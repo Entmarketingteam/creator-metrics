@@ -93,7 +93,19 @@ export async function GET(req: NextRequest) {
               shares: insights.shares ?? null,
               totalInteractions: insights.total_interactions ?? null,
             })
-            .onConflictDoNothing();
+            .onConflictDoUpdate({
+              target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
+              set: {
+                mediaUrl: m.media_url ?? null,
+                thumbnailUrl: m.thumbnail_url ?? null,
+                likeCount: m.like_count ?? null,
+                commentsCount: m.comments_count ?? null,
+                reach: insights.reach ?? null,
+                saved: insights.saved ?? null,
+                shares: insights.shares ?? null,
+                totalInteractions: insights.total_interactions ?? null,
+              },
+            });
         }
 
         results.push({ creator: creator.id, status: "ok" });
@@ -140,7 +152,15 @@ export async function GET(req: NextRequest) {
               likeCount: m.like_count ?? null,
               commentsCount: m.comments_count ?? null,
             })
-            .onConflictDoNothing();
+            .onConflictDoUpdate({
+              target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
+              set: {
+                mediaUrl: m.media_url ?? null,
+                thumbnailUrl: m.thumbnail_url ?? null,
+                likeCount: m.like_count ?? null,
+                commentsCount: m.comments_count ?? null,
+              },
+            });
         }
 
         results.push({ creator: creator.id, status: "ok (public)" });

@@ -123,6 +123,19 @@ export async function getComparison(creatorIds: string[]) {
   return rows;
 }
 
+export async function getRecentPostsByViews(creatorId: string, days = 7) {
+  return db
+    .select()
+    .from(mediaSnapshots)
+    .where(
+      and(
+        eq(mediaSnapshots.creatorId, creatorId),
+        sql`${mediaSnapshots.postedAt} >= NOW() - INTERVAL '${sql.raw(String(days))} days'`
+      )
+    )
+    .orderBy(desc(mediaSnapshots.reach), desc(mediaSnapshots.likeCount));
+}
+
 export async function getAggregateStats() {
   const [stats] = await db
     .select({

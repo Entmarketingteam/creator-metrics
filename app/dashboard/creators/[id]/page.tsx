@@ -3,7 +3,7 @@ import {
   getCreatorOverview,
   getCreatorHistory,
   getRecentPosts,
-  getTopPosts,
+  getRecentPostsByViews,
 } from "@/lib/queries";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import FollowerChart from "@/components/FollowerChart";
 import EngagementChart from "@/components/EngagementChart";
 import PostGrid from "@/components/PostGrid";
 import { formatNumber } from "@/lib/utils";
-import { Eye, Zap, TrendingUp, Grid3x3, Trophy } from "lucide-react";
+import { Eye, Zap, TrendingUp, Grid3x3, Flame } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +24,10 @@ export default async function CreatorDetailPage({
   const { creator, latest, previous } = await getCreatorOverview(params.id);
   if (!creator) notFound();
 
-  const [history, recentPosts, topPosts] = await Promise.all([
+  const [history, thisWeekPosts, recentPosts] = await Promise.all([
     getCreatorHistory(params.id, 90),
+    getRecentPostsByViews(params.id, 7),
     getRecentPosts(params.id, 25),
-    getTopPosts(params.id, 9),
   ]);
 
   const followerChange =
@@ -68,6 +68,14 @@ export default async function CreatorDetailPage({
               {creator.displayName ?? creator.username}
             </h1>
             {creator.isOwned && <Badge variant="success">Owned Account</Badge>}
+            <a
+              href={`https://instagram.com/${creator.username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              View on Instagram
+            </a>
           </div>
           <p className="text-gray-400 mb-3">@{creator.username}</p>
 
@@ -127,28 +135,29 @@ export default async function CreatorDetailPage({
         )}
       </div>
 
+      {/* This Week's Top Posts — sorted by views/reach */}
+      {thisWeekPosts.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Flame className="w-4 h-4 text-orange-400" />
+            <h2 className="text-lg font-semibold text-white">This Week&apos;s Top Posts</h2>
+            <span className="text-xs text-gray-500 ml-auto">Sorted by views</span>
+          </div>
+          <PostGrid posts={thisWeekPosts} />
+        </div>
+      )}
+
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <FollowerChart data={followerChartData} />
         <EngagementChart data={engagementChartData} />
       </div>
 
-      {/* Top Posts */}
-      {topPosts.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Trophy className="w-4 h-4 text-yellow-400" />
-            <h2 className="text-lg font-semibold text-white">Top Performing</h2>
-          </div>
-          <PostGrid posts={topPosts} />
-        </div>
-      )}
-
-      {/* Recent Posts */}
+      {/* All Recent Posts */}
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Grid3x3 className="w-4 h-4 text-gray-400" />
-          <h2 className="text-lg font-semibold text-white">Recent Posts</h2>
+          <h2 className="text-lg font-semibold text-white">All Recent Posts</h2>
         </div>
         <PostGrid posts={recentPosts} />
       </div>
