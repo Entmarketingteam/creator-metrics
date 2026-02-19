@@ -1,0 +1,153 @@
+const API_BASE = "https://graph.facebook.com/v21.0";
+
+interface IGProfile {
+  id: string;
+  name?: string;
+  username: string;
+  followers_count: number;
+  follows_count: number;
+  media_count: number;
+}
+
+interface IGMedia {
+  id: string;
+  caption?: string;
+  media_type: string;
+  media_product_type?: string;
+  like_count?: number;
+  comments_count?: number;
+  permalink?: string;
+  timestamp?: string;
+}
+
+interface IGMediaInsight {
+  reach?: number;
+  saved?: number;
+  shares?: number;
+  total_interactions?: number;
+}
+
+interface IGAccountInsights {
+  reach?: number;
+  accounts_engaged?: number;
+  total_interactions?: number;
+  follows_and_unfollows?: number;
+}
+
+async function igFetch<T>(path: string, token: string): Promise<T> {
+  const url = `${API_BASE}${path}${path.includes("?") ? "&" : "?"}access_token=${token}`;
+  const res = await fetch(url, { next: { revalidate: 0 } });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`IG API ${res.status}: ${err}`);
+  }
+  return res.json();
+}
+
+export async function fetchOwnedProfile(
+  igUserId: string,
+  token: string
+): Promise<IGProfile> {
+  return igFetch<IGProfile>(
+    `/${igUserId}?fields=id,name,username,followers_count,follows_count,media_count`,
+    token
+  );
+}
+
+export async function fetchOwnedMedia(
+  igUserId: string,
+  token: string,
+  limit = 25
+): Promise<IGMedia[]> {
+  const res = await igFetch<{ data: IGMedia[] }>(
+    `/${igUserId}/media?fields=id,caption,media_type,media_product_type,like_count,comments_count,permalink,timestamp&limit=${limit}`,
+    token
+  );
+  return res.data;
+}
+
+export async function fetchOwnedMediaInsights(
+  mediaId: string,
+  token: string
+): Promise<IGMediaInsight> {
+  try {
+    const res = await igFetch<{ data: { name: string; values: { value: number }[] }[] }>(
+      `/${mediaId}/insights?metric=reach,saved,shares,total_interactions`,
+      token
+    );
+    const out: Record<string, number> = {};
+    for (const m of res.data) {
+      out[m.name] = m.values[0]?.value ?? 0;
+    }
+    return out as unknown as IGMediaInsight;
+  } catch {
+    // Stories and some media types don't support all insights
+    return {};
+  }
+}
+
+export async function fetchOwnedAccountInsights(
+  igUserId: string,
+  token: string
+): Promise<IGAccountInsights> {
+  try {
+    const res = await igFetch<{ data: { name: string; total_value?: { value: number } }[] }>(
+      `/${igUserId}/insights?metric=reach,accounts_engaged,total_interactions,follows_and_unfollows&period=day&metric_type=total_value`,
+      token
+    );
+    const out: Record<string, number> = {};
+    for (const m of res.data) {
+      out[m.name] = m.total_value?.value ?? 0;
+    }
+    return out as unknown as IGAccountInsights;
+  } catch {
+    return {};
+  }
+}
+
+interface BusinessDiscoveryResult {
+  business_discovery: {
+    username: string;
+    name: string;
+    followers_count: number;
+    media_count: number;
+    media?: {
+      data: IGMedia[];
+    };
+  };
+}
+
+export async function fetchPublicProfile(
+  ourIgId: string,
+  targetUsername: string,
+  token: string
+): Promise<{
+  profile: { username: string; name: string; followers_count: number; media_count: number };
+  media: IGMedia[];
+}> {
+  const res = await igFetch<BusinessDiscoveryResult>(
+    `/${ourIgId}?fields=business_discovery.fields(username,name,followers_count,media_count,media.limit(25){id,caption,media_type,like_count,comments_count,permalink,timestamp}).username(${targetUsername})`,
+    token
+  );
+  return {
+    profile: {
+      username: res.business_discovery.username,
+      name: res.business_discovery.name,
+      followers_count: res.business_discovery.followers_count,
+      media_count: res.business_discovery.media_count,
+    },
+    media: res.business_discovery.media?.data ?? [],
+  };
+}
+
+export async function exchangeToken(
+  appId: string,
+  appSecret: string,
+  currentToken: string
+): Promise<string> {
+  const res = await igFetch<{ access_token: string; token_type: string; expires_in: number }>(
+    `/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${currentToken}`,
+    currentToken
+  );
+  return res.access_token;
+}
