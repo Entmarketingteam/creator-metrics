@@ -1,34 +1,31 @@
 "use client";
 
-import { Card } from "@tremor/react";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import { formatNumber } from "@/lib/utils";
 
 interface MetricCardProps {
   title: string;
   value: string | number;
   change?: number | null;
-  suffix?: string;
+  icon?: React.ReactNode;
 }
 
-export default function MetricCard({ title, value, change, suffix }: MetricCardProps) {
-  const formatted = typeof value === "number" ? value.toLocaleString() : value;
+export default function MetricCard({ title, value, change, icon }: MetricCardProps) {
+  const formatted = typeof value === "number" ? formatNumber(value) : value;
 
   return (
-    <Card className="p-4">
-      <p className="text-tremor-content text-sm">{title}</p>
-      <p className="text-2xl font-semibold text-tremor-content-strong mt-1">
-        {formatted}
-        {suffix && <span className="text-sm text-tremor-content ml-1">{suffix}</span>}
-      </p>
-      {change != null && (
-        <p
-          className={`text-sm mt-1 ${
-            change >= 0 ? "text-emerald-500" : "text-red-500"
-          }`}
-        >
-          {change >= 0 ? "+" : ""}
-          {change.toLocaleString()}
-        </p>
+    <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-400">{title}</p>
+        {icon && <div className="text-gray-500">{icon}</div>}
+      </div>
+      <p className="text-2xl font-bold text-white mt-1">{formatted}</p>
+      {change != null && change !== 0 && (
+        <div className={`flex items-center gap-1 mt-1 text-sm ${change > 0 ? "text-emerald-400" : "text-red-400"}`}>
+          {change > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+          <span>{change > 0 ? "+" : ""}{formatNumber(change)}</span>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }

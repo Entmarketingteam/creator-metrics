@@ -1,6 +1,7 @@
 "use client";
 
-import { BarChart, Card } from "@tremor/react";
+import { BarChart } from "@tremor/react";
+import { Zap } from "lucide-react";
 
 interface DataPoint {
   date: string;
@@ -12,23 +13,26 @@ interface DataPoint {
 export default function EngagementChart({ data }: { data: DataPoint[] }) {
   if (data.length === 0) {
     return (
-      <Card className="p-4">
-        <p className="text-tremor-content text-sm">No engagement history yet.</p>
-      </Card>
+      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+        <p className="text-gray-500 text-sm">No engagement history yet.</p>
+      </div>
     );
   }
 
   return (
-    <Card className="p-4">
-      <h3 className="text-sm font-medium text-tremor-content mb-4">28-Day Engagement Trends</h3>
+    <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Zap className="w-4 h-4 text-purple-400" />
+        <h3 className="text-sm font-semibold text-gray-400">28-Day Engagement</h3>
+      </div>
       <BarChart
         data={data}
         index="date"
         categories={["Reach", "Engaged", "Interactions"]}
         colors={["blue", "cyan", "violet"]}
         showAnimation
-        className="h-60"
+        className="h-52"
       />
-    </Card>
+    </div>
   );
 }

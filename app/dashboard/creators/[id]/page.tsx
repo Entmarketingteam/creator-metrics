@@ -5,10 +5,14 @@ import {
   getRecentPosts,
   getTopPosts,
 } from "@/lib/queries";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import MetricCard from "@/components/MetricCard";
 import FollowerChart from "@/components/FollowerChart";
 import EngagementChart from "@/components/EngagementChart";
 import PostGrid from "@/components/PostGrid";
+import { formatNumber } from "@/lib/utils";
+import { Eye, Zap, TrendingUp, Grid3x3, Trophy } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +27,7 @@ export default async function CreatorDetailPage({
   const [history, recentPosts, topPosts] = await Promise.all([
     getCreatorHistory(params.id, 90),
     getRecentPosts(params.id, 25),
-    getTopPosts(params.id, 6),
+    getTopPosts(params.id, 9),
   ]);
 
   const followerChange =
@@ -46,34 +50,79 @@ export default async function CreatorDetailPage({
     }));
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-tremor-content-strong">
-          {creator.displayName ?? creator.username}
-        </h1>
-        <p className="text-tremor-content">@{creator.username}</p>
-        {creator.isOwned && (
-          <span className="text-xs bg-tremor-brand/20 text-tremor-brand px-2 py-0.5 rounded-full mt-1 inline-block">
-            Owned Account — Full Insights
-          </span>
-        )}
+    <div className="max-w-6xl mx-auto">
+      {/* Profile Header — Instagram style */}
+      <div className="flex items-start gap-8 mb-8">
+        <Avatar className="h-28 w-28 ring-4 ring-gray-800">
+          {creator.profilePictureUrl ? (
+            <AvatarImage src={creator.profilePictureUrl} alt={creator.username} />
+          ) : null}
+          <AvatarFallback className="text-3xl font-bold bg-gray-800">
+            {(creator.displayName ?? creator.username).charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-bold text-white">
+              {creator.displayName ?? creator.username}
+            </h1>
+            {creator.isOwned && <Badge variant="success">Owned Account</Badge>}
+          </div>
+          <p className="text-gray-400 mb-3">@{creator.username}</p>
+
+          {/* Stats row */}
+          <div className="flex gap-8 mb-3">
+            <div>
+              <span className="font-bold text-white">{formatNumber(latest?.mediaCount)}</span>{" "}
+              <span className="text-gray-400">posts</span>
+            </div>
+            <div>
+              <span className="font-bold text-white">{formatNumber(latest?.followersCount)}</span>{" "}
+              <span className="text-gray-400">followers</span>
+              {followerChange != null && followerChange !== 0 && (
+                <span className={`ml-1 text-sm ${followerChange > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  ({followerChange > 0 ? "+" : ""}{formatNumber(followerChange)})
+                </span>
+              )}
+            </div>
+            <div>
+              <span className="font-bold text-white">{formatNumber(latest?.followsCount)}</span>{" "}
+              <span className="text-gray-400">following</span>
+            </div>
+          </div>
+
+          {creator.biography && (
+            <p className="text-sm text-gray-300 max-w-lg">{creator.biography}</p>
+          )}
+        </div>
       </div>
 
-      {/* Key Metrics */}
+      {/* Insights cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <MetricCard
           title="Followers"
           value={latest?.followersCount ?? 0}
           change={followerChange}
+          icon={<TrendingUp className="w-4 h-4" />}
         />
-        <MetricCard title="Posts" value={latest?.mediaCount ?? 0} />
+        <MetricCard
+          title="Posts"
+          value={latest?.mediaCount ?? 0}
+          icon={<Grid3x3 className="w-4 h-4" />}
+        />
         {latest?.reach28d != null && (
-          <MetricCard title="Reach (28d)" value={latest.reach28d} />
+          <MetricCard
+            title="Reach (28d)"
+            value={latest.reach28d}
+            icon={<Eye className="w-4 h-4" />}
+          />
         )}
         {latest?.totalInteractions28d != null && (
           <MetricCard
             title="Interactions (28d)"
             value={latest.totalInteractions28d}
+            icon={<Zap className="w-4 h-4" />}
           />
         )}
       </div>
@@ -87,31 +136,21 @@ export default async function CreatorDetailPage({
       {/* Top Posts */}
       {topPosts.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-tremor-content-strong mb-4">
-            Top Performing Posts
-          </h2>
-          <PostGrid
-            posts={topPosts.map((p) => ({
-              ...p,
-              postedAt: p.postedAt,
-              mediaProductType: p.mediaProductType,
-            }))}
-          />
+          <div className="flex items-center gap-2 mb-4">
+            <Trophy className="w-4 h-4 text-yellow-400" />
+            <h2 className="text-lg font-semibold text-white">Top Performing</h2>
+          </div>
+          <PostGrid posts={topPosts} />
         </div>
       )}
 
       {/* Recent Posts */}
       <div>
-        <h2 className="text-lg font-semibold text-tremor-content-strong mb-4">
-          Recent Posts
-        </h2>
-        <PostGrid
-          posts={recentPosts.map((p) => ({
-            ...p,
-            postedAt: p.postedAt,
-            mediaProductType: p.mediaProductType,
-          }))}
-        />
+        <div className="flex items-center gap-2 mb-4">
+          <Grid3x3 className="w-4 h-4 text-gray-400" />
+          <h2 className="text-lg font-semibold text-white">Recent Posts</h2>
+        </div>
+        <PostGrid posts={recentPosts} />
       </div>
     </div>
   );

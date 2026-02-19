@@ -1,19 +1,23 @@
 const API_BASE = "https://graph.facebook.com/v21.0";
 
-interface IGProfile {
+export interface IGProfile {
   id: string;
   name?: string;
   username: string;
+  profile_picture_url?: string;
+  biography?: string;
   followers_count: number;
   follows_count: number;
   media_count: number;
 }
 
-interface IGMedia {
+export interface IGMedia {
   id: string;
   caption?: string;
   media_type: string;
   media_product_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
   like_count?: number;
   comments_count?: number;
   permalink?: string;
@@ -49,7 +53,7 @@ export async function fetchOwnedProfile(
   token: string
 ): Promise<IGProfile> {
   return igFetch<IGProfile>(
-    `/${igUserId}?fields=id,name,username,followers_count,follows_count,media_count`,
+    `/${igUserId}?fields=id,name,username,profile_picture_url,biography,followers_count,follows_count,media_count`,
     token
   );
 }
@@ -60,7 +64,7 @@ export async function fetchOwnedMedia(
   limit = 25
 ): Promise<IGMedia[]> {
   const res = await igFetch<{ data: IGMedia[] }>(
-    `/${igUserId}/media?fields=id,caption,media_type,media_product_type,like_count,comments_count,permalink,timestamp&limit=${limit}`,
+    `/${igUserId}/media?fields=id,caption,media_type,media_product_type,media_url,thumbnail_url,like_count,comments_count,permalink,timestamp&limit=${limit}`,
     token
   );
   return res.data;
@@ -81,7 +85,6 @@ export async function fetchOwnedMediaInsights(
     }
     return out as unknown as IGMediaInsight;
   } catch {
-    // Stories and some media types don't support all insights
     return {};
   }
 }
@@ -109,6 +112,8 @@ interface BusinessDiscoveryResult {
   business_discovery: {
     username: string;
     name: string;
+    profile_picture_url?: string;
+    biography?: string;
     followers_count: number;
     media_count: number;
     media?: {
@@ -122,21 +127,26 @@ export async function fetchPublicProfile(
   targetUsername: string,
   token: string
 ): Promise<{
-  profile: { username: string; name: string; followers_count: number; media_count: number };
+  profile: IGProfile;
   media: IGMedia[];
 }> {
   const res = await igFetch<BusinessDiscoveryResult>(
-    `/${ourIgId}?fields=business_discovery.fields(username,name,followers_count,media_count,media.limit(25){id,caption,media_type,like_count,comments_count,permalink,timestamp}).username(${targetUsername})`,
+    `/${ourIgId}?fields=business_discovery.fields(username,name,profile_picture_url,biography,followers_count,media_count,media.limit(25){id,caption,media_type,media_url,thumbnail_url,like_count,comments_count,permalink,timestamp}).username(${targetUsername})`,
     token
   );
+  const bd = res.business_discovery;
   return {
     profile: {
-      username: res.business_discovery.username,
-      name: res.business_discovery.name,
-      followers_count: res.business_discovery.followers_count,
-      media_count: res.business_discovery.media_count,
+      id: "",
+      username: bd.username,
+      name: bd.name,
+      profile_picture_url: bd.profile_picture_url,
+      biography: bd.biography,
+      followers_count: bd.followers_count,
+      follows_count: 0,
+      media_count: bd.media_count,
     },
-    media: res.business_discovery.media?.data ?? [],
+    media: bd.media?.data ?? [],
   };
 }
 

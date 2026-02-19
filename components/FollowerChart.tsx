@@ -1,6 +1,7 @@
 "use client";
 
-import { AreaChart, Card } from "@tremor/react";
+import { AreaChart } from "@tremor/react";
+import { TrendingUp } from "lucide-react";
 
 interface DataPoint {
   date: string;
@@ -10,24 +11,27 @@ interface DataPoint {
 export default function FollowerChart({ data }: { data: DataPoint[] }) {
   if (data.length === 0) {
     return (
-      <Card className="p-4">
-        <p className="text-tremor-content text-sm">No follower history yet. Data populates daily.</p>
-      </Card>
+      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+        <p className="text-gray-500 text-sm">No follower history yet. Data populates daily.</p>
+      </div>
     );
   }
 
   return (
-    <Card className="p-4">
-      <h3 className="text-sm font-medium text-tremor-content mb-4">Follower Growth</h3>
+    <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-blue-400" />
+        <h3 className="text-sm font-semibold text-gray-400">Follower Growth</h3>
+      </div>
       <AreaChart
         data={data}
         index="date"
         categories={["Followers"]}
         colors={["blue"]}
         showAnimation
-        className="h-60"
+        className="h-52"
         curveType="monotone"
       />
-    </Card>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { creators, creatorSnapshots, mediaSnapshots } from "@/lib/schema";
 import { CREATORS } from "@/lib/creators";
+import { eq } from "drizzle-orm";
 import {
   fetchOwnedProfile,
   fetchOwnedMedia,
@@ -39,12 +40,21 @@ export async function GET(req: NextRequest) {
         .onConflictDoNothing();
 
       if (creator.isOwned && creator.igUserId) {
-        // Owned creator — full data
         const [profile, media, accountInsights] = await Promise.all([
           fetchOwnedProfile(creator.igUserId, token),
           fetchOwnedMedia(creator.igUserId, token),
           fetchOwnedAccountInsights(creator.igUserId, token),
         ]);
+
+        // Update creator with profile pic and bio
+        await db
+          .update(creators)
+          .set({
+            profilePictureUrl: profile.profile_picture_url ?? null,
+            biography: profile.biography ?? null,
+            displayName: profile.name ?? creator.displayName,
+          })
+          .where(eq(creators.id, creator.id));
 
         await db
           .insert(creatorSnapshots)
@@ -61,7 +71,6 @@ export async function GET(req: NextRequest) {
           })
           .onConflictDoNothing();
 
-        // Fetch insights for each media item
         for (const m of media) {
           const insights = await fetchOwnedMediaInsights(m.id, token);
           await db
@@ -74,6 +83,8 @@ export async function GET(req: NextRequest) {
               mediaProductType: m.media_product_type ?? null,
               caption: m.caption ?? null,
               permalink: m.permalink ?? null,
+              mediaUrl: m.media_url ?? null,
+              thumbnailUrl: m.thumbnail_url ?? null,
               postedAt: m.timestamp ? new Date(m.timestamp) : null,
               likeCount: m.like_count ?? null,
               commentsCount: m.comments_count ?? null,
@@ -87,12 +98,20 @@ export async function GET(req: NextRequest) {
 
         results.push({ creator: creator.id, status: "ok" });
       } else {
-        // Non-owned creator — business_discovery
         const { profile, media } = await fetchPublicProfile(
           ourIgId,
           creator.username,
           token
         );
+
+        await db
+          .update(creators)
+          .set({
+            profilePictureUrl: profile.profile_picture_url ?? null,
+            biography: profile.biography ?? null,
+            displayName: profile.name ?? creator.displayName,
+          })
+          .where(eq(creators.id, creator.id));
 
         await db
           .insert(creatorSnapshots)
@@ -115,6 +134,8 @@ export async function GET(req: NextRequest) {
               mediaType: m.media_type ?? null,
               caption: m.caption ?? null,
               permalink: m.permalink ?? null,
+              mediaUrl: m.media_url ?? null,
+              thumbnailUrl: m.thumbnail_url ?? null,
               postedAt: m.timestamp ? new Date(m.timestamp) : null,
               likeCount: m.like_count ?? null,
               commentsCount: m.comments_count ?? null,

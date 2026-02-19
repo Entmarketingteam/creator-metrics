@@ -8,8 +8,11 @@ export async function getAllCreatorsSummary() {
       id: creators.id,
       username: creators.username,
       displayName: creators.displayName,
+      profilePictureUrl: creators.profilePictureUrl,
+      biography: creators.biography,
       isOwned: creators.isOwned,
       followersCount: creatorSnapshots.followersCount,
+      followsCount: creatorSnapshots.followsCount,
       mediaCount: creatorSnapshots.mediaCount,
       capturedAt: creatorSnapshots.capturedAt,
     })

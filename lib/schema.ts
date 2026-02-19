@@ -14,6 +14,8 @@ export const creators = pgTable("creators", {
   igUserId: text("ig_user_id").notNull(),
   username: text("username").notNull(),
   displayName: text("display_name"),
+  profilePictureUrl: text("profile_picture_url"),
+  biography: text("biography"),
   isOwned: boolean("is_owned").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
@@ -46,6 +48,8 @@ export const mediaSnapshots = pgTable(
     mediaProductType: text("media_product_type"),
     caption: text("caption"),
     permalink: text("permalink"),
+    mediaUrl: text("media_url"),
+    thumbnailUrl: text("thumbnail_url"),
     postedAt: timestamp("timestamp", { withTimezone: true }),
     likeCount: integer("like_count"),
     commentsCount: integer("comments_count"),
