@@ -21,3 +21,37 @@ export function engagementRate(
   const total = (likes ?? 0) + (comments ?? 0);
   return ((total / followers) * 100).toFixed(2) + "%";
 }
+
+export function formatCurrency(n: number | string | null | undefined): string {
+  if (n == null) return "$0.00";
+  const val = typeof n === "string" ? parseFloat(n) : n;
+  if (isNaN(val)) return "$0.00";
+  return val.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function formatPercent(n: number | null | undefined): string {
+  if (n == null) return "0%";
+  const prefix = n > 0 ? "+" : "";
+  return `${prefix}${n.toFixed(1)}%`;
+}
+
+export const PLATFORM_COLORS: Record<string, string> = {
+  mavely: "emerald",
+  shopmy: "pink",
+  ltk: "violet",
+  amazon: "amber",
+  instagram: "blue",
+};
+
+export const PLATFORM_LABELS: Record<string, string> = {
+  mavely: "Mavely",
+  shopmy: "ShopMy",
+  ltk: "LTK",
+  amazon: "Amazon",
+  instagram: "Instagram",
+};

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import {
   getCreatorOverview,
   getCreatorHistory,
@@ -7,6 +8,9 @@ import {
 } from "@/lib/queries";
 import { CREATORS } from "@/lib/creators";
 import { fetchLtkOverview } from "@/lib/ltk";
+import { db } from "@/lib/db";
+import { platformEarnings } from "@/lib/schema";
+import { eq, sql, and } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import MetricCard from "@/components/MetricCard";
@@ -14,8 +18,8 @@ import FollowerChart from "@/components/FollowerChart";
 import EngagementChart from "@/components/EngagementChart";
 import PostGrid from "@/components/PostGrid";
 import LtkSection from "@/components/LtkSection";
-import { formatNumber } from "@/lib/utils";
-import { Eye, Zap, TrendingUp, Grid3x3, Flame } from "lucide-react";
+import { formatNumber, formatCurrency } from "@/lib/utils";
+import { Eye, Zap, TrendingUp, Grid3x3, Flame, DollarSign, ShoppingBag } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +33,27 @@ export default async function CreatorDetailPage({
 
   const config = CREATORS.find((c) => c.id === params.id);
 
-  const [history, thisWeekPosts, recentPosts, ltk] = await Promise.all([
+  const [history, thisWeekPosts, recentPosts, ltk, earningsData] = await Promise.all([
     getCreatorHistory(params.id, 90),
     getRecentPostsByViews(params.id, 7),
     getRecentPosts(params.id, 25),
     config?.ltkSlug ? fetchLtkOverview(config.ltkSlug) : Promise.resolve(null),
+    db
+      .select({
+        totalRevenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+        totalOrders: sql<number>`COALESCE(SUM(${platformEarnings.orders}), 0)`,
+        totalClicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
+      })
+      .from(platformEarnings)
+      .where(
+        and(
+          eq(platformEarnings.creatorId, params.id),
+          sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`
+        )
+      ),
   ]);
+
+  const earnings = earningsData[0];
 
   const followerChange =
     latest && previous
@@ -143,6 +162,41 @@ export default async function CreatorDetailPage({
 
       {/* LTK overview — powered by ent-dashboard-scaffold */}
       {ltk && <LtkSection overview={ltk} />}
+
+      {/* Earnings Summary */}
+      {(earnings?.totalRevenue ?? 0) > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-lg font-semibold text-white">Earnings (30d)</h2>
+            </div>
+            <Link
+              href={`/dashboard/earnings/${params.id}`}
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              View details →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <MetricCard
+              title="Revenue"
+              value={formatCurrency(earnings?.totalRevenue)}
+              icon={<DollarSign className="w-4 h-4" />}
+            />
+            <MetricCard
+              title="Orders"
+              value={earnings?.totalOrders ?? 0}
+              icon={<ShoppingBag className="w-4 h-4" />}
+            />
+            <MetricCard
+              title="Clicks"
+              value={earnings?.totalClicks ?? 0}
+              icon={<TrendingUp className="w-4 h-4" />}
+            />
+          </div>
+        </div>
+      )}
 
       {/* This Week's Top Posts — sorted by views/reach */}
       {thisWeekPosts.length > 0 && (

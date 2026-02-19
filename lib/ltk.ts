@@ -34,3 +34,136 @@ export async function fetchLtkOverview(slug: string): Promise<LtkOverview | null
   return (await res.json()) as LtkOverview;
 }
 
+import { db } from "./db";
+import { platformEarnings, sales } from "./schema";
+
+const LTK_API_BASE = "https://api-gateway.rewardstyle.com";
+
+interface LTKTokens {
+  accessToken: string;
+  idToken: string;
+}
+
+/**
+ * Fetch LTK tokens from Airtable (managed by n8n rotation workflow every 8h).
+ * Falls back to env vars if Airtable is unavailable.
+ */
+export async function getLTKTokens(): Promise<LTKTokens> {
+  const airtableToken = process.env.AIRTABLE_TOKEN;
+  const baseId = process.env.AIRTABLE_BASE_ID;
+
+  if (airtableToken && baseId) {
+    try {
+      const res = await fetch(
+        `https://api.airtable.com/v0/${baseId}/LTK_Credentials?maxRecords=1&sort%5B0%5D%5Bfield%5D=Updated&sort%5B0%5D%5Bdirection%5D=desc`,
+        {
+          headers: { Authorization: `Bearer ${airtableToken}` },
+          next: { revalidate: 0 },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const record = data.records?.[0]?.fields;
+        if (record?.access_token && record?.id_token) {
+          return {
+            accessToken: record.access_token,
+            idToken: record.id_token,
+          };
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch LTK tokens from Airtable:", e);
+    }
+  }
+
+  // Fallback to env vars
+  if (process.env.LTK_ACCESS_TOKEN && process.env.LTK_ID_TOKEN) {
+    return {
+      accessToken: process.env.LTK_ACCESS_TOKEN,
+      idToken: process.env.LTK_ID_TOKEN,
+    };
+  }
+
+  throw new Error("No LTK tokens available");
+}
+
+/**
+ * Make an authenticated request to the LTK API gateway.
+ */
+export async function ltkFetch<T>(
+  path: string,
+  tokens: LTKTokens,
+  options?: RequestInit
+): Promise<T> {
+  const url = `${LTK_API_BASE}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${tokens.accessToken}`,
+      "X-id-token": tokens.idToken,
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
+    next: { revalidate: 0 },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`LTK API ${res.status}: ${errText}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Fetch LTK items sold (detailed sales) for a date range.
+ */
+export async function fetchLTKItemsSold(
+  tokens: LTKTokens,
+  startDate: string,
+  endDate: string,
+  publisherIds?: string
+) {
+  const params = new URLSearchParams({
+    start: startDate,
+    end: endDate,
+    limit: "100",
+  });
+  if (publisherIds) params.set("publisher_ids", publisherIds);
+
+  return ltkFetch<{ items?: any[]; data?: any[] }>(
+    `/api/v1/analytics/items-sold?${params}`,
+    tokens
+  );
+}
+
+/**
+ * Fetch LTK commissions summary.
+ */
+export async function fetchLTKCommissionsSummary(tokens: LTKTokens) {
+  return ltkFetch<{ data?: any }>(
+    "/api/v1/analytics/commissions-summary",
+    tokens
+  );
+}
+
+/**
+ * Fetch LTK performance stats for a date range.
+ */
+export async function fetchLTKPerformanceStats(
+  tokens: LTKTokens,
+  startDate: string,
+  endDate: string,
+  publisherIds?: string
+) {
+  const params = new URLSearchParams({
+    start: startDate,
+    end: endDate,
+  });
+  if (publisherIds) params.set("publisher_ids", publisherIds);
+
+  return ltkFetch<any>(
+    `/api/v1/analytics/performance-stats?${params}`,
+    tokens
+  );
+}

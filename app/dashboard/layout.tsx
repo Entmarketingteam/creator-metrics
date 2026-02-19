@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
-import { LayoutDashboard, Users, GitCompareArrows } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  GitCompareArrows,
+  DollarSign,
+  Package,
+  Shield,
+} from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/creators", label: "Creators", icon: Users },
+  { href: "/dashboard/earnings", label: "Earnings", icon: DollarSign },
+  { href: "/dashboard/products", label: "Products", icon: Package },
   { href: "/dashboard/compare", label: "Compare", icon: GitCompareArrows },
+  { href: "/dashboard/admin", label: "Admin", icon: Shield },
 ];
 
 export default function DashboardLayout({
