@@ -9,8 +9,8 @@ import {
 import { CREATORS } from "@/lib/creators";
 import { fetchLtkOverview } from "@/lib/ltk";
 import { db } from "@/lib/db";
-import { platformEarnings } from "@/lib/schema";
-import { eq, sql, and } from "drizzle-orm";
+import { platformEarnings, sales, shopmyOpportunityCommissions } from "@/lib/schema";
+import { eq, sql, and, count } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import MetricCard from "@/components/MetricCard";
@@ -33,27 +33,38 @@ export default async function CreatorDetailPage({
 
   const config = CREATORS.find((c) => c.id === params.id);
 
-  const [history, thisWeekPosts, recentPosts, ltk, earningsData] = await Promise.all([
-    getCreatorHistory(params.id, 90),
-    getRecentPostsByViews(params.id, 7),
-    getRecentPosts(params.id, 25),
-    config?.ltkSlug ? fetchLtkOverview(config.ltkSlug) : Promise.resolve(null),
-    db
-      .select({
-        totalRevenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-        totalOrders: sql<number>`COALESCE(SUM(${platformEarnings.orders}), 0)`,
-        totalClicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
-      })
-      .from(platformEarnings)
-      .where(
-        and(
-          eq(platformEarnings.creatorId, params.id),
-          sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`
-        )
-      ),
-  ]);
+  const [history, thisWeekPosts, recentPosts, ltk, earningsData, shopmyEarningsData] =
+    await Promise.all([
+      getCreatorHistory(params.id, 90),
+      getRecentPostsByViews(params.id, 7),
+      getRecentPosts(params.id, 25),
+      config?.ltkSlug ? fetchLtkOverview(config.ltkSlug) : Promise.resolve(null),
+      db
+        .select({
+          totalRevenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+          totalOrders: sql<number>`COALESCE(SUM(${platformEarnings.orders}), 0)`,
+          totalClicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
+        })
+        .from(platformEarnings)
+        .where(
+          and(
+            eq(platformEarnings.creatorId, params.id),
+            sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`
+          )
+        ),
+      db
+        .select({
+          totalCommission: sql<number>`COALESCE(SUM(CAST(${sales.commissionAmount} AS FLOAT)), 0)`,
+          totalSales: sql<number>`COUNT(*)`,
+        })
+        .from(sales)
+        .where(
+          and(eq(sales.creatorId, params.id), eq(sales.platform, "shopmy"))
+        ),
+    ]);
 
   const earnings = earningsData[0];
+  const shopmyEarnings = shopmyEarningsData[0];
 
   const followerChange =
     latest && previous
@@ -193,6 +204,36 @@ export default async function CreatorDetailPage({
               title="Clicks"
               value={earnings?.totalClicks ?? 0}
               icon={<TrendingUp className="w-4 h-4" />}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ShopMy Earnings Card */}
+      {(shopmyEarnings?.totalCommission ?? 0) > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-pink-400" />
+              <h2 className="text-lg font-semibold text-white">ShopMy Earnings</h2>
+            </div>
+            <Link
+              href={`/dashboard/earnings/${params.id}`}
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              View details →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <MetricCard
+              title="Commission"
+              value={formatCurrency(shopmyEarnings?.totalCommission)}
+              icon={<DollarSign className="w-4 h-4" />}
+            />
+            <MetricCard
+              title="Sales"
+              value={shopmyEarnings?.totalSales ?? 0}
+              icon={<ShoppingBag className="w-4 h-4" />}
             />
           </div>
         </div>

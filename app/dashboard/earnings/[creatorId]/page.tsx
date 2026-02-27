@@ -7,11 +7,12 @@ import {
   sales,
   products,
   platformConnections,
+  shopmyOpportunityCommissions,
 } from "@/lib/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Link2 } from "lucide-react";
+import { DollarSign, Link2, ShoppingBag } from "lucide-react";
 import EarningsCard from "@/components/earnings/EarningsCard";
 import CommissionsSummary from "@/components/earnings/CommissionsSummary";
 import PlatformBreakdown from "@/components/earnings/PlatformBreakdown";
@@ -19,6 +20,7 @@ import EarningsChart from "@/components/earnings/EarningsChart";
 import SalesTable from "@/components/earnings/SalesTable";
 import TopPerformers from "@/components/earnings/TopPerformers";
 import PlatformBadge from "@/components/earnings/PlatformBadge";
+import OpportunityCommissions from "@/components/earnings/OpportunityCommissions";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +136,28 @@ export default async function CreatorEarningsPage({
     .orderBy(desc(sql`CAST(${products.totalRevenue} AS FLOAT)`))
     .limit(5);
 
+  // ShopMy-specific data
+  const [shopmySales, shopmyOpCommissions] = await Promise.all([
+    db
+      .select()
+      .from(sales)
+      .where(
+        and(
+          eq(sales.creatorId, params.creatorId),
+          eq(sales.platform, "shopmy")
+        )
+      )
+      .orderBy(desc(sales.saleDate))
+      .limit(50),
+    db
+      .select()
+      .from(shopmyOpportunityCommissions)
+      .where(eq(shopmyOpportunityCommissions.creatorId, params.creatorId))
+      .orderBy(desc(shopmyOpportunityCommissions.syncedAt)),
+  ]);
+
+  const hasShopMyData = shopmySales.length > 0 || shopmyOpCommissions.length > 0;
+
   return (
     <div className="max-w-6xl mx-auto">
       {/* Creator Header */}
@@ -199,6 +223,38 @@ export default async function CreatorEarningsPage({
         }))}
         totalCount={salesCount[0]?.count ?? 0}
       />
+
+      {/* ShopMy Section */}
+      {hasShopMyData && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-4">
+            <ShoppingBag className="w-4 h-4 text-pink-400" />
+            <h2 className="text-lg font-semibold text-white">ShopMy</h2>
+          </div>
+
+          {shopmyOpCommissions.length > 0 && (
+            <div className="mb-6">
+              <OpportunityCommissions data={shopmyOpCommissions} />
+            </div>
+          )}
+
+          {shopmySales.length > 0 && (
+            <SalesTable
+              initialData={shopmySales.map((s) => ({
+                id: s.id,
+                platform: s.platform,
+                saleDate: s.saleDate.toISOString(),
+                productName: s.productName,
+                brand: s.brand,
+                commissionAmount: s.commissionAmount,
+                orderValue: s.orderValue,
+                status: s.status,
+              }))}
+              totalCount={shopmySales.length}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

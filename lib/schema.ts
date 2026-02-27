@@ -186,3 +186,41 @@ export const userRoles = pgTable("user_roles", {
   assignedCreatorIds: text("assigned_creator_ids"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+// ── ShopMy-specific Tables ─────────────────────────────────────────
+
+export const shopmyOpportunityCommissions = pgTable(
+  "shopmy_opportunity_commissions",
+  {
+    id: serial("id").primaryKey(),
+    creatorId: text("creator_id").references(() => creators.id),
+    externalId: integer("external_id").unique(),
+    title: text("title"),
+    commissionAmount: numeric("commission_amount", { precision: 10, scale: 2 }),
+    status: text("status"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  }
+);
+
+export const shopmyPayments = pgTable("shopmy_payments", {
+  id: serial("id").primaryKey(),
+  creatorId: text("creator_id").references(() => creators.id),
+  externalId: integer("external_id").unique(),
+  amount: numeric("amount", { precision: 10, scale: 2 }),
+  source: text("source"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+});
+
+export const shopmyBrandRates = pgTable(
+  "shopmy_brand_rates",
+  {
+    id: serial("id").primaryKey(),
+    creatorId: text("creator_id").references(() => creators.id),
+    brand: text("brand"),
+    rate: numeric("rate", { precision: 5, scale: 2 }),
+    rateReturning: numeric("rate_returning", { precision: 5, scale: 2 }),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [unique().on(t.creatorId, t.brand)]
+);
