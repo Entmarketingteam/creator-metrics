@@ -28,30 +28,36 @@ export async function loginShopMy(
     throw new Error(`ShopMy login failed ${res.status}: ${errText}`);
   }
 
-  // Collect Set-Cookie headers
-  const setCookieHeader = res.headers.get("set-cookie") ?? "";
-  const allCookies: string[] = [];
+  // Collect Set-Cookie headers — use getSetCookie() (Node 18.14+) for reliable
+  // multi-cookie parsing. Each entry is a single "name=value; attrs..." string.
+  const setCookieList: string[] =
+    (res.headers as any).getSetCookie?.() ??
+    [res.headers.get("set-cookie") ?? ""].filter(Boolean);
 
-  // Node fetch returns comma-joined set-cookie — split carefully
-  // Pattern: extract individual cookie name=value pairs
-  const cookieMatches = setCookieHeader.matchAll(/([^=,]+=[^;]+)(?:;[^,]*)?(?:,|$)/g);
-  for (const m of cookieMatches) {
-    allCookies.push(m[1].trim());
-  }
+  // Extract name=value from each Set-Cookie string (everything before first ';')
+  const allCookies: string[] = setCookieList
+    .map((c) => c.split(";")[0].trim())
+    .filter(Boolean);
 
-  // Extract CSRF token UUID from shopmy_csrf_token cookie value
-  const csrfCookieMatch = setCookieHeader.match(/shopmy_csrf_token=([^;,]+)/);
-  if (!csrfCookieMatch) {
+  // Extract CSRF token from the shopmy_csrf_token cookie
+  const csrfRaw = setCookieList
+    .find((c) => c.trimStart().startsWith("shopmy_csrf_token="))
+    ?.split(";")[0]
+    ?.split("=")
+    .slice(1)
+    .join("=") ?? "";
+
+  if (!csrfRaw) {
     throw new Error("ShopMy login: shopmy_csrf_token cookie not found");
   }
-  // The cookie value may be URL-encoded or contain extra chars — strip to UUID
-  const rawCsrf = decodeURIComponent(csrfCookieMatch[1]);
-  const uuidMatch = rawCsrf.match(
+
+  const decoded = decodeURIComponent(csrfRaw);
+  const uuidMatch = decoded.match(
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
   );
-  const csrfToken = uuidMatch ? uuidMatch[0] : rawCsrf;
+  const csrfToken = uuidMatch ? uuidMatch[0] : decoded;
 
-  // Build Cookie header from all cookies received
+  // Build Cookie header
   const cookieHeader = allCookies.join("; ");
 
   return { cookieHeader, csrfToken };
