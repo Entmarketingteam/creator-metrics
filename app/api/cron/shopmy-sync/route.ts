@@ -120,7 +120,6 @@ export async function GET(req: NextRequest) {
             creatorId: creator.id,
             platform: "shopmy",
             saleDate: new Date(c.transaction_date ?? c.created_at ?? Date.now()),
-            productName: c.Product_title ?? c.product_name ?? null,
             brand: c.merchant ?? c.brand ?? null,
             // amountEarned is already a clean numeric string (no $ or ,)
             commissionAmount: c.amountEarned != null
