@@ -13,6 +13,7 @@ import MetricCard from "@/components/MetricCard";
 import FollowerChart from "@/components/FollowerChart";
 import EngagementChart from "@/components/EngagementChart";
 import PostGrid from "@/components/PostGrid";
+import LtkSection from "@/components/LtkSection";
 import { formatNumber } from "@/lib/utils";
 import { Eye, Zap, TrendingUp, Grid3x3, Flame } from "lucide-react";
 
@@ -140,42 +141,8 @@ export default async function CreatorDetailPage({
         )}
       </div>
 
-      {/* LTK summary (read-only from ent-dashboard-scaffold) */}
-      {ltk && (
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Flame className="w-4 h-4 text-pink-400" />
-            <h2 className="text-lg font-semibold text-white">
-              LTK Activity (Last 30 Days)
-            </h2>
-            <span className="text-xs text-gray-500 ml-auto">
-              Powered by ent-dashboard-scaffold
-            </span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard
-              title="LTK Posts (30d)"
-              value={ltk.posts_count}
-              icon={<Grid3x3 className="w-4 h-4" />}
-            />
-            <MetricCard
-              title="Avg LTK Posts / Week"
-              value={ltk.avg_posts_per_week}
-              icon={<TrendingUp className="w-4 h-4" />}
-            />
-            <MetricCard
-              title="Top LTK Retailer"
-              value={ltk.top_retailer}
-              icon={<Flame className="w-4 h-4" />}
-            />
-            <MetricCard
-              title="Products Linked"
-              value={ltk.total_products}
-              icon={<Grid3x3 className="w-4 h-4" />}
-            />
-          </div>
-        </div>
-      )}
+      {/* LTK overview — powered by ent-dashboard-scaffold */}
+      {ltk && <LtkSection overview={ltk} />}
 
       {/* This Week's Top Posts — sorted by views/reach */}
       {thisWeekPosts.length > 0 && (
