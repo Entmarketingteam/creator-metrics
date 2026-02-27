@@ -1,4 +1,4 @@
-const LTK_SERVICE_BASE_URL = process.env.LTK_SERVICE_BASE_URL!;
+const LTK_SERVICE_BASE_URL = process.env.LTK_SERVICE_BASE_URL;
 
 export interface LtkOverview {
   posts_count: number;
@@ -20,6 +20,7 @@ export interface LtkOverview {
 
 export async function fetchLtkOverview(slug: string): Promise<LtkOverview | null> {
   if (!slug) return null;
+  if (!LTK_SERVICE_BASE_URL) return null;
 
   const baseUrl = LTK_SERVICE_BASE_URL.replace(/\/+$/, "");
   const url = `${baseUrl}/api/ltk/${encodeURIComponent(slug)}/data`;
