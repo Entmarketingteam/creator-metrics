@@ -4,6 +4,7 @@ export interface CreatorConfig {
   username: string;
   displayName: string;
   isOwned: boolean;
+  ltkSlug?: string;
 }
 
 export const CREATORS: CreatorConfig[] = [
@@ -13,6 +14,7 @@ export const CREATORS: CreatorConfig[] = [
     username: "nicki.entenmann",
     displayName: "Nicki Entenmann",
     isOwned: true,
+    ltkSlug: "nicki",
   },
   // Add non-owned creators here as needed:
   // {
@@ -21,5 +23,6 @@ export const CREATORS: CreatorConfig[] = [
   //   username: "creator_handle",
   //   displayName: "Creator Name",
   //   isOwned: false,
+  //   ltkSlug: "creator-slug",
   // },
 ];
