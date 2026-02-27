@@ -34,7 +34,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# drizzle
+# drizzle — ignore generated config but track migrations and meta
 drizzle/
+!drizzle/*.sql
+!drizzle/meta/
+!drizzle/meta/**
+!drizzle/*.mjs
 
 .vercel
