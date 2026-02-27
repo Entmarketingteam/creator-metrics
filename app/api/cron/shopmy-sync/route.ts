@@ -94,10 +94,12 @@ export async function GET(req: NextRequest) {
 
     try {
       const session = await loginShopMy(email, password);
-      const [summary, brandRates] = await Promise.all([
-        fetchPayoutSummary(session, creator.shopmyUserId),
-        fetchBrandRates(session, creator.shopmyUserId),
-      ]);
+      const summary = await fetchPayoutSummary(session, creator.shopmyUserId);
+      // Brand rates is non-critical — don't let it block the commission sync
+      const brandRates = await fetchBrandRates(session, creator.shopmyUserId).catch((e) => {
+        console.warn(`[shopmy-sync] brand rates fetch failed for ${creator.id}: ${e.message}`);
+        return [] as any[];
+      });
 
       // --- Upsert normal_commissions → sales table ---
       const normalCommissions = summary.normal_commissions ?? [];
