@@ -55,7 +55,7 @@ export async function getLTKTokens(): Promise<LTKTokens> {
   if (airtableToken && baseId) {
     try {
       const res = await fetch(
-        `https://api.airtable.com/v0/${baseId}/LTK_Credentials?maxRecords=1&sort%5B0%5D%5Bfield%5D=Updated&sort%5B0%5D%5Bdirection%5D=desc`,
+        `https://api.airtable.com/v0/${baseId}/LTK_Credentials?maxRecords=1&sort%5B0%5D%5Bfield%5D=Last_Refreshed&sort%5B0%5D%5Bdirection%5D=desc`,
         {
           headers: { Authorization: `Bearer ${airtableToken}` },
           next: { revalidate: 0 },
@@ -64,10 +64,10 @@ export async function getLTKTokens(): Promise<LTKTokens> {
       if (res.ok) {
         const data = await res.json();
         const record = data.records?.[0]?.fields;
-        if (record?.access_token && record?.id_token) {
+        if (record?.Access_Token && record?.ID_Token) {
           return {
-            accessToken: record.access_token,
-            idToken: record.id_token,
+            accessToken: record.Access_Token,
+            idToken: record.ID_Token,
           };
         }
       }

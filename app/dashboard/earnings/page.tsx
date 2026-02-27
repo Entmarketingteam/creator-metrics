@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { platformEarnings, sales, products } from "@/lib/schema";
-import { sql, desc, eq } from "drizzle-orm";
+import { sql, desc } from "drizzle-orm";
 import { DollarSign } from "lucide-react";
 import EarningsCard from "@/components/earnings/EarningsCard";
 import CommissionsSummary from "@/components/earnings/CommissionsSummary";
@@ -10,12 +10,30 @@ import PlatformBreakdown from "@/components/earnings/PlatformBreakdown";
 import EarningsChart from "@/components/earnings/EarningsChart";
 import SalesTable from "@/components/earnings/SalesTable";
 import TopPerformers from "@/components/earnings/TopPerformers";
+import PeriodSelector from "@/components/earnings/PeriodSelector";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
-export default async function EarningsPage() {
+const PERIOD_LABELS: Record<string, string> = {
+  "7": "7 days",
+  "30": "30 days",
+  "90": "90 days",
+  "365": "1 year",
+};
+
+export default async function EarningsPage({
+  searchParams,
+}: {
+  searchParams: { days?: string };
+}) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+
+  const days = parseInt(searchParams.days ?? "30", 10);
+  const safeDays = [7, 30, 90, 365].includes(days) ? days : 30;
+  const periodLabel = PERIOD_LABELS[String(safeDays)] ?? "30 days";
+  const interval = sql`NOW() - MAKE_INTERVAL(days => ${safeDays})`;
 
   // Aggregate earnings across all creators
   const earningsSummary = await db
@@ -24,7 +42,7 @@ export default async function EarningsPage() {
       totalCommission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
     })
     .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`);
+    .where(sql`${platformEarnings.syncedAt} >= ${interval}`);
 
   // Pending vs paid
   const statusBreakdown = await db
@@ -33,7 +51,7 @@ export default async function EarningsPage() {
       total: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
     })
     .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`)
+    .where(sql`${platformEarnings.syncedAt} >= ${interval}`)
     .groupBy(platformEarnings.status);
 
   const pending = statusBreakdown.find((s) => s.status === "pending")?.total ?? 0;
@@ -47,7 +65,7 @@ export default async function EarningsPage() {
       revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
     })
     .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`)
+    .where(sql`${platformEarnings.syncedAt} >= ${interval}`)
     .groupBy(platformEarnings.platform);
 
   const platformTotal = platformData.reduce((s, p) => s + Number(p.revenue), 0);
@@ -57,14 +75,14 @@ export default async function EarningsPage() {
     percentage: platformTotal > 0 ? Math.round((Number(p.revenue) / platformTotal) * 100) : 0,
   }));
 
-  // Revenue time series (last 30 days by day)
+  // Revenue time series
   const revenueHistory = await db
     .select({
       date: sql<string>`${platformEarnings.periodStart}::text`,
       Revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
     })
     .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`)
+    .where(sql`${platformEarnings.syncedAt} >= ${interval}`)
     .groupBy(platformEarnings.periodStart)
     .orderBy(platformEarnings.periodStart);
 
@@ -72,12 +90,14 @@ export default async function EarningsPage() {
   const recentSales = await db
     .select()
     .from(sales)
+    .where(sql`${sales.saleDate} >= ${interval}`)
     .orderBy(desc(sales.saleDate))
     .limit(20);
 
   const salesCount = await db
     .select({ count: sql<number>`COUNT(*)` })
-    .from(sales);
+    .from(sales)
+    .where(sql`${sales.saleDate} >= ${interval}`);
 
   // Top products
   const topProducts = await db
@@ -88,12 +108,17 @@ export default async function EarningsPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <DollarSign className="w-6 h-6 text-blue-400" />
-        <div>
-          <h1 className="text-2xl font-bold text-white">Earnings</h1>
-          <p className="text-gray-500">Track commission earnings across all platforms</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <DollarSign className="w-6 h-6 text-blue-400" />
+          <div>
+            <h1 className="text-2xl font-bold text-white">Earnings</h1>
+            <p className="text-gray-500">Track commission earnings across all platforms</p>
+          </div>
         </div>
+        <Suspense>
+          <PeriodSelector days={String(safeDays)} />
+        </Suspense>
       </div>
 
       {/* Top row: Earnings card + Commissions */}
@@ -101,7 +126,7 @@ export default async function EarningsPage() {
         <EarningsCard
           totalRevenue={totalRevenue}
           pendingPayment={pending}
-          period="30 days"
+          period={periodLabel}
         />
         <CommissionsSummary
           pending={pending}
