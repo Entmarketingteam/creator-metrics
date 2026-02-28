@@ -199,7 +199,7 @@ export default async function CreatorEarningsPage({
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <PlatformBreakdown data={platformBreakdown} />
-        <EarningsChart data={revenueHistory} />
+        <EarningsChart data={revenueHistory} platforms={[]} />
       </div>
 
       {/* Top Products */}

@@ -3,24 +3,26 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { platformEarnings, sales, products } from "@/lib/schema";
 import { sql, desc } from "drizzle-orm";
-import { DollarSign } from "lucide-react";
-import EarningsCard from "@/components/earnings/EarningsCard";
-import CommissionsSummary from "@/components/earnings/CommissionsSummary";
+import { DollarSign, MousePointerClick, ShoppingCart, TrendingUp } from "lucide-react";
+import PlatformCard, { type PlatformCardData } from "@/components/earnings/PlatformCard";
 import PlatformBreakdown from "@/components/earnings/PlatformBreakdown";
-import EarningsChart from "@/components/earnings/EarningsChart";
+import EarningsChart, { type ChartDataPoint } from "@/components/earnings/EarningsChart";
 import SalesTable from "@/components/earnings/SalesTable";
 import TopPerformers from "@/components/earnings/TopPerformers";
 import PeriodSelector from "@/components/earnings/PeriodSelector";
+import { formatCurrency } from "@/lib/utils";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
 const PERIOD_LABELS: Record<string, string> = {
-  "7": "7 days",
-  "30": "30 days",
-  "90": "90 days",
-  "365": "1 year",
+  "7": "Last 7 days",
+  "30": "Last 30 days",
+  "90": "Last 90 days",
+  "365": "Last year",
 };
+
+const PLATFORMS = ["ltk", "shopmy", "mavely", "amazon"] as const;
 
 export default async function EarningsPage({
   searchParams,
@@ -32,88 +34,141 @@ export default async function EarningsPage({
 
   const days = parseInt(searchParams.days ?? "30", 10);
   const safeDays = [7, 30, 90, 365].includes(days) ? days : 30;
-  const periodLabel = PERIOD_LABELS[String(safeDays)] ?? "30 days";
-  const interval = sql`NOW() - MAKE_INTERVAL(days => ${safeDays})`;
+  const periodLabel = PERIOD_LABELS[String(safeDays)] ?? "Last 30 days";
 
-  // Aggregate earnings across all creators
-  const earningsSummary = await db
-    .select({
-      totalRevenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-      totalCommission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= ${interval}`);
+  // ── Per-platform: latest row per platform within the window ──────
+  // Use DISTINCT ON to get the most recent sync per platform
+  const latestPerPlatform = await db.execute(sql`
+    SELECT DISTINCT ON (platform)
+      platform,
+      CAST(COALESCE(revenue, '0') AS FLOAT) AS revenue,
+      CAST(COALESCE(commission, '0') AS FLOAT) AS commission,
+      COALESCE(clicks, 0) AS clicks,
+      COALESCE(orders, 0) AS orders,
+      synced_at
+    FROM platform_earnings
+    WHERE period_end >= NOW() - MAKE_INTERVAL(days => ${safeDays})
+    ORDER BY platform, synced_at DESC
+  `);
 
-  // Pending vs paid
-  const statusBreakdown = await db
-    .select({
-      status: platformEarnings.status,
-      total: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= ${interval}`)
-    .groupBy(platformEarnings.status);
+  // Build a map of platform → data, with zeros for missing platforms
+  const platformMap = new Map<string, PlatformCardData>();
+  for (const platform of PLATFORMS) {
+    platformMap.set(platform, {
+      platform,
+      revenue: 0,
+      commission: 0,
+      clicks: 0,
+      orders: 0,
+      periodLabel,
+      syncedAt: null,
+    });
+  }
+  for (const row of latestPerPlatform as any[]) {
+    const key = String(row.platform).toLowerCase();
+    platformMap.set(key, {
+      platform: key,
+      revenue: Number(row.revenue),
+      commission: Number(row.commission),
+      clicks: Number(row.clicks),
+      orders: Number(row.orders),
+      periodLabel,
+      syncedAt: row.synced_at ? String(row.synced_at) : null,
+    });
+  }
 
-  const pending = statusBreakdown.find((s) => s.status === "pending")?.total ?? 0;
-  const paid = statusBreakdown.find((s) => s.status === "paid")?.total ?? 0;
-  const totalRevenue = earningsSummary[0]?.totalRevenue ?? 0;
+  const platformCards = PLATFORMS.map((p) => platformMap.get(p)!);
 
-  // Platform breakdown
-  const platformData = await db
-    .select({
-      platform: platformEarnings.platform,
-      revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= ${interval}`)
-    .groupBy(platformEarnings.platform);
+  // ── Summary totals across all platforms ──────────────────────────
+  const totalRevenue = platformCards.reduce((s, c) => s + c.revenue, 0);
+  const totalCommission = platformCards.reduce((s, c) => s + c.commission, 0);
+  const totalClicks = platformCards.reduce((s, c) => s + c.clicks, 0);
+  const totalOrders = platformCards.reduce((s, c) => s + c.orders, 0);
+  const totalCvr = totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toFixed(1) + "%" : "—";
 
-  const platformTotal = platformData.reduce((s, p) => s + Number(p.revenue), 0);
-  const platformBreakdown = platformData.map((p) => ({
-    platform: p.platform,
-    revenue: Number(p.revenue),
-    percentage: platformTotal > 0 ? Math.round((Number(p.revenue) / platformTotal) * 100) : 0,
-  }));
+  // ── Platform breakdown for bar chart ─────────────────────────────
+  const platformTotal = platformCards.reduce((s, c) => s + c.commission, 0);
+  const platformBreakdown = platformCards
+    .filter((c) => c.commission > 0)
+    .map((c) => ({
+      platform: c.platform,
+      revenue: c.commission,
+      percentage: platformTotal > 0 ? Math.round((c.commission / platformTotal) * 100) : 0,
+    }));
 
-  // Revenue time series
-  const revenueHistory = await db
-    .select({
-      date: sql<string>`${platformEarnings.periodStart}::text`,
-      Revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(sql`${platformEarnings.syncedAt} >= ${interval}`)
-    .groupBy(platformEarnings.periodStart)
-    .orderBy(platformEarnings.periodStart);
+  // ── Time series chart: revenue per platform over time ────────────
+  const timeSeriesRaw = await db.execute(sql`
+    SELECT
+      period_end::text AS date,
+      platform,
+      CAST(COALESCE(commission, '0') AS FLOAT) AS commission
+    FROM platform_earnings
+    WHERE period_end >= NOW() - MAKE_INTERVAL(days => ${safeDays})
+    ORDER BY period_end ASC, platform ASC
+  `);
 
-  // Recent sales
-  const recentSales = await db
-    .select()
-    .from(sales)
-    .where(sql`${sales.saleDate} >= ${interval}`)
-    .orderBy(desc(sales.saleDate))
-    .limit(20);
+  // Pivot: { date → { platform: commission } }
+  const chartMap = new Map<string, Record<string, number>>();
+  const activePlatforms = new Set<string>();
+  for (const row of timeSeriesRaw as any[]) {
+    const d = String(row.date);
+    const p = String(row.platform);
+    if (!chartMap.has(d)) chartMap.set(d, {});
+    chartMap.get(d)![p] = Number(row.commission);
+    activePlatforms.add(p);
+  }
 
-  const salesCount = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(sales)
-    .where(sql`${sales.saleDate} >= ${interval}`);
+  // Build chart data using platform labels as keys (Tremor needs readable names)
+  const PLATFORM_LABELS_MAP: Record<string, string> = {
+    ltk: "LTK",
+    shopmy: "ShopMy",
+    mavely: "Mavely",
+    amazon: "Amazon",
+  };
+  const chartData: ChartDataPoint[] = Array.from(chartMap.entries()).map(
+    ([date, vals]) => {
+      const point: ChartDataPoint = { date };
+      for (const [p, v] of Object.entries(vals)) {
+        const label = PLATFORM_LABELS_MAP[p] ?? p;
+        point[label] = v;
+      }
+      return point;
+    }
+  );
+  const chartPlatforms = Array.from(activePlatforms).filter((p) =>
+    PLATFORMS.includes(p as any)
+  );
 
-  // Top products
-  const topProducts = await db
-    .select()
-    .from(products)
-    .orderBy(desc(sql`CAST(${products.totalRevenue} AS FLOAT)`))
-    .limit(5);
+  // ── Recent sales + top products ───────────────────────────────────
+  const [recentSales, salesCountResult, topProducts] = await Promise.all([
+    db
+      .select()
+      .from(sales)
+      .where(sql`${sales.saleDate} >= NOW() - MAKE_INTERVAL(days => ${safeDays})`)
+      .orderBy(desc(sales.saleDate))
+      .limit(20),
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(sales)
+      .where(sql`${sales.saleDate} >= NOW() - MAKE_INTERVAL(days => ${safeDays})`),
+    db
+      .select()
+      .from(products)
+      .orderBy(desc(sql`CAST(${products.totalRevenue} AS FLOAT)`))
+      .limit(5),
+  ]);
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* ── Page header ─────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <DollarSign className="w-6 h-6 text-blue-400" />
           <div>
             <h1 className="text-2xl font-bold text-white">Earnings</h1>
-            <p className="text-gray-500">Track commission earnings across all platforms</p>
+            <p className="text-gray-500 text-sm">
+              Affiliate revenue across all platforms · Nicki Entenmann
+            </p>
           </div>
         </div>
         <Suspense>
@@ -121,34 +176,60 @@ export default async function EarningsPage({
         </Suspense>
       </div>
 
-      {/* Top row: Earnings card + Commissions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <EarningsCard
-          totalRevenue={totalRevenue}
-          pendingPayment={pending}
-          period={periodLabel}
-        />
-        <CommissionsSummary
-          pending={pending}
-          paid={paid}
-          total={totalRevenue}
-        />
-      </div>
-
-      {/* Middle row: Platform breakdown + Revenue chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <PlatformBreakdown data={platformBreakdown} />
-        <EarningsChart data={revenueHistory} />
-      </div>
-
-      {/* Top Performers */}
-      {topProducts.length > 0 && (
-        <div className="mb-6">
-          <TopPerformers products={topProducts} />
+      {/* ── Summary stats row ───────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+          <p className="text-xs text-gray-500 mb-1">Total Commission</p>
+          <p className="text-xl font-bold text-white">{formatCurrency(totalCommission)}</p>
+          <p className="text-xs text-gray-600 mt-1">{periodLabel}</p>
         </div>
-      )}
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+          <div className="flex items-center gap-1.5 mb-1">
+            <MousePointerClick className="h-3.5 w-3.5 text-gray-500" />
+            <p className="text-xs text-gray-500">Total Clicks</p>
+          </div>
+          <p className="text-xl font-bold text-white">{totalClicks.toLocaleString()}</p>
+          <p className="text-xs text-gray-600 mt-1">across all platforms</p>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+          <div className="flex items-center gap-1.5 mb-1">
+            <ShoppingCart className="h-3.5 w-3.5 text-gray-500" />
+            <p className="text-xs text-gray-500">Total Orders</p>
+          </div>
+          <p className="text-xl font-bold text-white">{totalOrders.toLocaleString()}</p>
+          <p className="text-xs text-gray-600 mt-1">across all platforms</p>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+          <div className="flex items-center gap-1.5 mb-1">
+            <TrendingUp className="h-3.5 w-3.5 text-gray-500" />
+            <p className="text-xs text-gray-500">Avg. Conversion</p>
+          </div>
+          <p className="text-xl font-bold text-white">{totalCvr}</p>
+          <p className="text-xs text-gray-600 mt-1">orders ÷ clicks</p>
+        </div>
+      </div>
 
-      {/* Sales Table */}
+      {/* ── Per-platform cards ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {platformCards.map((card) => (
+          <PlatformCard key={card.platform} data={card} />
+        ))}
+      </div>
+
+      {/* ── Chart + Breakdown row ───────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-3">
+          <EarningsChart data={chartData} platforms={chartPlatforms} />
+        </div>
+        <div className="lg:col-span-2">
+          <PlatformBreakdown data={platformBreakdown} />
+        </div>
+      </div>
+
+      {/* ── Top performers ──────────────────────────────────────── */}
+      {topProducts.length > 0 && <TopPerformers products={topProducts} />}
+
+      {/* ── Sales table ─────────────────────────────────────────── */}
       <SalesTable
         initialData={recentSales.map((s) => ({
           id: s.id,
@@ -160,7 +241,7 @@ export default async function EarningsPage({
           orderValue: s.orderValue,
           status: s.status,
         }))}
-        totalCount={salesCount[0]?.count ?? 0}
+        totalCount={salesCountResult[0]?.count ?? 0}
       />
     </div>
   );

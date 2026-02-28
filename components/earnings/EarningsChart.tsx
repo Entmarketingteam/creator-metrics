@@ -1,25 +1,39 @@
 "use client";
 
-import { AreaChart } from "@tremor/react";
+import { BarChart } from "@tremor/react";
 import { DollarSign } from "lucide-react";
+import { PLATFORM_LABELS } from "@/lib/utils";
 
-interface DataPoint {
+export interface ChartDataPoint {
   date: string;
-  Revenue: number;
+  [platform: string]: string | number;
 }
 
 interface EarningsChartProps {
-  data: DataPoint[];
+  data: ChartDataPoint[];
+  platforms: string[];
 }
 
-export default function EarningsChart({ data }: EarningsChartProps) {
-  if (data.length === 0) {
+const TREMOR_COLORS: Record<string, string> = {
+  ltk: "violet",
+  shopmy: "pink",
+  mavely: "emerald",
+  amazon: "amber",
+};
+
+export default function EarningsChart({ data, platforms }: EarningsChartProps) {
+  if (data.length === 0 || platforms.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
-        <p className="text-sm text-gray-500">No earnings data yet.</p>
+      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5 flex items-center justify-center min-h-[200px]">
+        <p className="text-sm text-gray-500">No revenue data for this period.</p>
       </div>
     );
   }
+
+  const categories = platforms.map(
+    (p) => PLATFORM_LABELS[p.toLowerCase()] ?? p
+  );
+  const colors = platforms.map((p) => TREMOR_COLORS[p.toLowerCase()] ?? "blue");
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
@@ -29,14 +43,15 @@ export default function EarningsChart({ data }: EarningsChartProps) {
           Revenue Over Time
         </h3>
       </div>
-      <AreaChart
+      <BarChart
         data={data}
         index="date"
-        categories={["Revenue"]}
-        colors={["blue"]}
+        categories={categories}
+        colors={colors}
         showAnimation
         className="h-52"
-        curveType="monotone"
+        stack={false}
+        yAxisWidth={56}
       />
     </div>
   );
