@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 const CREATOR_API = "https://creator-api-gateway.shopltk.com/v1";
 
 const RANGES = [
-  { label: "last_7_days", days: 7 },
-  { label: "last_30_days", days: 30 },
+  { label: "7d", days: 7 },
+  { label: "30d", days: 30 },
 ];
 
 async function ltkCreatorFetch<T>(
