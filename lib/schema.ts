@@ -86,6 +86,9 @@ export const mediaSnapshots = pgTable(
     saved: integer("saved"),
     shares: integer("shares"),
     totalInteractions: integer("total_interactions"),
+    // Reels-specific metrics
+    reelsAvgWatchTimeMs: integer("reels_avg_watch_time_ms"),
+    reelsVideoViewTotalTimeMs: integer("reels_video_view_total_time_ms"),
   },
   (t) => [unique().on(t.mediaIgId, t.capturedAt)]
 );

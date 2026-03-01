@@ -29,6 +29,8 @@ interface IGMediaInsight {
   saved?: number;
   shares?: number;
   total_interactions?: number;
+  ig_reels_avg_watch_time?: number;
+  ig_reels_video_view_total_time?: number;
 }
 
 interface IGAccountInsights {
@@ -72,11 +74,17 @@ export async function fetchOwnedMedia(
 
 export async function fetchOwnedMediaInsights(
   mediaId: string,
-  token: string
+  token: string,
+  mediaProductType?: string
 ): Promise<IGMediaInsight> {
   try {
+    const isReel = mediaProductType === "REELS";
+    const metrics = isReel
+      ? "reach,saved,shares,total_interactions,ig_reels_avg_watch_time,ig_reels_video_view_total_time"
+      : "reach,saved,shares,total_interactions";
+
     const res = await igFetch<{ data: { name: string; values: { value: number }[] }[] }>(
-      `/${mediaId}/insights?metric=reach,saved,shares,total_interactions`,
+      `/${mediaId}/insights?metric=${metrics}`,
       token
     );
     const out: Record<string, number> = {};
