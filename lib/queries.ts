@@ -69,7 +69,7 @@ export async function getCreatorHistory(creatorId: string, days = 30) {
     .where(
       and(
         eq(creatorSnapshots.creatorId, creatorId),
-        sql`captured_at >= CURRENT_DATE - ${days}`
+        sql`captured_at >= CURRENT_DATE - MAKE_INTERVAL(days => ${days})`
       )
     )
     .orderBy(creatorSnapshots.capturedAt);
