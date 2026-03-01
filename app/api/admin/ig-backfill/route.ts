@@ -29,11 +29,12 @@ async function fetchMediaInsights(
   total_interactions?: number;
   ig_reels_avg_watch_time?: number;
   ig_reels_video_view_total_time?: number;
+  views?: number;
 }> {
   try {
     const isReel = mediaProductType === "REELS";
     const metrics = isReel
-      ? "reach,saved,shares,total_interactions,ig_reels_avg_watch_time,ig_reels_video_view_total_time"
+      ? "reach,saved,shares,total_interactions,ig_reels_avg_watch_time,ig_reels_video_view_total_time,views"
       : "reach,saved,shares,total_interactions";
 
     const res = await igFetch<{
@@ -146,6 +147,7 @@ export async function GET(req: NextRequest) {
           totalInteractions: insights.total_interactions ?? null,
           reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
           reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
+          viewsCount: insights.views ?? null,
         })
         .onConflictDoUpdate({
           target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
@@ -158,6 +160,7 @@ export async function GET(req: NextRequest) {
             totalInteractions: insights.total_interactions ?? null,
             reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
             reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
+            viewsCount: insights.views ?? null,
             mediaUrl: media.media_url ?? null,
             thumbnailUrl: media.thumbnail_url ?? null,
           },

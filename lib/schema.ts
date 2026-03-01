@@ -89,6 +89,7 @@ export const mediaSnapshots = pgTable(
     // Reels-specific metrics
     reelsAvgWatchTimeMs: integer("reels_avg_watch_time_ms"),
     reelsVideoViewTotalTimeMs: integer("reels_video_view_total_time_ms"),
+    viewsCount: integer("views_count"),   // total plays (unique: reach; total: views_count)
   },
   (t) => [unique().on(t.mediaIgId, t.capturedAt)]
 );

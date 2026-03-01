@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
               totalInteractions: insights.total_interactions ?? null,
               reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
               reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
+              viewsCount: insights.views ?? null,
             })
             .onConflictDoUpdate({
               target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
@@ -108,6 +109,7 @@ export async function GET(req: NextRequest) {
                 totalInteractions: insights.total_interactions ?? null,
                 reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
                 reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
+                viewsCount: insights.views ?? null,
               },
             });
         }

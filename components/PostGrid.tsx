@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Heart, MessageCircle, Eye, Bookmark, Share2, Play } from "lucide-react";
+import { Heart, MessageCircle, Eye, Bookmark, Share2, Play, Clock } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 
 interface Post {
@@ -18,6 +18,8 @@ interface Post {
   saved: number | null;
   shares: number | null;
   postedAt: Date | null;
+  reelsAvgWatchTimeMs?: number | null;
+  viewsCount?: number | null;
 }
 
 export default function PostGrid({ posts }: { posts: Post[] }) {
@@ -34,6 +36,19 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
       {posts.map((post) => {
         const imgSrc = post.thumbnailUrl ?? post.mediaUrl;
         const isVideo = post.mediaType === "VIDEO" || post.mediaProductType === "REELS";
+        const isReel = post.mediaProductType === "REELS";
+
+        // Avg watch time in seconds (rounded to 1 decimal)
+        const avgWatchSec =
+          isReel && post.reelsAvgWatchTimeMs != null
+            ? (post.reelsAvgWatchTimeMs / 1000).toFixed(1)
+            : null;
+
+        // Replay rate: total plays / unique viewers
+        const replayRate =
+          isReel && post.viewsCount != null && post.reach != null && post.reach > 0
+            ? (post.viewsCount / post.reach).toFixed(1)
+            : null;
 
         return (
           <a
@@ -106,6 +121,18 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
                   <div className="flex items-center gap-1 bg-black/60 rounded-full px-2.5 py-1 backdrop-blur-sm">
                     <Share2 className="w-3.5 h-3.5 text-green-400" />
                     <span className="text-xs font-semibold text-white">{formatNumber(post.shares)}</span>
+                  </div>
+                )}
+                {avgWatchSec != null && (
+                  <div className="flex items-center gap-1 bg-orange-500/70 rounded-full px-2.5 py-1 backdrop-blur-sm">
+                    <Clock className="w-3.5 h-3.5 text-white" />
+                    <span className="text-xs font-semibold text-white">{avgWatchSec}s</span>
+                  </div>
+                )}
+                {replayRate != null && parseFloat(replayRate) > 1 && (
+                  <div className="flex items-center gap-1 bg-violet-500/70 rounded-full px-2.5 py-1 backdrop-blur-sm">
+                    <Play className="w-3 h-3 text-white fill-white" />
+                    <span className="text-xs font-semibold text-white">{replayRate}x</span>
                   </div>
                 )}
               </div>

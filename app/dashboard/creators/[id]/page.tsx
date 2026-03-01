@@ -28,6 +28,8 @@ import {
   ImageIcon,
   BarChart2,
   ExternalLink,
+  Clock,
+  RotateCcw,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -147,6 +149,39 @@ export default async function CreatorDetailPage({
   const hotPosts = allPosts
     .filter((p) => p.postedAt && new Date(p.postedAt) > cutoff)
     .sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0));
+
+  // Reels performance aggregates
+  const reelsWithWatchTime = reels.filter(
+    (r) => r.reelsAvgWatchTimeMs != null && r.reelsAvgWatchTimeMs > 0
+  );
+  const avgWatchTimeSec =
+    reelsWithWatchTime.length > 0
+      ? reelsWithWatchTime.reduce((s, r) => s + (r.reelsAvgWatchTimeMs ?? 0), 0) /
+        reelsWithWatchTime.length /
+        1000
+      : null;
+
+  // Replay rate = total plays / unique reach (avg across reels that have both)
+  const reelsWithReplay = reels.filter(
+    (r) => r.viewsCount != null && r.reach != null && r.reach > 0
+  );
+  const avgReplayRate =
+    reelsWithReplay.length > 0
+      ? reelsWithReplay.reduce(
+          (s, r) => s + (r.viewsCount ?? 0) / (r.reach ?? 1),
+          0
+        ) / reelsWithReplay.length
+      : null;
+
+  // Avg reach per reel
+  const reelsWithReach = reels.filter((r) => r.reach != null && r.reach > 0);
+  const avgReelReach =
+    reelsWithReach.length > 0
+      ? Math.round(
+          reelsWithReach.reduce((s, r) => s + (r.reach ?? 0), 0) /
+            reelsWithReach.length
+        )
+      : null;
 
   const followerChange =
     latest && previous
@@ -391,6 +426,57 @@ export default async function CreatorDetailPage({
             <h2 className="text-base font-semibold text-white">Reels</h2>
             <span className="text-xs text-gray-500 ml-1">({reels.length})</span>
           </div>
+
+          {/* Reels performance summary */}
+          {(avgWatchTimeSec != null || avgReplayRate != null || avgReelReach != null) && (
+            <div className="flex flex-wrap gap-3 mb-4">
+              {avgWatchTimeSec != null && (
+                <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-4 py-2.5">
+                  <Clock className="w-4 h-4 text-orange-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Avg watch time</p>
+                    <p className="text-sm font-bold text-white">{avgWatchTimeSec.toFixed(1)}s</p>
+                  </div>
+                </div>
+              )}
+              {avgReplayRate != null && (
+                <div className="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-lg px-4 py-2.5">
+                  <RotateCcw className="w-4 h-4 text-violet-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Avg replay rate</p>
+                    <p className="text-sm font-bold text-white">{avgReplayRate.toFixed(2)}x</p>
+                  </div>
+                </div>
+              )}
+              {avgReelReach != null && (
+                <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2.5">
+                  <Eye className="w-4 h-4 text-blue-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Avg reach / Reel</p>
+                    <p className="text-sm font-bold text-white">{formatNumber(avgReelReach)}</p>
+                  </div>
+                </div>
+              )}
+              {avgWatchTimeSec != null && (
+                <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5">
+                  <Zap className="w-4 h-4 text-yellow-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Est. hook strength</p>
+                    <p className="text-sm font-bold text-white">
+                      {avgWatchTimeSec >= 10
+                        ? "🔥 Strong"
+                        : avgWatchTimeSec >= 5
+                        ? "⚡ Good"
+                        : avgWatchTimeSec >= 3
+                        ? "📊 Average"
+                        : "⚠️ Weak"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <PostGrid posts={reels.slice(0, 12)} />
         </section>
       )}
