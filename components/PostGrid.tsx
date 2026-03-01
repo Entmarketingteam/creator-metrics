@@ -1,7 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { Heart, MessageCircle, Eye, Bookmark, Share2, Play, Clock } from "lucide-react";
+import { Heart, MessageCircle, Eye, Bookmark, Share2, Play, Clock, Link } from "lucide-react";
+
+function affiliatePlatform(url: string): { label: string; color: string } | null {
+  if (/mavely\.app\.link|mave\.ly/.test(url)) return { label: "Mavely", color: "bg-emerald-500/80" };
+  if (/ltk\.app|liketoknow\.it/.test(url)) return { label: "LTK", color: "bg-violet-500/80" };
+  if (/shopmy\.us|shop\.my/.test(url)) return { label: "ShopMy", color: "bg-pink-500/80" };
+  if (/amzn\.to|amazon\.com/.test(url)) return { label: "Amazon", color: "bg-orange-500/80" };
+  return { label: "Link", color: "bg-blue-500/80" };
+}
 import { formatNumber } from "@/lib/utils";
 
 interface Post {
@@ -20,6 +28,7 @@ interface Post {
   postedAt: Date | null;
   reelsAvgWatchTimeMs?: number | null;
   viewsCount?: number | null;
+  linkUrl?: string | null;
 }
 
 export default function PostGrid({ posts }: { posts: Post[] }) {
@@ -89,6 +98,19 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
                 </span>
               </div>
             )}
+
+            {/* Affiliate link badge */}
+            {post.linkUrl && (() => {
+              const platform = affiliatePlatform(post.linkUrl!);
+              return platform ? (
+                <div className="absolute bottom-2 left-2 z-10">
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${platform.color} text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm`}>
+                    <Link className="w-2.5 h-2.5" />
+                    {platform.label}
+                  </span>
+                </div>
+              ) : null;
+            })()}
 
             {/* Hover overlay with engagement bubbles */}
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[1px]">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { creators, mediaSnapshots } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { extractAffiliateUrl } from "@/lib/instagram";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -60,9 +61,10 @@ export async function GET(req: NextRequest) {
           media_url?: string;
           thumbnail_url?: string;
           timestamp?: string;
+          link?: string; // link sticker URL if present
         }[];
       }>(
-        `/${creator.igUserId}/stories?fields=id,caption,media_type,media_url,thumbnail_url,timestamp`,
+        `/${creator.igUserId}/stories?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,link`,
         token
       );
 
@@ -92,6 +94,9 @@ export async function GET(req: NextRequest) {
           // insights may fail for very recent stories — still upsert the media
         }
 
+        // Link sticker URL takes priority; fall back to affiliate URL in caption
+        const linkUrl = story.link ?? extractAffiliateUrl(story.caption) ?? null;
+
         await db
           .insert(mediaSnapshots)
           .values({
@@ -109,6 +114,7 @@ export async function GET(req: NextRequest) {
             reach: reach,
             shares: navigation,       // navigation = taps forward/back/exits combined
             totalInteractions: replies,
+            linkUrl,
           })
           .onConflictDoUpdate({
             target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
@@ -117,6 +123,7 @@ export async function GET(req: NextRequest) {
               shares: navigation,
               totalInteractions: replies,
               mediaUrl: story.media_url ?? null,
+              linkUrl,
             },
           });
 

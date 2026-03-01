@@ -91,6 +91,7 @@ export const mediaSnapshots = pgTable(
     reelsAvgWatchTimeMs: integer("reels_avg_watch_time_ms"),
     reelsVideoViewTotalTimeMs: bigint("reels_video_view_total_time_ms", { mode: "number" }),
     viewsCount: integer("views_count"),   // total plays (unique: reach; total: views_count)
+    linkUrl: text("link_url"),            // link sticker URL (stories) or first affiliate URL from caption
   },
   (t) => [unique().on(t.mediaIgId, t.capturedAt)]
 );

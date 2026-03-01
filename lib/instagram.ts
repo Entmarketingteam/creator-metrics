@@ -22,6 +22,32 @@ export interface IGMedia {
   comments_count?: number;
   permalink?: string;
   timestamp?: string;
+  link?: string; // link sticker URL (stories with link stickers only)
+}
+
+/** Affiliate URL patterns we want to capture for attribution */
+const AFFILIATE_PATTERNS = [
+  /https?:\/\/mavely\.app\.link\/[^\s"'>)\]]+/gi,
+  /https?:\/\/mave\.ly\/[^\s"'>)\]]+/gi,
+  /https?:\/\/ltk\.app\/[^\s"'>)\]]+/gi,
+  /https?:\/\/liketoknow\.it\/[^\s"'>)\]]+/gi,
+  /https?:\/\/www\.shopmy\.us\/[^\s"'>)\]]+/gi,
+  /https?:\/\/shop\.my\/[^\s"'>)\]]+/gi,
+  /https?:\/\/amzn\.to\/[^\s"'>)\]]+/gi,
+];
+
+/**
+ * Extract the first affiliate URL from a caption or link sticker URL.
+ * Returns null if none found.
+ */
+export function extractAffiliateUrl(text: string | null | undefined): string | null {
+  if (!text) return null;
+  for (const pattern of AFFILIATE_PATTERNS) {
+    pattern.lastIndex = 0;
+    const match = pattern.exec(text);
+    if (match) return match[0];
+  }
+  return null;
 }
 
 interface IGMediaInsight {
@@ -67,7 +93,7 @@ export async function fetchOwnedMedia(
   limit = 25
 ): Promise<IGMedia[]> {
   const res = await igFetch<{ data: IGMedia[] }>(
-    `/${igUserId}/media?fields=id,caption,media_type,media_product_type,media_url,thumbnail_url,like_count,comments_count,permalink,timestamp&limit=${limit}`,
+    `/${igUserId}/media?fields=id,caption,media_type,media_product_type,media_url,thumbnail_url,like_count,comments_count,permalink,timestamp,link&limit=${limit}`,
     token
   );
   return res.data;
