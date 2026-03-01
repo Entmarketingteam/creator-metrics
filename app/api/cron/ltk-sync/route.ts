@@ -25,11 +25,6 @@ export async function GET(req: NextRequest) {
 
   try {
     const tokens = await getLTKTokens();
-    const tokenDebug = {
-      accessTokenLen: tokens.accessToken?.length ?? 0,
-      idTokenLen: tokens.idToken?.length ?? 0,
-      airtableBaseId: process.env.AIRTABLE_BASE_ID ?? "NOT_SET",
-    };
 
     const ltkCreators = await db
       .select({ id: creators.id, ltkPublisherId: creators.ltkPublisherId })
@@ -70,7 +65,6 @@ export async function GET(req: NextRequest) {
               creator: creator.id,
               status: "api_error",
               error: `${range.label}: commissions=${commissionsErr} performance=${performanceErr}`,
-              debug: { commissionsErr, performanceErr, range: range.label },
             });
             continue;
           }
@@ -126,7 +120,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ synced: new Date().toISOString(), tokenDebug, results });
+    return NextResponse.json({ synced: new Date().toISOString(), results });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: 500 });
