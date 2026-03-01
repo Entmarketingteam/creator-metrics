@@ -185,10 +185,14 @@ export async function GET(req: NextRequest) {
       // months keys: "2/28/26", "1/31/26" etc. (last day of each month)
       const months = (summary as any).months ?? {};
       for (const [monthKey, monthData] of Object.entries(months as Record<string, any>)) {
-        // Parse "M/D/YY" → last day of month → derive first day
-        const [m, d, y] = monthKey.split("/").map(Number);
+        // Parse "M/D/YY" → normalize to full calendar month (first → last day).
+        // The API key may be today's date mid-month (e.g. "3/5/26") or the actual
+        // last day (e.g. "2/28/26"). Always using last-day-of-month as periodEnd
+        // means each month has exactly one stable row, updated in-place each run.
+        const [m, , y] = monthKey.split("/").map(Number);
         const fullYear = 2000 + y;
-        const periodEnd = new Date(Date.UTC(fullYear, m - 1, d)).toISOString().split("T")[0];
+        // day 0 of month m+1 = last day of month m (works for any month/year)
+        const periodEnd = new Date(Date.UTC(fullYear, m, 0)).toISOString().split("T")[0];
         const periodStart = new Date(Date.UTC(fullYear, m - 1, 1)).toISOString().split("T")[0];
         const total = monthData.user_payout_total ?? 0;
 
