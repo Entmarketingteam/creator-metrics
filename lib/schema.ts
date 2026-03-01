@@ -218,6 +218,47 @@ export const shopmyPayments = pgTable("shopmy_payments", {
   syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── Mavely GraphQL Tables ───────────────────────────────────────────
+
+/** Per-affiliate-link metrics synced from Mavely GraphQL API */
+export const mavelyLinks = pgTable(
+  "mavely_links",
+  {
+    id: serial("id").primaryKey(),
+    creatorId: text("creator_id").references(() => creators.id),
+    mavelyLinkId: text("mavely_link_id").notNull(), // Mavely's internal link ID
+    linkUrl: text("link_url"),     // mavely.app.link URL — joins with media_snapshots.link_url
+    title: text("title"),
+    imageUrl: text("image_url"),
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    clicks: integer("clicks").default(0),
+    orders: integer("orders").default(0),
+    commission: numeric("commission", { precision: 12, scale: 2 }).default("0"),
+    revenue: numeric("revenue", { precision: 12, scale: 2 }).default("0"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [unique().on(t.creatorId, t.mavelyLinkId, t.periodStart, t.periodEnd)]
+);
+
+/** Individual Mavely sale transactions — enables referrer + content attribution */
+export const mavelyTransactions = pgTable(
+  "mavely_transactions",
+  {
+    id: serial("id").primaryKey(),
+    creatorId: text("creator_id").references(() => creators.id),
+    mavelyTransactionId: text("mavely_transaction_id").notNull().unique(),
+    mavelyLinkId: text("mavely_link_id"),  // join to mavely_links
+    linkUrl: text("link_url"),             // join to media_snapshots.link_url
+    referrer: text("referrer"),            // e.g. "instagram.com"
+    commissionAmount: numeric("commission_amount", { precision: 12, scale: 2 }).default("0"),
+    orderValue: numeric("order_value", { precision: 12, scale: 2 }).default("0"),
+    saleDate: timestamp("sale_date", { withTimezone: true }),
+    status: text("status"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  }
+);
+
 export const shopmyBrandRates = pgTable(
   "shopmy_brand_rates",
   {

@@ -55,3 +55,20 @@ export const PLATFORM_LABELS: Record<string, string> = {
   amazon: "Amazon",
   instagram: "Instagram",
 };
+
+/** Full wordmark logos — for larger display (PlatformCard headers) */
+export const PLATFORM_LOGO_WORDMARK: Record<string, string> = {
+  mavely: "/logos/mavely.png",
+  ltk: "/logos/ltk.png",
+  shopmy: "/logos/shopmy.png",
+};
+
+/** Square icon logos — for compact display (badges, pills) */
+export const PLATFORM_LOGO_ICON: Record<string, string> = {
+  mavely: "/logos/mavely.png",
+  ltk: "/logos/ltk.png",
+  shopmy: "/logos/shopmy-icon.png",
+};
+
+/** Platforms whose logos need CSS invert on dark backgrounds (black logos on white) */
+export const PLATFORM_LOGO_INVERT = new Set(["ltk", "shopmy"]);

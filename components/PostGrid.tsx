@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Heart, MessageCircle, Eye, Bookmark, Share2, Play, Clock, Link } from "lucide-react";
+import { PLATFORM_LOGO_ICON, PLATFORM_LOGO_INVERT } from "@/lib/utils";
 
 function affiliatePlatform(url: string): { label: string; color: string } | null {
   if (/mavely\.app\.link|mave\.ly/.test(url)) return { label: "Mavely", color: "bg-emerald-500/80" };
@@ -102,14 +103,28 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
             {/* Affiliate link badge */}
             {post.linkUrl && (() => {
               const platform = affiliatePlatform(post.linkUrl!);
-              return platform ? (
+              if (!platform) return null;
+              const platformKey = platform.label.toLowerCase().replace(" ", "");
+              const logoSrc = PLATFORM_LOGO_ICON[platformKey];
+              return (
                 <div className="absolute bottom-2 left-2 z-10">
                   <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${platform.color} text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm`}>
-                    <Link className="w-2.5 h-2.5" />
+                    {logoSrc ? (
+                      <Image
+                        src={logoSrc}
+                        alt={platform.label}
+                        width={10}
+                        height={10}
+                        className={`object-contain ${PLATFORM_LOGO_INVERT.has(platformKey) ? "invert" : ""}`}
+                        unoptimized
+                      />
+                    ) : (
+                      <Link className="w-2.5 h-2.5" />
+                    )}
                     {platform.label}
                   </span>
                 </div>
-              ) : null;
+              );
             })()}
 
             {/* Hover overlay with engagement bubbles */}

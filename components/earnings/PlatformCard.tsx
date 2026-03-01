@@ -1,5 +1,6 @@
+import Image from "next/image";
 import { MousePointerClick, ShoppingCart, TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
-import { formatCurrency, PLATFORM_LABELS } from "@/lib/utils";
+import { formatCurrency, PLATFORM_LABELS, PLATFORM_LOGO_WORDMARK, PLATFORM_LOGO_INVERT } from "@/lib/utils";
 
 const PLATFORM_ACCENT: Record<string, { bg: string; border: string; text: string; icon: string }> = {
   ltk: {
@@ -69,7 +70,18 @@ export default function PlatformCard({ data }: { data: PlatformCardData }) {
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className={`text-sm font-semibold ${accent.text}`}>{label}</span>
+        {PLATFORM_LOGO_WORDMARK[key] ? (
+          <Image
+            src={PLATFORM_LOGO_WORDMARK[key]}
+            alt={label}
+            height={20}
+            width={80}
+            className={`object-contain object-left h-5 w-auto ${PLATFORM_LOGO_INVERT.has(key) ? "invert opacity-80" : ""}`}
+            unoptimized
+          />
+        ) : (
+          <span className={`text-sm font-semibold ${accent.text}`}>{label}</span>
+        )}
         {data.syncedAt ? (
           <span className="flex items-center gap-1 text-xs text-gray-500">
             <RefreshCw className="h-3 w-3" />
