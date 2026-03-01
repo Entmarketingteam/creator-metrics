@@ -14,6 +14,7 @@ import MetricCard from "@/components/MetricCard";
 import FollowerChart from "@/components/FollowerChart";
 import EngagementChart from "@/components/EngagementChart";
 import PostGrid from "@/components/PostGrid";
+import DateRangePicker from "@/components/DateRangePicker";
 import PlatformCard from "@/components/earnings/PlatformCard";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import {
@@ -36,9 +37,14 @@ export const dynamic = "force-dynamic";
 
 export default async function CreatorDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { from?: string; to?: string };
 }) {
+  const from = searchParams.from;
+  const to = searchParams.to;
+
   const { creator, latest, previous } = await getCreatorOverview(params.id);
   if (!creator) notFound();
 
@@ -53,7 +59,7 @@ export default async function CreatorDetailPage({
     getCreatorHistory(params.id, 90),
 
     // Fetch 60 most recent posts for type-filtering
-    getRecentPosts(params.id, 60),
+    getRecentPosts(params.id, 60, from, to),
 
     // LTK — 30-day record (period spans ~30 days vs 7-day record)
     db
@@ -405,6 +411,16 @@ export default async function CreatorDetailPage({
           />
         </div>
       </section>}
+
+      {/* ── Date Filter ───────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <DateRangePicker from={from} to={to} />
+        {(from || to) && (
+          <p className="text-xs text-gray-500">
+            Filtering {allPosts.length} posts
+          </p>
+        )}
+      </div>
 
       {/* ── Hot Right Now ─────────────────────────────────────────────── */}
       {hotPosts.length > 0 && (

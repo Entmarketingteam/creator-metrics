@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { creators, creatorSnapshots, mediaSnapshots } from "./schema";
-import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, gte, lte } from "drizzle-orm";
 
 export async function getAllCreatorsSummary() {
   const rows = await db
@@ -84,13 +84,37 @@ export async function getTopPosts(creatorId: string, limit = 10) {
     .limit(limit);
 }
 
-export async function getRecentPosts(creatorId: string, limit = 25) {
+export async function getRecentPosts(
+  creatorId: string,
+  limit = 25,
+  from?: string,
+  to?: string
+) {
+  const conditions = [eq(mediaSnapshots.creatorId, creatorId)];
+  if (from) conditions.push(gte(mediaSnapshots.postedAt, new Date(from)));
+  if (to) {
+    const toEnd = new Date(to);
+    toEnd.setHours(23, 59, 59, 999);
+    conditions.push(lte(mediaSnapshots.postedAt, toEnd));
+  }
+
+  // DISTINCT ON (media_ig_id) — latest captured_at per post, avoids duplicates
+  // from multiple cron snapshots of the same media.
   return db
-    .select()
+    .selectDistinctOn([mediaSnapshots.mediaIgId])
     .from(mediaSnapshots)
-    .where(eq(mediaSnapshots.creatorId, creatorId))
-    .orderBy(desc(mediaSnapshots.postedAt))
-    .limit(limit);
+    .where(and(...conditions))
+    .orderBy(desc(mediaSnapshots.mediaIgId), desc(mediaSnapshots.capturedAt))
+    // Re-sort by postedAt after dedup via subquery trick using raw sql
+    .then((rows) =>
+      rows
+        .sort((a, b) => {
+          const da = a.postedAt ? new Date(a.postedAt).getTime() : 0;
+          const db_ = b.postedAt ? new Date(b.postedAt).getTime() : 0;
+          return db_ - da;
+        })
+        .slice(0, limit)
+    );
 }
 
 export async function getComparison(creatorIds: string[]) {
