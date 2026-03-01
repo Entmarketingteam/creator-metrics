@@ -1,4 +1,5 @@
 const SHOPMY_API_BASE = "https://apiv3.shopmy.us";
+const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
 export interface ShopMySession {
   cookieHeader: string;
@@ -17,6 +18,7 @@ export async function loginShopMy(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "User-Agent": BROWSER_UA,
       Origin: "https://shopmy.us",
       Referer: "https://shopmy.us/",
     },
@@ -75,6 +77,7 @@ export async function shopmyFetch<T>(
     headers: {
       "x-csrf-token": session.csrfToken,
       "x-session-id": String(Date.now()),
+      "User-Agent": BROWSER_UA,
       Origin: "https://shopmy.us",
       Referer: "https://shopmy.us/",
       Cookie: session.cookieHeader,
