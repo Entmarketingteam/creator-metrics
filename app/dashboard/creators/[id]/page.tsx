@@ -7,7 +7,7 @@ import {
 } from "@/lib/queries";
 import { db } from "@/lib/db";
 import { platformEarnings, sales } from "@/lib/schema";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, gte, lte } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import MetricCard from "@/components/MetricCard";
@@ -48,6 +48,45 @@ export default async function CreatorDetailPage({
   const { creator, latest, previous } = await getCreatorOverview(params.id);
   if (!creator) notFound();
 
+  // Date-overlap conditions for earnings: a period overlaps [from, to] if
+  // periodEnd >= from AND periodStart <= to
+  const dateConds = [
+    ...(from ? [gte(platformEarnings.periodEnd, from)] : []),
+    ...(to ? [lte(platformEarnings.periodStart, to)] : []),
+  ];
+  const hasDateFilter = from || to;
+
+  // LTK: when date range active → SUM overlapping periods; else → most recent 30-day record
+  const ltkQuery = hasDateFilter
+    ? db
+        .select({
+          revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+          commission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
+          clicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
+          orders: sql<number>`COALESCE(SUM(${platformEarnings.orders}), 0)`,
+          syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
+        })
+        .from(platformEarnings)
+        .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "ltk"), ...dateConds))
+    : db
+        .select({
+          revenue: sql<number>`COALESCE(CAST(${platformEarnings.revenue} AS FLOAT), 0)`,
+          commission: sql<number>`COALESCE(CAST(${platformEarnings.commission} AS FLOAT), 0)`,
+          clicks: sql<number>`COALESCE(${platformEarnings.clicks}, 0)`,
+          orders: sql<number>`COALESCE(${platformEarnings.orders}, 0)`,
+          syncedAt: sql<string>`${platformEarnings.syncedAt}::text`,
+        })
+        .from(platformEarnings)
+        .where(
+          and(
+            eq(platformEarnings.creatorId, params.id),
+            eq(platformEarnings.platform, "ltk"),
+            sql`(${platformEarnings.periodEnd}::date - ${platformEarnings.periodStart}::date) >= 20`
+          )
+        )
+        .orderBy(desc(platformEarnings.syncedAt))
+        .limit(1);
+
   const [
     history,
     allPosts,
@@ -58,31 +97,12 @@ export default async function CreatorDetailPage({
   ] = await Promise.all([
     getCreatorHistory(params.id, 90),
 
-    // Fetch 60 most recent posts for type-filtering
-    getRecentPosts(params.id, 60, from, to),
+    // Bump limit when date-filtered — range narrows results naturally
+    getRecentPosts(params.id, hasDateFilter ? 200 : 60, from, to),
 
-    // LTK — 30-day record (period spans ~30 days vs 7-day record)
-    db
-      .select({
-        revenue: sql<number>`COALESCE(CAST(${platformEarnings.revenue} AS FLOAT), 0)`,
-        commission: sql<number>`COALESCE(CAST(${platformEarnings.commission} AS FLOAT), 0)`,
-        clicks: sql<number>`COALESCE(${platformEarnings.clicks}, 0)`,
-        orders: sql<number>`COALESCE(${platformEarnings.orders}, 0)`,
-        syncedAt: sql<string>`${platformEarnings.syncedAt}::text`,
-      })
-      .from(platformEarnings)
-      .where(
-        and(
-          eq(platformEarnings.creatorId, params.id),
-          eq(platformEarnings.platform, "ltk"),
-          // Select the 30-day range: period spans at least 20 days
-          sql`(${platformEarnings.periodEnd}::date - ${platformEarnings.periodStart}::date) >= 20`
-        )
-      )
-      .orderBy(desc(platformEarnings.syncedAt))
-      .limit(1),
+    ltkQuery,
 
-    // ShopMy — all-time total across all monthly records
+    // ShopMy — SUM periods overlapping with selected range (or all-time)
     db
       .select({
         revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
@@ -91,14 +111,9 @@ export default async function CreatorDetailPage({
         monthCount: sql<number>`COUNT(*)`,
       })
       .from(platformEarnings)
-      .where(
-        and(
-          eq(platformEarnings.creatorId, params.id),
-          eq(platformEarnings.platform, "shopmy")
-        )
-      ),
+      .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "shopmy"), ...dateConds)),
 
-    // Mavely — all records summed
+    // Mavely — SUM periods overlapping with selected range (or all-time)
     db
       .select({
         revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
@@ -106,14 +121,9 @@ export default async function CreatorDetailPage({
         syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
       })
       .from(platformEarnings)
-      .where(
-        and(
-          eq(platformEarnings.creatorId, params.id),
-          eq(platformEarnings.platform, "mavely")
-        )
-      ),
+      .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "mavely"), ...dateConds)),
 
-    // ShopMy current month (most recent period)
+    // ShopMy current month (most recent period — for label only)
     db
       .select({
         revenue: sql<number>`COALESCE(CAST(${platformEarnings.revenue} AS FLOAT), 0)`,
@@ -121,12 +131,7 @@ export default async function CreatorDetailPage({
         periodEnd: platformEarnings.periodEnd,
       })
       .from(platformEarnings)
-      .where(
-        and(
-          eq(platformEarnings.creatorId, params.id),
-          eq(platformEarnings.platform, "shopmy")
-        )
-      )
+      .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "shopmy")))
       .orderBy(desc(platformEarnings.periodEnd))
       .limit(1),
   ]);
@@ -136,8 +141,11 @@ export default async function CreatorDetailPage({
   const mavely = mavelyRaw[0] ?? { revenue: 0, commission: 0, syncedAt: null };
   const shopmyCurrent = shopmyCurrentMonthRaw[0];
 
-  // Total: LTK 30d net commissions + ShopMy all-time + Mavely all-time
-  // NOTE: LTK is 30-day rolling; ShopMy & Mavely are all-time totals (different periods by design)
+  // Human-readable label for the active date range
+  const periodRangeLabel = hasDateFilter
+    ? `${from ?? "start"} – ${to ?? "now"}`
+    : null;
+
   const totalEarnings =
     (ltk.revenue ?? 0) + (shopmy.revenue ?? 0) + (mavely.revenue ?? 0);
 
@@ -345,7 +353,9 @@ export default async function CreatorDetailPage({
               <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Combined Total</p>
               <p className="text-3xl font-bold text-white">{formatCurrency(totalEarnings)}</p>
               <p className="text-xs text-gray-500 mt-1">
-                LTK (30d) · ShopMy (all-time) · Mavely (all-time)
+                {periodRangeLabel
+                  ? `Filtered: ${periodRangeLabel}`
+                  : "LTK (30d) · ShopMy (all-time) · Mavely (all-time)"}
               </p>
             </div>
             <div className="flex gap-4 text-center">
@@ -380,7 +390,7 @@ export default async function CreatorDetailPage({
               commission: ltk.commission ?? 0,
               clicks: ltk.clicks ?? 0,
               orders: ltk.orders ?? 0,
-              periodLabel: "30-day",
+              periodLabel: periodRangeLabel ?? "30-day",
               syncedAt: ltk.syncedAt ?? null,
             }}
           />
@@ -392,9 +402,10 @@ export default async function CreatorDetailPage({
               clicks: 0,
               orders: 0,
               periodLabel:
-                (shopmy.monthCount ?? 0) > 1
+                periodRangeLabel ??
+                ((shopmy.monthCount ?? 0) > 1
                   ? `${shopmy.monthCount} months (all-time)`
-                  : "current month",
+                  : "current month"),
               syncedAt: shopmy.syncedAt ?? null,
             }}
           />
@@ -405,7 +416,7 @@ export default async function CreatorDetailPage({
               commission: mavely.commission ?? 0,
               clicks: 0,
               orders: 0,
-              periodLabel: "all-time",
+              periodLabel: periodRangeLabel ?? "all-time",
               syncedAt: mavely.syncedAt ?? null,
             }}
           />
