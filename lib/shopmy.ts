@@ -19,6 +19,9 @@ export async function loginShopMy(
     headers: {
       "Content-Type": "application/json",
       "User-Agent": BROWSER_UA,
+      "Accept": "application/json, text/plain, */*",
+      "x-apicache-bypass": "true",
+      "x-session-id": String(Date.now()),
       Origin: "https://shopmy.us",
       Referer: "https://shopmy.us/",
     },
@@ -75,8 +78,10 @@ export async function shopmyFetch<T>(
   const url = `${SHOPMY_API_BASE}${path}`;
   const res = await fetch(url, {
     headers: {
+      "Accept": "application/json, text/plain, */*",
       "x-csrf-token": session.csrfToken,
       "x-session-id": String(Date.now()),
+      "x-apicache-bypass": "true",
       "User-Agent": BROWSER_UA,
       Origin: "https://shopmy.us",
       Referer: "https://shopmy.us/",
@@ -94,11 +99,10 @@ export async function shopmyFetch<T>(
 }
 
 export interface ShopMyPayoutSummary {
-  normal_commissions?: any[];
-  opportunity_commissions?: any[];
-  shopper_referral_bonuses?: any[];
-  payments?: any[];
-  months?: any[];
+  /** Individual commission records (renamed from normal_commissions in API) */
+  payouts?: any[];
+  months?: Record<string, { user_payout_total: number; user_payout_total_locked: number; user_payout_total_paid: number }>;
+  referralTotals?: Record<string, any>;
   todayAmount?: number;
 }
 
@@ -138,4 +142,20 @@ export async function fetchBrandRates(
     session
   );
   return Array.isArray(result) ? result : result?.rates ?? [];
+}
+
+/**
+ * Fetch completed payment history for a creator.
+ * Endpoint: GET /api/Payments/by_user/{userId}
+ * Response: { success: true, payments: [{ id, amount, user_amount, source, sent_date, ... }] }
+ */
+export async function fetchPayments(
+  session: ShopMySession,
+  userId: string
+): Promise<any[]> {
+  const result = await shopmyFetch<{ success: boolean; payments?: any[] }>(
+    `/api/Payments/by_user/${userId}`,
+    session
+  );
+  return result?.payments ?? [];
 }

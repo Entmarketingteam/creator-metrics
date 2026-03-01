@@ -4,13 +4,13 @@ import {
   sales,
   platformEarnings,
   creators,
-  shopmyOpportunityCommissions,
   shopmyPayments,
   shopmyBrandRates,
 } from "@/lib/schema";
 import {
   loginShopMy,
   fetchPayoutSummary,
+  fetchPayments,
   fetchBrandRates,
   parseShopMyAmount,
 } from "@/lib/shopmy";
@@ -94,24 +94,21 @@ export async function GET(req: NextRequest) {
 
     try {
       const session = await loginShopMy(email, password);
-      const summary = await fetchPayoutSummary(session, creator.shopmyUserId);
-      // Brand rates is non-critical — don't let it block the commission sync
-      const brandRates = await fetchBrandRates(session, creator.shopmyUserId).catch((e) => {
-        console.warn(`[shopmy-sync] brand rates fetch failed for ${creator.id}: ${e.message}`);
-        return [] as any[];
-      });
+      const [summary, payments, brandRates] = await Promise.all([
+        fetchPayoutSummary(session, creator.shopmyUserId),
+        fetchPayments(session, creator.shopmyUserId).catch((e) => {
+          console.warn(`[shopmy-sync] payments fetch failed for ${creator.id}: ${e.message}`);
+          return [] as any[];
+        }),
+        fetchBrandRates(session, creator.shopmyUserId).catch((e) => {
+          console.warn(`[shopmy-sync] brand rates fetch failed for ${creator.id}: ${e.message}`);
+          return [] as any[];
+        }),
+      ]);
 
-      // --- Upsert normal_commissions → sales table ---
-      const normalCommissions = summary.normal_commissions ?? [];
-      // Debug: log field keys from first record to catch API shape changes
-      if (normalCommissions.length > 0) {
-        console.log("[shopmy-sync] normal_commission keys:", Object.keys(normalCommissions[0]));
-        console.log("[shopmy-sync] first record sample:", JSON.stringify(normalCommissions[0]));
-      }
-      if ((summary.opportunity_commissions ?? []).length > 0) {
-        console.log("[shopmy-sync] opp_commission keys:", Object.keys((summary.opportunity_commissions ?? [])[0]));
-        console.log("[shopmy-sync] first opp sample:", JSON.stringify((summary.opportunity_commissions ?? [])[0]));
-      }
+      // --- Upsert payouts (individual commissions) → sales table ---
+      // API returns data.payouts (not normal_commissions)
+      const normalCommissions = (summary as any).payouts ?? [];
       for (const c of normalCommissions) {
         const externalId = String(c.id ?? c.order_id ?? c.transaction_id ?? "");
         if (!externalId) continue;
@@ -123,46 +120,18 @@ export async function GET(req: NextRequest) {
             platform: "shopmy",
             saleDate: new Date(c.transaction_date ?? c.created_at ?? Date.now()),
             brand: c.merchant ?? c.brand ?? null,
-            // amountEarned is already a clean numeric string (no $ or ,)
             commissionAmount: c.amountEarned != null
               ? String(c.amountEarned)
               : parseShopMyAmount(c.commission_amount),
             orderValue: parseShopMyAmount(c.order_amount),
-            productName: c.Product_title ?? c.product_title ?? c.productTitle ?? c.name ?? null,
+            productName: c.title ?? c.product_title ?? c.productTitle ?? c.name ?? null,
             status: mapShopMyStatus(c),
             externalOrderId: externalId,
           })
           .onConflictDoNothing();
       }
 
-      // --- Upsert opportunity_commissions ---
-      const opCommissions = summary.opportunity_commissions ?? [];
-      for (const oc of opCommissions) {
-        const extId = oc.id ?? null;
-        if (extId == null) continue;
-
-        await db
-          .insert(shopmyOpportunityCommissions)
-          .values({
-            creatorId: creator.id,
-            externalId: extId,
-            title: oc.title ?? oc.name ?? null,
-            commissionAmount: parseShopMyAmount(oc.commission_amount ?? oc.amount),
-            status: oc.statusDisplay ?? oc.status ?? null,
-          })
-          .onConflictDoUpdate({
-            target: shopmyOpportunityCommissions.externalId,
-            set: {
-              title: oc.title ?? oc.name ?? null,
-              commissionAmount: parseShopMyAmount(oc.commission_amount ?? oc.amount),
-              status: oc.statusDisplay ?? oc.status ?? null,
-              syncedAt: new Date(),
-            },
-          });
-      }
-
-      // --- Upsert payments ---
-      const payments = summary.payments ?? [];
+      // --- Upsert payments (completed payouts from /api/Payments/by_user) ---
       for (const p of payments) {
         const extId = p.id ?? null;
         if (extId == null) continue;
@@ -174,14 +143,14 @@ export async function GET(req: NextRequest) {
             externalId: extId,
             amount: String(p.amount ?? 0),
             source: p.source ?? "PAYPAL",
-            sentAt: p.sent_at ? new Date(p.sent_at) : null,
+            sentAt: p.sent_date ? new Date(p.sent_date) : null,
           })
           .onConflictDoUpdate({
             target: shopmyPayments.externalId,
             set: {
               amount: String(p.amount ?? 0),
               source: p.source ?? "PAYPAL",
-              sentAt: p.sent_at ? new Date(p.sent_at) : null,
+              sentAt: p.sent_date ? new Date(p.sent_date) : null,
               syncedAt: new Date(),
             },
           });
@@ -212,48 +181,43 @@ export async function GET(req: NextRequest) {
           });
       }
 
-      // --- Upsert platformEarnings totals ---
-      // Use today as a single-day period for the summary snapshot
-      const today = new Date().toISOString().split("T")[0];
-      const totalCommission = normalCommissions.reduce(
-        (sum: number, c: any) =>
-          sum + Number(c.amountEarned ?? parseShopMyAmount(c.commission_amount)),
-        0
-      );
-      const totalOrders = normalCommissions.length;
+      // --- Upsert platformEarnings from monthly totals ---
+      // months keys: "2/28/26", "1/31/26" etc. (last day of each month)
+      const months = (summary as any).months ?? {};
+      for (const [monthKey, monthData] of Object.entries(months as Record<string, any>)) {
+        // Parse "M/D/YY" → last day of month → derive first day
+        const [m, d, y] = monthKey.split("/").map(Number);
+        const fullYear = 2000 + y;
+        const periodEnd = new Date(Date.UTC(fullYear, m - 1, d)).toISOString().split("T")[0];
+        const periodStart = new Date(Date.UTC(fullYear, m - 1, 1)).toISOString().split("T")[0];
+        const total = monthData.user_payout_total ?? 0;
 
-      await db
-        .insert(platformEarnings)
-        .values({
-          creatorId: creator.id,
-          platform: "shopmy",
-          periodStart: today,
-          periodEnd: today,
-          revenue: String(totalCommission),
-          commission: String(totalCommission),
-          orders: totalOrders,
-          status: "open",
-          rawPayload: JSON.stringify({
-            todayAmount: summary.todayAmount,
-            normalCount: normalCommissions.length,
-            opCount: opCommissions.length,
-            paymentsCount: payments.length,
-          }),
-        })
-        .onConflictDoUpdate({
-          target: [
-            platformEarnings.creatorId,
-            platformEarnings.platform,
-            platformEarnings.periodStart,
-            platformEarnings.periodEnd,
-          ],
-          set: {
-            revenue: String(totalCommission),
-            commission: String(totalCommission),
-            orders: totalOrders,
-            syncedAt: new Date(),
-          },
-        });
+        await db
+          .insert(platformEarnings)
+          .values({
+            creatorId: creator.id,
+            platform: "shopmy",
+            periodStart,
+            periodEnd,
+            revenue: String(total),
+            commission: String(total),
+            rawPayload: JSON.stringify(monthData),
+          })
+          .onConflictDoUpdate({
+            target: [
+              platformEarnings.creatorId,
+              platformEarnings.platform,
+              platformEarnings.periodStart,
+              platformEarnings.periodEnd,
+            ],
+            set: {
+              revenue: String(total),
+              commission: String(total),
+              rawPayload: JSON.stringify(monthData),
+              syncedAt: new Date(),
+            },
+          });
+      }
 
       results.push({ creator: creator.id, status: "ok" });
     } catch (e: unknown) {
