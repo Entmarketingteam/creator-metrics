@@ -43,7 +43,12 @@ def upsert_platform_earnings(conn, rows):
     if not rows:
         return 0
     cur = conn.cursor()
-    cur.execute("""
+    values = [(
+        r["creator_id"], r["platform"], r["period_start"], r["period_end"],
+        r["revenue"], r["commission"], r.get("clicks", 0), r.get("orders", 0),
+        r.get("status", "open"), r.get("raw_payload"), datetime.utcnow()
+    ) for r in rows]
+    execute_values(cur, """
         INSERT INTO platform_earnings
             (creator_id, platform, period_start, period_end, revenue, commission, clicks, orders, status, raw_payload, synced_at)
         VALUES %s
@@ -54,11 +59,7 @@ def upsert_platform_earnings(conn, rows):
             orders      = EXCLUDED.orders,
             raw_payload = EXCLUDED.raw_payload,
             synced_at   = EXCLUDED.synced_at
-    """, [(
-        r["creator_id"], r["platform"], r["period_start"], r["period_end"],
-        r["revenue"], r["commission"], r.get("clicks", 0), r.get("orders", 0),
-        r.get("status", "open"), r.get("raw_payload"), datetime.utcnow()
-    ) for r in rows])
+    """, values)
     count = cur.rowcount
     conn.commit()
     return count
@@ -69,16 +70,17 @@ def upsert_sales(conn, rows):
     if not rows:
         return 0
     cur = conn.cursor()
-    cur.execute("""
+    values = [(
+        r["creator_id"], r["platform"], r["sale_date"], r.get("brand"),
+        r.get("commission_amount", 0), r.get("order_value", 0),
+        r.get("product_name"), r.get("status", "open"), r.get("external_order_id")
+    ) for r in rows]
+    execute_values(cur, """
         INSERT INTO sales
             (creator_id, platform, sale_date, brand, commission_amount, order_value, product_name, status, external_order_id)
         VALUES %s
         ON CONFLICT DO NOTHING
-    """, [(
-        r["creator_id"], r["platform"], r["sale_date"], r.get("brand"),
-        r.get("commission_amount", 0), r.get("order_value", 0),
-        r.get("product_name"), r.get("status", "open"), r.get("external_order_id")
-    ) for r in rows])
+    """, values)
     count = cur.rowcount
     conn.commit()
     return count
@@ -221,47 +223,25 @@ def backfill_ltk(conn):
 # ── Mavely ────────────────────────────────────────────────────────────────────
 
 def get_mavely_session():
-    """Login to Mavely and return cookies + access token."""
+    """Get Mavely cookies + access token from Airtable (saved by n8n workflow)."""
     import subprocess
-    MAVELY_EMAIL = "marketingteam@nickient.com"
-    MAVELY_PASS = "Paisleyrae710!"
+    airtable_key = subprocess.check_output(
+        ["doppler", "secrets", "get", "AIRTABLE_API_KEY", "--project", "ent-agency-automation", "--config", "dev", "--plain"],
+        text=True
+    ).strip()
+    url = "https://api.airtable.com/v0/appQnKyfyRyhHX44h/tbllD6GuMSSEuN0Nq"
+    data = http_get(url, {"Authorization": f"Bearer {airtable_key}"})
+    fields = data["records"][0]["fields"]
+    cookies = fields.get("Mavely_Cookies", "")
 
+    # Extract access token from session using stored cookies
     base = "https://creators.mave.ly"
-    h = {"Content-Type": "application/json", "Origin": base, "Referer": f"{base}/", "User-Agent": UA}
-
-    # Get CSRF
-    csrf_req = urllib.request.Request(f"{base}/api/auth/csrf", headers={**h, "Accept": "application/json", "Referer": f"{base}/auth/login"})
-    csrf_resp = urllib.request.urlopen(csrf_req, timeout=15)
-    csrf_cookies_raw = csrf_resp.headers.get_all("Set-Cookie") or []
-    csrf_data = json.loads(csrf_resp.read())
-    csrf_token = csrf_data["csrfToken"]
-    csrf_cookie = "; ".join(c.split(";")[0].strip() for c in csrf_cookies_raw)
-
-    # Login
-    login_headers = {
-        **h,
-        "Cookie": csrf_cookie,
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
-    login_body = urllib.parse.urlencode({
-        "csrfToken": csrf_token,
-        "username": MAVELY_EMAIL,
-        "password": MAVELY_PASS,
-        "redirect": "false",
-        "callbackUrl": f"{base}/home",
-        "json": "true",
-    }).encode()
-    login_req = urllib.request.Request(f"{base}/api/auth/callback/credentials", data=login_body, headers=login_headers, method="POST")
-    login_resp = urllib.request.urlopen(login_req, timeout=15)
-    login_cookies_raw = login_resp.headers.get_all("Set-Cookie") or []
-    all_cookies = csrf_cookie + "; " + "; ".join(c.split(";")[0].strip() for c in login_cookies_raw)
-
-    # Get session (includes JWT access token)
-    session_req = urllib.request.Request(f"{base}/api/auth/session", headers={**h, "Cookie": all_cookies})
-    session_data = json.loads(urllib.request.urlopen(session_req, timeout=15).read())
+    h = {"Origin": base, "Referer": f"{base}/", "User-Agent": UA, "Cookie": cookies}
+    session_data = http_get(f"{base}/api/auth/session", h)
     access_token = session_data.get("token") or session_data.get("accessToken")
-
-    return all_cookies, access_token
+    if not access_token:
+        raise Exception(f"Could not get Mavely access token from session. Session keys: {list(session_data.keys())}")
+    return cookies, access_token
 
 
 def mavely_graphql(cookies, access_token, period_start, period_end):
