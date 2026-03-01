@@ -16,13 +16,11 @@ export const CREATORS: CreatorConfig[] = [
     isOwned: true,
     ltkSlug: "nicki",
   },
-  // Add non-owned creators here as needed:
-  // {
-  //   id: "creator_handle",
-  //   igUserId: null,
-  //   username: "creator_handle",
-  //   displayName: "Creator Name",
-  //   isOwned: false,
-  //   ltkSlug: "creator-slug",
-  // },
+  {
+    id: "livefitwithem",
+    igUserId: "17841450282995930",
+    username: "livefitwithem",
+    displayName: "Emily Ogan",
+    isOwned: false,
+  },
 ];

@@ -129,8 +129,11 @@ export default async function CreatorDetailPage({
   const shopmyCurrent = shopmyCurrentMonthRaw[0];
 
   // Total: LTK 30d net commissions + ShopMy all-time + Mavely all-time
+  // NOTE: LTK is 30-day rolling; ShopMy & Mavely are all-time totals (different periods by design)
   const totalEarnings =
     (ltk.revenue ?? 0) + (shopmy.revenue ?? 0) + (mavely.revenue ?? 0);
+
+  const hasEarnings = creator.isOwned && totalEarnings > 0;
 
   // Split posts by content type
   const reels = allPosts.filter((p) => p.mediaProductType === "REELS");
@@ -280,7 +283,7 @@ export default async function CreatorDetailPage({
       </section>
 
       {/* ── Earnings ─────────────────────────────────────────────────── */}
-      <section>
+      {creator.isOwned && <section>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -343,13 +346,13 @@ export default async function CreatorDetailPage({
           <PlatformCard
             data={{
               platform: "shopmy",
-              revenue: shopmyCurrent?.revenue ?? shopmy.revenue ?? 0,
-              commission: shopmyCurrent?.revenue ?? shopmy.revenue ?? 0,
+              revenue: shopmy.revenue ?? 0,
+              commission: shopmy.commission ?? 0,
               clicks: 0,
               orders: 0,
               periodLabel:
                 (shopmy.monthCount ?? 0) > 1
-                  ? `${shopmy.monthCount} months`
+                  ? `${shopmy.monthCount} months (all-time)`
                   : "current month",
               syncedAt: shopmy.syncedAt ?? null,
             }}
@@ -366,7 +369,7 @@ export default async function CreatorDetailPage({
             }}
           />
         </div>
-      </section>
+      </section>}
 
       {/* ── Hot Right Now ─────────────────────────────────────────────── */}
       {hotPosts.length > 0 && (
