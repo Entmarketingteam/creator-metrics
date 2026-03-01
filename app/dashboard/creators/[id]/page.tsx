@@ -10,7 +10,8 @@ import { CREATORS } from "@/lib/creators";
 import { fetchLtkOverview } from "@/lib/ltk";
 import { db } from "@/lib/db";
 import { platformEarnings, sales, shopmyOpportunityCommissions } from "@/lib/schema";
-import { eq, sql, and, count } from "drizzle-orm";
+import { eq, sql, and, desc } from "drizzle-orm";
+import OpportunityCommissions from "@/components/earnings/OpportunityCommissions";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import MetricCard from "@/components/MetricCard";
@@ -33,7 +34,7 @@ export default async function CreatorDetailPage({
 
   const config = CREATORS.find((c) => c.id === params.id);
 
-  const [history, thisWeekPosts, recentPosts, ltk, earningsData, shopmyEarningsData] =
+  const [history, thisWeekPosts, recentPosts, ltk, earningsData, shopmyEarningsData, opportunityCommissions] =
     await Promise.all([
       getCreatorHistory(params.id, 90),
       getRecentPostsByViews(params.id, 7),
@@ -61,6 +62,16 @@ export default async function CreatorDetailPage({
         .where(
           and(eq(sales.creatorId, params.id), eq(sales.platform, "shopmy"))
         ),
+      db
+        .select({
+          id: shopmyOpportunityCommissions.id,
+          title: shopmyOpportunityCommissions.title,
+          commissionAmount: shopmyOpportunityCommissions.commissionAmount,
+          status: shopmyOpportunityCommissions.status,
+        })
+        .from(shopmyOpportunityCommissions)
+        .where(eq(shopmyOpportunityCommissions.creatorId, params.id))
+        .orderBy(desc(shopmyOpportunityCommissions.commissionAmount)),
     ]);
 
   const earnings = earningsData[0];
@@ -236,6 +247,24 @@ export default async function CreatorDetailPage({
               icon={<ShoppingBag className="w-4 h-4" />}
             />
           </div>
+        </div>
+      )}
+
+      {/* ShopMy Opportunity Commissions (brand deals) */}
+      {opportunityCommissions.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign className="w-4 h-4 text-pink-400" />
+            <h2 className="text-lg font-semibold text-white">Brand Deals</h2>
+          </div>
+          <OpportunityCommissions
+            data={opportunityCommissions.map((c) => ({
+              id: c.id,
+              title: c.title,
+              commissionAmount: c.commissionAmount?.toString() ?? null,
+              status: c.status,
+            }))}
+          />
         </div>
       )}
 

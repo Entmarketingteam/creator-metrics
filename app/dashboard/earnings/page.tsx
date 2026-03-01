@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { platformEarnings, sales, products } from "@/lib/schema";
 import { sql, desc } from "drizzle-orm";
+import BrandBreakdown, { type BrandRow } from "@/components/earnings/BrandBreakdown";
 import { DollarSign, MousePointerClick, ShoppingCart, TrendingUp } from "lucide-react";
 import PlatformCard, { type PlatformCardData } from "@/components/earnings/PlatformCard";
 import PlatformBreakdown from "@/components/earnings/PlatformBreakdown";
@@ -139,6 +140,25 @@ export default async function EarningsPage({
     PLATFORMS.includes(p as any)
   );
 
+  // ── Brand breakdown from sales ────────────────────────────────────
+  const brandBreakdownRaw = await db.execute(sql`
+    SELECT
+      brand,
+      COUNT(*)::int AS sales,
+      ROUND(SUM(commission_amount::numeric), 2) AS commission
+    FROM sales
+    WHERE sale_date >= NOW() - MAKE_INTERVAL(days => ${safeDays})
+      AND brand IS NOT NULL
+    GROUP BY brand
+    ORDER BY commission DESC
+    LIMIT 10
+  `);
+  const brandBreakdown: BrandRow[] = (brandBreakdownRaw as any[]).map((r) => ({
+    brand: String(r.brand),
+    commission: Number(r.commission),
+    sales: Number(r.sales),
+  }));
+
   // ── Recent sales + top products ───────────────────────────────────
   const [recentSales, salesCountResult, topProducts] = await Promise.all([
     db
@@ -226,7 +246,8 @@ export default async function EarningsPage({
         </div>
       </div>
 
-      {/* ── Top performers ──────────────────────────────────────── */}
+      {/* ── Brand breakdown + top performers ────────────────────── */}
+      {brandBreakdown.length > 0 && <BrandBreakdown data={brandBreakdown} />}
       {topProducts.length > 0 && <TopPerformers products={topProducts} />}
 
       {/* ── Sales table ─────────────────────────────────────────── */}
