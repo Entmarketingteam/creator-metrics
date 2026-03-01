@@ -5,6 +5,7 @@ import {
   timestamp,
   serial,
   integer,
+  bigint,
   date,
   unique,
   numeric,
@@ -88,7 +89,7 @@ export const mediaSnapshots = pgTable(
     totalInteractions: integer("total_interactions"),
     // Reels-specific metrics
     reelsAvgWatchTimeMs: integer("reels_avg_watch_time_ms"),
-    reelsVideoViewTotalTimeMs: integer("reels_video_view_total_time_ms"),
+    reelsVideoViewTotalTimeMs: bigint("reels_video_view_total_time_ms", { mode: "number" }),
     viewsCount: integer("views_count"),   // total plays (unique: reach; total: views_count)
   },
   (t) => [unique().on(t.mediaIgId, t.capturedAt)]
