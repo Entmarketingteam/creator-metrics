@@ -6,7 +6,7 @@ import {
   getRecentPosts,
 } from "@/lib/queries";
 import { db } from "@/lib/db";
-import { platformEarnings, sales } from "@/lib/schema";
+import { platformEarnings, sales, mavelyLinks } from "@/lib/schema";
 import { eq, sql, and, desc, gte, lte } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +94,7 @@ export default async function CreatorDetailPage({
     shopmyRaw,
     mavelyRaw,
     shopmyCurrentMonthRaw,
+    mavelyLinksRaw,
   ] = await Promise.all([
     getCreatorHistory(params.id, 90),
 
@@ -134,7 +135,47 @@ export default async function CreatorDetailPage({
       .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "shopmy")))
       .orderBy(desc(platformEarnings.periodEnd))
       .limit(1),
+
+    // Mavely per-link attribution — aggregate all periods, keyed by link URL
+    creator.isOwned
+      ? db
+          .select({
+            linkUrl: mavelyLinks.linkUrl,
+            clicks: sql<number>`COALESCE(SUM(${mavelyLinks.clicks}), 0)`,
+            commission: sql<number>`COALESCE(SUM(CAST(${mavelyLinks.commission} AS FLOAT)), 0)`,
+            revenue: sql<number>`COALESCE(SUM(CAST(${mavelyLinks.revenue} AS FLOAT)), 0)`,
+            orders: sql<number>`COALESCE(SUM(${mavelyLinks.orders}), 0)`,
+            title: sql<string>`MAX(${mavelyLinks.title})`,
+            imageUrl: sql<string>`MAX(${mavelyLinks.imageUrl})`,
+          })
+          .from(mavelyLinks)
+          .where(
+            and(
+              eq(mavelyLinks.creatorId, params.id),
+              sql`${mavelyLinks.linkUrl} IS NOT NULL`
+            )
+          )
+          .groupBy(mavelyLinks.linkUrl)
+      : Promise.resolve([]),
   ]);
+
+  // Build link_url → attribution map for PostGrid
+  const mavelyAttribution: Record<string, {
+    clicks: number; commission: number; revenue: number; orders: number;
+    title: string | null; imageUrl: string | null;
+  }> = {};
+  for (const row of mavelyLinksRaw) {
+    if (row.linkUrl) {
+      mavelyAttribution[row.linkUrl] = {
+        clicks: Number(row.clicks) || 0,
+        commission: Number(row.commission) || 0,
+        revenue: Number(row.revenue) || 0,
+        orders: Number(row.orders) || 0,
+        title: row.title ?? null,
+        imageUrl: row.imageUrl ?? null,
+      };
+    }
+  }
 
   const ltk = ltkRaw[0] ?? { revenue: 0, commission: 0, clicks: 0, orders: 0, syncedAt: null };
   const shopmy = shopmyRaw[0] ?? { revenue: 0, commission: 0, syncedAt: null, monthCount: 0 };
@@ -441,7 +482,7 @@ export default async function CreatorDetailPage({
             <h2 className="text-base font-semibold text-white">Hot Right Now</h2>
             <span className="text-xs text-gray-500 ml-auto">Last 48 hours · sorted by views</span>
           </div>
-          <PostGrid posts={hotPosts.slice(0, 6)} />
+          <PostGrid posts={hotPosts.slice(0, 6)} attribution={mavelyAttribution} />
         </section>
       )}
 
@@ -504,7 +545,7 @@ export default async function CreatorDetailPage({
             </div>
           )}
 
-          <PostGrid posts={reels.slice(0, 12)} />
+          <PostGrid posts={reels.slice(0, 12)} attribution={mavelyAttribution} />
         </section>
       )}
 
@@ -516,7 +557,7 @@ export default async function CreatorDetailPage({
             <h2 className="text-base font-semibold text-white">Posts</h2>
             <span className="text-xs text-gray-500 ml-1">({feedPosts.length})</span>
           </div>
-          <PostGrid posts={feedPosts.slice(0, 12)} />
+          <PostGrid posts={feedPosts.slice(0, 12)} attribution={mavelyAttribution} />
         </section>
       )}
 
@@ -530,7 +571,7 @@ export default async function CreatorDetailPage({
             <h2 className="text-base font-semibold text-white">Stories</h2>
             <span className="text-xs text-gray-500 ml-1">({stories.length})</span>
           </div>
-          <PostGrid posts={stories.slice(0, 12)} />
+          <PostGrid posts={stories.slice(0, 12)} attribution={mavelyAttribution} />
         </section>
       )}
 
@@ -554,7 +595,7 @@ export default async function CreatorDetailPage({
             <h2 className="text-base font-semibold text-white">All Recent Content</h2>
             <span className="text-xs text-gray-500 ml-auto">{allPosts.length} items</span>
           </div>
-          <PostGrid posts={allPosts} />
+          <PostGrid posts={allPosts} attribution={mavelyAttribution} />
         </section>
       )}
     </div>

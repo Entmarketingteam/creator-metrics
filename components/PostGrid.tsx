@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { Heart, MessageCircle, Eye, Bookmark, Share2, Play, Clock, Link } from "lucide-react";
-import { PLATFORM_LOGO_ICON, PLATFORM_LOGO_INVERT } from "@/lib/utils";
+import { Heart, MessageCircle, Eye, Bookmark, Share2, Play, Clock, Link, DollarSign, MousePointerClick } from "lucide-react";
+import { PLATFORM_LOGO_ICON, PLATFORM_LOGO_INVERT, formatNumber, formatCurrency } from "@/lib/utils";
 
 function affiliatePlatform(url: string): { label: string; color: string } | null {
   if (/mavely\.app\.link|mave\.ly/.test(url)) return { label: "Mavely", color: "bg-emerald-500/80" };
@@ -11,7 +11,6 @@ function affiliatePlatform(url: string): { label: string; color: string } | null
   if (/amzn\.to|amazon\.com/.test(url)) return { label: "Amazon", color: "bg-orange-500/80" };
   return { label: "Link", color: "bg-blue-500/80" };
 }
-import { formatNumber } from "@/lib/utils";
 
 interface Post {
   mediaIgId: string;
@@ -32,7 +31,22 @@ interface Post {
   linkUrl?: string | null;
 }
 
-export default function PostGrid({ posts }: { posts: Post[] }) {
+interface PostAttribution {
+  clicks: number;
+  commission: number;
+  revenue: number;
+  orders: number;
+  title: string | null;
+  imageUrl: string | null;
+}
+
+export default function PostGrid({
+  posts,
+  attribution,
+}: {
+  posts: Post[];
+  attribution?: Record<string, PostAttribution>;
+}) {
   if (posts.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
@@ -59,6 +73,10 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
           isReel && post.viewsCount != null && post.reach != null && post.reach > 0
             ? (post.viewsCount / post.reach).toFixed(1)
             : null;
+
+        // Mavely attribution — match on linkUrl
+        const attr = post.linkUrl ? attribution?.[post.linkUrl] : undefined;
+        const hasRevenue = attr && attr.commission > 0;
 
         return (
           <a
@@ -100,7 +118,7 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
               </div>
             )}
 
-            {/* Affiliate link badge */}
+            {/* Affiliate link badge — bottom-left */}
             {post.linkUrl && (() => {
               const platform = affiliatePlatform(post.linkUrl!);
               if (!platform) return null;
@@ -126,6 +144,16 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
                 </div>
               );
             })()}
+
+            {/* Revenue attribution badge — bottom-right, always visible */}
+            {hasRevenue && (
+              <div className="absolute bottom-2 right-2 z-10">
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold bg-emerald-600/90 text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+                  <DollarSign className="w-2.5 h-2.5" />
+                  {formatCurrency(attr!.commission).replace("$", "")}
+                </span>
+              </div>
+            )}
 
             {/* Hover overlay with engagement bubbles */}
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[1px]">
@@ -170,6 +198,19 @@ export default function PostGrid({ posts }: { posts: Post[] }) {
                   <div className="flex items-center gap-1 bg-violet-500/70 rounded-full px-2.5 py-1 backdrop-blur-sm">
                     <Play className="w-3 h-3 text-white fill-white" />
                     <span className="text-xs font-semibold text-white">{replayRate}x</span>
+                  </div>
+                )}
+                {/* Mavely revenue attribution — shown in hover overlay */}
+                {hasRevenue && (
+                  <div className="flex items-center gap-1 bg-emerald-600/80 rounded-full px-2.5 py-1 backdrop-blur-sm">
+                    <DollarSign className="w-3.5 h-3.5 text-white" />
+                    <span className="text-xs font-semibold text-white">{formatCurrency(attr!.commission)} comm</span>
+                  </div>
+                )}
+                {hasRevenue && attr!.clicks > 0 && (
+                  <div className="flex items-center gap-1 bg-black/60 rounded-full px-2.5 py-1 backdrop-blur-sm">
+                    <MousePointerClick className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-xs font-semibold text-white">{formatNumber(attr!.clicks)} clicks</span>
                   </div>
                 )}
               </div>
