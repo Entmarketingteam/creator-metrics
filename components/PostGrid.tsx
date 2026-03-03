@@ -6,7 +6,7 @@ import { PLATFORM_LOGO_ICON, PLATFORM_LOGO_INVERT, formatNumber, formatCurrency 
 
 function affiliatePlatform(url: string): { label: string; color: string } | null {
   if (/mavely\.app\.link|mave\.ly/.test(url)) return { label: "Mavely", color: "bg-emerald-500/80" };
-  if (/ltk\.app|liketoknow\.it/.test(url)) return { label: "LTK", color: "bg-violet-500/80" };
+  if (/liketk\.it|ltk\.app|liketoknow\.it/.test(url)) return { label: "LTK", color: "bg-violet-500/80" };
   if (/shopmy\.us|shop\.my/.test(url)) return { label: "ShopMy", color: "bg-pink-500/80" };
   if (/amzn\.to|amazon\.com/.test(url)) return { label: "Amazon", color: "bg-orange-500/80" };
   return { label: "Link", color: "bg-blue-500/80" };
@@ -32,6 +32,7 @@ interface Post {
 }
 
 interface PostAttribution {
+  platform: "mavely" | "ltk";
   clicks: number;
   commission: number;
   revenue: number;
@@ -148,7 +149,7 @@ export default function PostGrid({
             {/* Revenue attribution badge — bottom-right, always visible */}
             {hasRevenue && (
               <div className="absolute bottom-2 right-2 z-10">
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold bg-emerald-600/90 text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+                <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold ${attr!.platform === "ltk" ? "bg-violet-600/90" : "bg-emerald-600/90"} text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm`}>
                   <DollarSign className="w-2.5 h-2.5" />
                   {formatCurrency(attr!.commission).replace("$", "")}
                 </span>
@@ -200,9 +201,9 @@ export default function PostGrid({
                     <span className="text-xs font-semibold text-white">{replayRate}x</span>
                   </div>
                 )}
-                {/* Mavely revenue attribution — shown in hover overlay */}
+                {/* Revenue attribution — shown in hover overlay */}
                 {hasRevenue && (
-                  <div className="flex items-center gap-1 bg-emerald-600/80 rounded-full px-2.5 py-1 backdrop-blur-sm">
+                  <div className={`flex items-center gap-1 ${attr!.platform === "ltk" ? "bg-violet-600/80" : "bg-emerald-600/80"} rounded-full px-2.5 py-1 backdrop-blur-sm`}>
                     <DollarSign className="w-3.5 h-3.5 text-white" />
                     <span className="text-xs font-semibold text-white">{formatCurrency(attr!.commission)} comm</span>
                   </div>

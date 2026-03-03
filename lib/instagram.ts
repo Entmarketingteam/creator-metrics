@@ -29,6 +29,7 @@ export interface IGMedia {
 const AFFILIATE_PATTERNS = [
   /https?:\/\/mavely\.app\.link\/[^\s"'>)\]]+/gi,
   /https?:\/\/mave\.ly\/[^\s"'>)\]]+/gi,
+  /https?:\/\/liketk\.it\/[^\s"'>)\]]+/gi,   // LTK share links (story link stickers)
   /https?:\/\/ltk\.app\/[^\s"'>)\]]+/gi,
   /https?:\/\/liketoknow\.it\/[^\s"'>)\]]+/gi,
   /https?:\/\/www\.shopmy\.us\/[^\s"'>)\]]+/gi,

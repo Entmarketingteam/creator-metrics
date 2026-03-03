@@ -259,6 +259,26 @@ export const mavelyTransactions = pgTable(
   }
 );
 
+// ── LTK (LikeToKnow.it) Tables ─────────────────────────────────────
+
+/** Per-post LTK metrics — share_url is the join key with media_snapshots.link_url */
+export const ltkPosts = pgTable(
+  "ltk_posts",
+  {
+    id: serial("id").primaryKey(),
+    creatorId: text("creator_id").references(() => creators.id),
+    shareUrl: text("share_url").notNull(), // liketk.it/... URL — joins with media_snapshots.link_url
+    datePublished: timestamp("date_published", { withTimezone: true }),
+    heroImage: text("hero_image"),
+    clicks: integer("clicks").default(0),
+    commissions: numeric("commissions", { precision: 12, scale: 2 }).default("0"),
+    orders: integer("orders").default(0),
+    itemsSold: integer("items_sold").default(0),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [unique().on(t.creatorId, t.shareUrl)]
+);
+
 export const shopmyBrandRates = pgTable(
   "shopmy_brand_rates",
   {

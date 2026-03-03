@@ -6,7 +6,7 @@ import {
   getRecentPosts,
 } from "@/lib/queries";
 import { db } from "@/lib/db";
-import { platformEarnings, sales, mavelyLinks } from "@/lib/schema";
+import { platformEarnings, sales, mavelyLinks, ltkPosts } from "@/lib/schema";
 import { eq, sql, and, desc, gte, lte } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +95,7 @@ export default async function CreatorDetailPage({
     mavelyRaw,
     shopmyCurrentMonthRaw,
     mavelyLinksRaw,
+    ltkPostsRaw,
   ] = await Promise.all([
     getCreatorHistory(params.id, 90),
 
@@ -157,22 +158,51 @@ export default async function CreatorDetailPage({
           )
           .groupBy(mavelyLinks.linkUrl)
       : Promise.resolve([]),
+
+    // LTK per-post attribution — keyed by share_url (liketk.it/...)
+    creator.isOwned
+      ? db
+          .select({
+            shareUrl: ltkPosts.shareUrl,
+            clicks: sql<number>`COALESCE(SUM(${ltkPosts.clicks}), 0)`,
+            commissions: sql<number>`COALESCE(SUM(CAST(${ltkPosts.commissions} AS FLOAT)), 0)`,
+            orders: sql<number>`COALESCE(SUM(${ltkPosts.orders}), 0)`,
+          })
+          .from(ltkPosts)
+          .where(eq(ltkPosts.creatorId, params.id))
+          .groupBy(ltkPosts.shareUrl)
+      : Promise.resolve([]),
   ]);
 
-  // Build link_url → attribution map for PostGrid
+  // Build link_url → attribution map for PostGrid (Mavely + LTK combined)
   const mavelyAttribution: Record<string, {
+    platform: "mavely" | "ltk";
     clicks: number; commission: number; revenue: number; orders: number;
     title: string | null; imageUrl: string | null;
   }> = {};
   for (const row of mavelyLinksRaw) {
     if (row.linkUrl) {
       mavelyAttribution[row.linkUrl] = {
+        platform: "mavely",
         clicks: Number(row.clicks) || 0,
         commission: Number(row.commission) || 0,
         revenue: Number(row.revenue) || 0,
         orders: Number(row.orders) || 0,
         title: row.title ?? null,
         imageUrl: row.imageUrl ?? null,
+      };
+    }
+  }
+  for (const row of ltkPostsRaw) {
+    if (row.shareUrl) {
+      mavelyAttribution[row.shareUrl] = {
+        platform: "ltk",
+        clicks: Number(row.clicks) || 0,
+        commission: Number(row.commissions) || 0,
+        revenue: Number(row.commissions) || 0,
+        orders: Number(row.orders) || 0,
+        title: null,
+        imageUrl: null,
       };
     }
   }

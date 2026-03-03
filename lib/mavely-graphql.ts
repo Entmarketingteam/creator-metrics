@@ -120,6 +120,43 @@ async function graphql<T>(token: string, query: string, variables: Record<string
 
 // ── Per-link metrics ────────────────────────────────────────────────
 
+interface LinkMetricsResponse {
+  creatorAnalyticsMetricsByEntity: {
+    affiliateLinkMetrics: {
+      affiliateLink: {
+        id: string;
+        link?: string;
+        metaTitle?: string;
+        metaImage?: string;
+        brand?: { id: string; name: string };
+      } | null;
+      metrics: {
+        clicksCount?: number;
+        commission?: number;
+        sales?: number;
+        salesCount?: number;
+      };
+    }[] | null;
+  };
+}
+
+interface ReportsResponse {
+  allReports: {
+    pageInfo: { hasNextPage: boolean; endCursor: string };
+    edges: {
+      node: {
+        id: string;
+        date?: string;
+        status?: string;
+        saleAmount?: number;
+        userCommission?: number;
+        referrer?: string;
+        link?: { id: string; link?: string } | null;
+      };
+    }[];
+  };
+}
+
 export interface MavelyLinkMetric {
   linkId: string;
   linkUrl: string | null;
@@ -166,25 +203,7 @@ export async function fetchLinkMetrics(
   let skip = 0;
 
   while (true) {
-    const data = await graphql<{
-      creatorAnalyticsMetricsByEntity: {
-        affiliateLinkMetrics: {
-          affiliateLink: {
-            id: string;
-            link?: string;
-            metaTitle?: string;
-            metaImage?: string;
-            brand?: { id: string; name: string };
-          } | null;
-          metrics: {
-            clicksCount?: number;
-            commission?: number;
-            sales?: number;
-            salesCount?: number;
-          };
-        }[] | null;
-      };
-    }>(token, LINK_METRICS_QUERY, {
+    const data: LinkMetricsResponse = await graphql<LinkMetricsResponse>(token, LINK_METRICS_QUERY, {
       v1: {
         cstDateStr_gte: startDate,
         cstDateStr_lte: endDate,
@@ -263,22 +282,7 @@ export async function fetchTransactions(
   let cursor: string | null = null;
 
   while (true) {
-    const data = await graphql<{
-      allReports: {
-        pageInfo: { hasNextPage: boolean; endCursor: string };
-        edges: {
-          node: {
-            id: string;
-            date?: string;
-            status?: string;
-            saleAmount?: number;
-            userCommission?: number;
-            referrer?: string;
-            link?: { id: string; link?: string } | null;
-          };
-        }[];
-      };
-    }>(token, REPORTS_QUERY, {
+    const data: ReportsResponse = await graphql<ReportsResponse>(token, REPORTS_QUERY, {
       v1: { date_gte: startDate, date_lte: endDate },
       v2: "date_DESC",
       v3: PAGE,

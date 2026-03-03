@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { creators, mediaSnapshots } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { extractAffiliateUrl } from "@/lib/instagram";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -91,10 +92,10 @@ export async function GET(req: NextRequest) {
   let cursor: string | null = null;
   let fetched = 0;
 
-  const mediaFields = "id,caption,media_type,media_product_type,media_url,thumbnail_url,like_count,comments_count,permalink,timestamp";
+  const mediaFields = "id,caption,media_type,media_product_type,media_url,thumbnail_url,like_count,comments_count,permalink,timestamp,link";
 
   while (true) {
-    const cursorParam = cursor ? `&after=${cursor}` : "";
+    const afterParam: string = cursor ? `&after=${cursor}` : "";
     const page = await igFetch<{
       data: {
         id: string;
@@ -107,10 +108,11 @@ export async function GET(req: NextRequest) {
         comments_count?: number;
         permalink?: string;
         timestamp?: string;
+        link?: string;
       }[];
       paging?: { cursors?: { after?: string }; next?: string };
     }>(
-      `/${creator.igUserId}/media?fields=${mediaFields}&limit=${pageSize}${cursorParam}`,
+      `/${creator.igUserId}/media?fields=${mediaFields}&limit=${pageSize}${afterParam}`,
       token
     );
 
@@ -125,6 +127,8 @@ export async function GET(req: NextRequest) {
         media.media_product_type ?? "",
         token
       );
+
+      const linkUrl = media.link ?? extractAffiliateUrl(media.caption) ?? null;
 
       await db
         .insert(mediaSnapshots)
@@ -148,6 +152,7 @@ export async function GET(req: NextRequest) {
           reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
           reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
           viewsCount: insights.views ?? null,
+          linkUrl,
         })
         .onConflictDoUpdate({
           target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
@@ -163,6 +168,7 @@ export async function GET(req: NextRequest) {
             viewsCount: insights.views ?? null,
             mediaUrl: media.media_url ?? null,
             thumbnailUrl: media.thumbnail_url ?? null,
+            linkUrl,
           },
         });
 
