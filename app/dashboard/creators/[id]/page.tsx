@@ -292,28 +292,28 @@ export default async function CreatorDetailPage({
     : "all-time";
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-16">
+    <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-4">
       {/* ── Profile Header ───────────────────────────────────────────── */}
-      <div className="flex items-start gap-8">
-        <Avatar className="h-28 w-28 ring-4 ring-gray-800 shrink-0">
+      <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-8">
+        <Avatar className="h-20 w-20 sm:h-28 sm:w-28 ring-4 ring-gray-800 shrink-0">
           {creator.profilePictureUrl ? (
             <AvatarImage src={creator.profilePictureUrl} alt={creator.username} />
           ) : null}
-          <AvatarFallback className="text-3xl font-bold bg-gray-800">
+          <AvatarFallback className="text-2xl sm:text-3xl font-bold bg-gray-800">
             {(creator.displayName ?? creator.username).charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-white">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-white">
               {creator.displayName ?? creator.username}
             </h1>
             {creator.isOwned && <Badge variant="success">Owned Account</Badge>}
           </div>
-          <p className="text-gray-400 mb-3">@{creator.username}</p>
+          <p className="text-gray-400 mb-3 text-sm">@{creator.username}</p>
 
-          <div className="flex flex-wrap gap-6 mb-3 text-sm">
+          <div className="flex flex-wrap gap-4 sm:gap-6 mb-3 text-sm">
             <div>
               <span className="font-bold text-white">{formatNumber(latest?.mediaCount)}</span>{" "}
               <span className="text-gray-400">posts</span>
@@ -369,11 +369,11 @@ export default async function CreatorDetailPage({
 
       {/* ── Instagram Audience ───────────────────────────────────────── */}
       <section>
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <Users className="w-4 h-4 text-pink-400" />
           <h2 className="text-base font-semibold text-white">Instagram Audience</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <MetricCard
             title="Followers"
             value={latest?.followersCount ?? 0}
@@ -453,7 +453,7 @@ export default async function CreatorDetailPage({
         )}
 
         {/* Per-platform cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <PlatformCard
             data={{
               platform: "ltk",
@@ -594,14 +594,14 @@ export default async function CreatorDetailPage({
       {/* ── Stories ───────────────────────────────────────────────────── */}
       {stories.length > 0 && (
         <section>
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-3">
             <div className="w-4 h-4 rounded-full border-2 border-orange-400 flex items-center justify-center">
               <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
             </div>
             <h2 className="text-base font-semibold text-white">Stories</h2>
             <span className="text-xs text-gray-500 ml-1">({stories.length})</span>
           </div>
-          <PostGrid posts={stories.slice(0, 12)} attribution={mavelyAttribution} />
+          <PostGrid posts={stories.slice(0, 12)} attribution={mavelyAttribution} variant="stories" />
         </section>
       )}
 
