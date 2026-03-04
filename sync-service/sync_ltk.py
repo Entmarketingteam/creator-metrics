@@ -191,8 +191,10 @@ def sync_ltk_data(conn) -> dict:
     now = datetime.utcnow()
 
     for days in [7, 30]:
-        period_start = (now - timedelta(days=days)).strftime("%Y-%m-%d")
-        period_end   = now.strftime("%Y-%m-%d")
+        period_start      = (now - timedelta(days=days)).strftime("%Y-%m-%d")
+        period_end        = now.strftime("%Y-%m-%d")
+        period_start_date = (now - timedelta(days=days)).date()
+        period_end_date   = now.date()
 
         params = {
             "start_date": f"{period_start}T00:00:00Z",
@@ -221,7 +223,7 @@ def sync_ltk_data(conn) -> dict:
             VALUES ($1, 'ltk', $2, $3, $4, $5, $6, $7, NOW())
             ON CONFLICT (creator_id, platform, period_start, period_end)
             DO UPDATE SET revenue=$4, commission=$5, clicks=$6, orders=$7, synced_at=NOW()
-        """, "nicki_entenmann", period_start, period_end, net_comm, open_earnings, clicks, orders)
+        """, "nicki_entenmann", period_start_date, period_end_date, net_comm, open_earnings, clicks, orders)
 
         results.append({"range": f"last_{days}_days", "clicks": clicks, "orders": orders})
 

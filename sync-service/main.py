@@ -22,46 +22,58 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── DB connection ─────────────────────────────────────────────────────────────
 
-_pool: asyncpg.Pool | None = None
+# ── DB helpers ────────────────────────────────────────────────────────────────
 
-async def get_pool() -> asyncpg.Pool:
-    global _pool
-    if _pool is None:
-        db_url = os.environ["DATABASE_URL"]
-        # asyncpg requires postgresql:// not postgres://
-        if db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql://", 1)
-        _pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5)
-    return _pool
+def _get_dsn() -> str:
+    db_url = os.environ["DATABASE_URL"]
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    return db_url
 
 
 class SyncConn:
     """
-    Synchronous DB wrapper for use inside asyncio.to_thread().
-    Each call uses a fresh connection from the pool (thread-safe).
+    Synchronous DB wrapper. Creates its own event loop + reuses ONE asyncpg
+    connection for all execute() calls. Must be instantiated inside the thread
+    that will use it (i.e., inside asyncio.to_thread()).
+    Call close() when done.
     """
     def __init__(self, dsn: str):
-        self._dsn = dsn
+        self._loop = asyncio.new_event_loop()
+        # statement_cache_size=0 required for Supabase PgBouncer (transaction mode)
+        self._conn = self._loop.run_until_complete(
+            asyncpg.connect(dsn, statement_cache_size=0)
+        )
 
     def execute(self, query: str, *args):
-        import asyncpg as _asyncpg
-        import asyncio
+        return self._loop.run_until_complete(self._conn.execute(query, *args))
 
-        async def _run():
-            conn = await _asyncpg.connect(self._dsn)
-            try:
-                return await conn.execute(query, *args)
-            finally:
-                await conn.close()
+    def executemany(self, query: str, args_list: list):
+        return self._loop.run_until_complete(self._conn.executemany(query, args_list))
 
-        # Run in the current event loop
+    def close(self):
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-        return loop.run_until_complete(_run())
+            self._loop.run_until_complete(self._conn.close())
+        except Exception:
+            pass
+        self._loop.close()
+
+
+def _run_mavely(dsn: str) -> dict:
+    conn = SyncConn(dsn)
+    try:
+        return sync_mavely(conn)
+    finally:
+        conn.close()
+
+
+def _run_ltk_data(dsn: str) -> dict:
+    conn = SyncConn(dsn)
+    try:
+        return sync_ltk_data(conn)
+    finally:
+        conn.close()
 
 
 # ── Scheduler jobs ────────────────────────────────────────────────────────────
@@ -74,24 +86,20 @@ async def job_ltk_token_refresh():
     except Exception as e:
         logger.error("LTK token refresh FAILED: %s", e)
 
-def _make_sync_conn() -> SyncConn:
-    db_url = os.environ["DATABASE_URL"]
-    if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql://", 1)
-    return SyncConn(db_url)
 
 async def job_ltk_data_sync():
     logger.info("=== JOB: LTK data sync ===")
     try:
-        result = await asyncio.to_thread(sync_ltk_data, _make_sync_conn())
+        result = await asyncio.to_thread(_run_ltk_data, _get_dsn())
         logger.info("LTK data sync done: %s", result)
     except Exception as e:
         logger.error("LTK data sync FAILED: %s", e)
 
+
 async def job_mavely_sync():
     logger.info("=== JOB: Mavely sync ===")
     try:
-        result = await asyncio.to_thread(sync_mavely, _make_sync_conn())
+        result = await asyncio.to_thread(_run_mavely, _get_dsn())
         logger.info("Mavely sync done: %s", result)
     except Exception as e:
         logger.error("Mavely sync FAILED: %s", e)
@@ -105,7 +113,7 @@ scheduler = AsyncIOScheduler(timezone="UTC")
 async def lifespan(app: FastAPI):
     logger.info("Starting sync service scheduler...")
 
-    # LTK token refresh: every 3 hours (more frequent to avoid stale tokens)
+    # LTK token refresh: every 3 hours
     scheduler.add_job(job_ltk_token_refresh, CronTrigger(hour="*/3"), id="ltk_token_refresh")
 
     # LTK data sync: 6:30 UTC daily
@@ -120,10 +128,10 @@ async def lifespan(app: FastAPI):
     yield
 
     scheduler.shutdown()
-    if _pool:
-        await _pool.close()
+
 
 app = FastAPI(title="creator-metrics sync", lifespan=lifespan)
+
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -141,23 +149,28 @@ async def health():
     jobs = [{"id": j.id, "next_run": str(j.next_run_time)} for j in scheduler.get_jobs()]
     return {"status": "ok", "utc": datetime.utcnow().isoformat(), "jobs": jobs}
 
+
 @app.post("/sync/ltk-tokens")
 async def trigger_ltk_token_refresh(req: Request):
     _check_secret(req)
+    # Runs synchronously — usually fast (Airtop browser session ~30s)
     result = await asyncio.to_thread(refresh_ltk_tokens)
     return result
+
 
 @app.post("/sync/ltk")
 async def trigger_ltk_sync(req: Request):
     _check_secret(req)
-    result = await asyncio.to_thread(sync_ltk_data, _make_sync_conn())
-    return result
+    asyncio.create_task(job_ltk_data_sync())
+    return {"status": "accepted", "message": "LTK sync started in background"}
+
 
 @app.post("/sync/mavely")
 async def trigger_mavely_sync(req: Request):
     _check_secret(req)
-    result = await asyncio.to_thread(sync_mavely, _make_sync_conn())
-    return result
+    asyncio.create_task(job_mavely_sync())
+    return {"status": "accepted", "message": "Mavely sync started in background"}
+
 
 @app.get("/jobs")
 async def list_jobs(req: Request):

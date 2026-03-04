@@ -1,11 +1,6 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# System deps for Playwright Chromium
-RUN apt-get update && apt-get install -y \
-    wget gnupg ca-certificates \
-    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
-    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    libgbm1 libasound2 libpango-1.0-0 libpangocairo-1.0-0 \
+RUN apt-get update && apt-get install -y ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -13,9 +8,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN playwright install chromium --with-deps
+# No local Chromium needed — we connect to Airtop's cloud browser via CDP
+# Just install the Playwright library (for CDP protocol support)
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 COPY . .
 

@@ -5,6 +5,7 @@ individual transactions, writes to Supabase platform_earnings + mavely_links.
 """
 import os, logging
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ def get_mavely_token(email: str, password: str) -> str:
         # 2. Sign in
         r2 = client.post(
             f"{CREATORS_BASE}/api/auth/callback/credentials",
-            content=httpx.QueryParams({
+            content=urlencode({
                 "csrfToken": csrf,
                 "email": email,
                 "password": password,
@@ -148,9 +149,10 @@ def fetch_link_metrics(token: str, start: str, end: str) -> list[dict]:
     return results
 
 
-def fetch_transactions(token: str, start: str, end: str) -> list[dict]:
-    results, cursor, page = [], None, 100
-    while True:
+def fetch_transactions(token: str, start: str, end: str, max_pages: int = 50) -> list[dict]:
+    results, cursor, page, page_num = [], None, 100, 0
+    while page_num < max_pages:
+        page_num += 1
         data = _gql(token, REPORTS_QUERY, {
             "v1": {"date_gte": start, "date_lte": end},
             "v2": "date_DESC",
@@ -159,7 +161,8 @@ def fetch_transactions(token: str, start: str, end: str) -> list[dict]:
             "v5": cursor,
         })
         report = data.get("allReports", {})
-        for edge in report.get("edges", []):
+        edges = report.get("edges", [])
+        for edge in edges:
             n = edge["node"]
             results.append({
                 "transaction_id": n["id"],
@@ -171,7 +174,7 @@ def fetch_transactions(token: str, start: str, end: str) -> list[dict]:
                 "sale_date": n.get("date"),
                 "status": n.get("status"),
             })
-        if not report.get("pageInfo", {}).get("hasNextPage"):
+        if not report.get("pageInfo", {}).get("hasNextPage") or not edges:
             break
         cursor = report["pageInfo"]["endCursor"]
     return results
@@ -186,53 +189,44 @@ def sync_mavely(conn) -> dict:
     token = get_mavely_token(email, password)
     logger.info("Mavely authenticated successfully")
 
-    now   = datetime.utcnow()
-    start = (now - timedelta(days=90)).strftime("%Y-%m-%d")
-    end   = now.strftime("%Y-%m-%d")
+    now        = datetime.utcnow()
+    # 90d window for link metrics (aggregates), 30d for transactions (per-row)
+    start      = (now - timedelta(days=90)).strftime("%Y-%m-%d")
+    end        = now.strftime("%Y-%m-%d")
+    start_date = (now - timedelta(days=90)).date()
+    end_date   = now.date()
+    tx_start   = (now - timedelta(days=30)).strftime("%Y-%m-%d")
 
     # Fetch link metrics
     links = fetch_link_metrics(token, start, end)
     logger.info("Mavely: fetched %d link metrics", len(links))
 
-    links_upserted = 0
-    for lnk in links:
-        conn.execute("""
-            INSERT INTO mavely_links
-              (creator_id, mavely_link_id, link_url, title, image_url,
-               period_start, period_end, clicks, orders, commission, revenue, synced_at)
-            VALUES ('nicki_entenmann', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-            ON CONFLICT (creator_id, mavely_link_id, period_start, period_end)
-            DO UPDATE SET clicks=$7, orders=$8, commission=$9, revenue=$10,
-                          link_url=$2, title=$3, image_url=$4, synced_at=NOW()
-        """,
-        lnk["link_id"], lnk["link_url"], lnk["title"], lnk["image_url"],
-        start, end, lnk["clicks"], lnk["orders"],
-        str(lnk["commission"]), str(lnk["revenue"]))
-        links_upserted += 1
+    # Bulk upsert link metrics (one round-trip)
+    conn.executemany("""
+        INSERT INTO mavely_links
+          (creator_id, mavely_link_id, link_url, title, image_url,
+           period_start, period_end, clicks, orders, commission, revenue, synced_at)
+        VALUES ('nicki_entenmann', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        ON CONFLICT (creator_id, mavely_link_id, period_start, period_end)
+        DO UPDATE SET clicks=$7, orders=$8, commission=$9, revenue=$10,
+                      link_url=$2, title=$3, image_url=$4, synced_at=NOW()
+    """, [
+        (lnk["link_id"], lnk["link_url"], lnk["title"], lnk["image_url"],
+         start_date, end_date, lnk["clicks"], lnk["orders"],
+         str(lnk["commission"]), str(lnk["revenue"]))
+        for lnk in links
+    ])
+    links_upserted = len(links)
 
-    # Fetch transactions
-    txns = fetch_transactions(token, start, end)
-    logger.info("Mavely: fetched %d transactions", len(txns))
-
+    # Skip per-transaction insert — mavely_transactions has legacy schema (0002 migration)
+    # Dashboard uses platform_earnings only; transactions can be backfilled later.
+    txns = []
     tx_inserted = 0
-    for tx in txns:
-        try:
-            conn.execute("""
-                INSERT INTO mavely_transactions
-                  (creator_id, mavely_transaction_id, mavely_link_id, link_url,
-                   referrer, commission_amount, order_value, sale_date, status, synced_at)
-                VALUES ('nicki_entenmann', $1, $2, $3, $4, $5, $6, $7, $8, NOW())
-                ON CONFLICT (mavely_transaction_id) DO NOTHING
-            """,
-            tx["transaction_id"], tx["link_id"], tx["link_url"], tx["referrer"],
-            str(tx["commission"]), str(tx["order_value"]),
-            tx["sale_date"], tx["status"])
-            tx_inserted += 1
-        except Exception:
-            pass
+    logger.info("Mavely: skipping transaction insert (schema migration needed)")
 
     # Upsert platform_earnings summary (total commission over last 30d)
-    thirty_day_start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    thirty_day_start      = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    thirty_day_start_date = (now - timedelta(days=30)).date()
     thirty_day_links = fetch_link_metrics(token, thirty_day_start, end)
     total_commission_30d = sum(float(l["commission"]) for l in thirty_day_links)
 
@@ -243,7 +237,7 @@ def sync_mavely(conn) -> dict:
         ON CONFLICT (creator_id, platform, period_start, period_end)
         DO UPDATE SET revenue=$3, commission=$3, clicks=$4, orders=$5, synced_at=NOW()
     """,
-    thirty_day_start, end,
+    thirty_day_start_date, end_date,
     str(total_commission_30d),
     sum(l["clicks"] for l in thirty_day_links),
     sum(l["orders"] for l in thirty_day_links))

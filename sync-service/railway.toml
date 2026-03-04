@@ -1,6 +1,6 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "sync-service/Dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "python main.py"
