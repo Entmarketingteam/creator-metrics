@@ -57,7 +57,7 @@ def update_ltk_tokens_in_airtable(record_id: str, access_token: str, id_token: s
         "Refresh_Token": refresh_token,
         "Last_Refreshed": datetime.now(timezone.utc).isoformat(),
         "Token_Expires_At": expires_at,
-        "Status": "ok",
+        "Status": "active",
         "Consecutive_Failures": 0,
     }
     r = httpx.patch(url, json={"fields": fields}, headers=_airtable_headers(), timeout=30)
@@ -73,6 +73,7 @@ def refresh_ltk_tokens():
     extract fresh Auth0 tokens from localStorage. Writes back to Airtable.
     """
     import urllib.request
+    import urllib.error
     airtop_key = os.environ["AIRTOP_API_KEY"]
     ltk_email  = os.environ["LTK_EMAIL"]
     ltk_password = os.environ["LTK_PASSWORD"]
@@ -84,12 +85,24 @@ def refresh_ltk_tokens():
             "Authorization": f"Bearer {airtop_key}",
             "Content-Type": "application/json",
         })
-        import urllib.error
         try:
             resp = urllib.request.urlopen(req, timeout=60)
             return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"Airtop {method} {path} → {e.code}: {e.read().decode()}")
+
+    # Terminate any existing sessions to avoid hitting the free plan 3-session limit
+    logger.info("Cleaning up stale Airtop sessions...")
+    try:
+        existing_sessions = airtop("GET", "/sessions")
+        for s in existing_sessions.get("data", {}).get("sessions", []):
+            try:
+                airtop("DELETE", f"/sessions/{s['id']}")
+                logger.info("Terminated stale Airtop session %s", s["id"])
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning("Could not list/clean Airtop sessions: %s", e)
 
     logger.info("Creating Airtop session for LTK token refresh...")
     session = airtop("POST", "/sessions", {"configuration": {"timeoutMinutes": 5}})
@@ -112,11 +125,33 @@ def refresh_ltk_tokens():
 
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp(cdp_ws)
+        browser = p.chromium.connect_over_cdp(
+            cdp_ws,
+            headers={"Authorization": f"Bearer {airtop_key}"}
+        )
         context = browser.contexts[0]
         page = context.pages[0] if context.pages else context.new_page()
 
-        page.goto("https://creator.shopltk.com/login", wait_until="networkidle", timeout=30000)
+        # Intercept /oauth/token response to capture id_token before Auth0 SDK processes it
+        intercepted_tokens = {}
+        def _on_response(response):
+            if "/oauth/token" in response.url and response.status == 200:
+                try:
+                    data = response.json()
+                    if "id_token" in data:
+                        intercepted_tokens["id_token"] = data["id_token"]
+                    if "access_token" in data:
+                        intercepted_tokens["access_token"] = data["access_token"]
+                    if "refresh_token" in data:
+                        intercepted_tokens["refresh_token"] = data["refresh_token"]
+                    logger.info("Intercepted /oauth/token response keys: %s", list(data.keys()))
+                except Exception as e:
+                    logger.warning("Could not parse /oauth/token response: %s", e)
+        page.on("response", _on_response)
+
+        page.goto("https://creator.shopltk.com/login", wait_until="domcontentloaded", timeout=30000)
+        # Wait for email input to be present and stable before querying
+        page.wait_for_selector('input[type="email"], input[type="text"]', timeout=15000)
         # Fill credentials
         inputs = page.query_selector_all('input[type="email"], input[type="text"], input[type="password"]')
         email_input = next((i for i in inputs if i.get_attribute("type") in ("email", "text")), None)
@@ -128,20 +163,53 @@ def refresh_ltk_tokens():
         page.click('button[type="submit"]')
         page.wait_for_url("https://creator.shopltk.com/**", timeout=20000)
 
-        # Extract tokens from localStorage
+        # Wait for Auth0 to write tokens to localStorage after redirect
+        page.wait_for_timeout(4000)
+
+        # Debug: log all localStorage keys and the raw auth0 value
+        all_keys = page.evaluate("() => Object.keys(localStorage)")
+        logger.info("localStorage keys after login: %s", all_keys)
+        auth0_keys = [k for k in (all_keys or []) if "@@auth0spajs@@" in k]
+        logger.info("Auth0 localStorage keys: %s", auth0_keys)
+        logger.info("Intercepted token keys: %s", list(intercepted_tokens.keys()))
+
+        # Extract tokens from localStorage first, fall back to intercepted network response
         raw = page.evaluate("""() => {
             const key = Object.keys(localStorage).find(k => k.includes('@@auth0spajs@@'));
             return key ? localStorage.getItem(key) : null;
         }""")
-        if not raw:
-            raise RuntimeError("Auth0 tokens not found in localStorage after login")
-        auth0 = json.loads(raw)
-        body = auth0.get("body", {})
-        access_token  = body.get("access_token")
-        id_token      = body.get("id_token")
-        refresh_token = body.get("refresh_token", "")
-        if not access_token or not id_token:
-            raise RuntimeError("Missing access_token or id_token in localStorage")
+
+        access_token = refresh_token = id_token = None
+
+        if raw:
+            try:
+                auth0 = json.loads(raw)
+                body = auth0.get("body", {})
+                access_token  = body.get("access_token")
+                id_token      = body.get("id_token")
+                refresh_token = body.get("refresh_token", "")
+                logger.info("localStorage body keys: %s", list(body.keys()))
+            except Exception as e:
+                logger.warning("Could not parse auth0 localStorage: %s", e)
+
+        # Fall back to intercepted network response for any missing tokens
+        if not access_token:
+            access_token = intercepted_tokens.get("access_token")
+        if not id_token:
+            id_token = intercepted_tokens.get("id_token")
+        if not refresh_token:
+            refresh_token = intercepted_tokens.get("refresh_token", "")
+
+        if not access_token:
+            raise RuntimeError(
+                f"Missing access_token. "
+                f"localStorage body keys: {list(body.keys()) if raw else 'N/A'}, "
+                f"intercepted keys: {list(intercepted_tokens.keys())}"
+            )
+        # Auth0 may not issue a separate id_token — fall back to access_token
+        if not id_token:
+            id_token = access_token
+            logger.info("No id_token from Auth0 — using access_token as id_token fallback")
 
         browser.close()
 
