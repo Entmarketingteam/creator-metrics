@@ -81,8 +81,8 @@ export default function PostGrid({
     <div
       className={
         isStoriesVariant
-          ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-1.5 sm:gap-2"
-          : "grid grid-cols-3 gap-1 md:gap-3"
+          ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-0.5 sm:gap-1"
+          : "grid grid-cols-3 gap-[2px] md:gap-[3px]"
       }
     >
       {posts.map((post) => {
@@ -119,8 +119,8 @@ export default function PostGrid({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className={`group relative bg-gray-900 rounded-lg overflow-hidden ${
-              isStoriesVariant ? "aspect-[9/16]" : "aspect-square"
+            className={`group relative bg-card rounded-sm overflow-hidden shadow-card dark:shadow-card-dark ${
+              isStoriesVariant ? "aspect-[9/16]" : isReel ? "aspect-[4/5]" : "aspect-square"
             }`}
           >
             {/* Thumbnail */}
@@ -138,8 +138,8 @@ export default function PostGrid({
                 unoptimized
               />
             ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                <span className="text-gray-600 text-[10px]">No preview</span>
+              <div className="absolute inset-0 bg-gradient-to-br from-muted to-card flex items-center justify-center">
+                <span className="text-muted-foreground text-[10px]">No preview</span>
               </div>
             )}
 
