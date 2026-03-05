@@ -94,10 +94,10 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
     cdp_ws = _airtop(airtop_key, "GET", f"/sessions/{session_id}")["data"]["cdpWsUrl"]
     logger.info("Airtop session running for %s", email)
 
-    intercepted = {}
     today = date.today()
     start_date = (today - timedelta(days=days)).strftime("%Y-%m-%d")
     end_date = today.strftime("%Y-%m-%d")
+    page_data = {}
 
     try:
         with sync_playwright() as p:
@@ -108,118 +108,94 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
             context = browser.contexts[0]
             page = context.pages[0] if context.pages else context.new_page()
 
-            # Intercept Associates performance API responses
-            def _on_response(response):
-                url = response.url
-                # Performance summary endpoints
-                if any(x in url for x in [
-                    "/home/api/default/performance",
-                    "/associates/api",
-                    "reporting/table",
-                    "reporting/download",
-                    "/home/summary",
-                    "performanceSummary",
-                    "commissionsSummary",
-                ]):
-                    try:
-                        data = response.json()
-                        logger.info("Captured API: %s → keys: %s", url[:80], list(data.keys()) if isinstance(data, dict) else type(data).__name__)
-                        intercepted[url] = data
-                    except Exception:
-                        pass
+            def _login_if_needed():
+                cur = page.url
+                if not any(x in cur for x in ["ap/signin", "ap/cvf", "signin", "login"]):
+                    return
+                logger.info("Login required for %s (url=%s)", email, cur)
 
-            page.on("response", _on_response)
+                # Email step
+                try:
+                    page.wait_for_selector('#ap_email, input[name="email"]', timeout=8000)
+                    inp = page.query_selector('#ap_email') or page.query_selector('input[name="email"]')
+                    if inp:
+                        inp.fill(email)
+                    btn = page.query_selector('#continue, input[name="continue"]')
+                    if btn:
+                        btn.click()
+                        time.sleep(2)
+                except Exception:
+                    pass
 
-            # Navigate to Associates Central summary
-            logger.info("Navigating to Associates Central for %s...", email)
-            page.goto(
-                "https://affiliate-program.amazon.com/home/summary",
-                wait_until="domcontentloaded",
-                timeout=30000,
-            )
-            time.sleep(2)
+                # Password step
+                try:
+                    page.wait_for_selector('#ap_password, input[name="password"]', timeout=8000)
+                    pw = page.query_selector('#ap_password') or page.query_selector('input[name="password"]')
+                    if pw:
+                        pw.fill(password)
+                    submit = page.query_selector('#signInSubmit, input[type="submit"]')
+                    if submit:
+                        submit.click()
+                    page.wait_for_load_state("networkidle", timeout=20000)
+                    time.sleep(3)
+                except Exception:
+                    pass
 
-            # Check if we need to log in
-            if "signin" in page.url or "ap/signin" in page.url or "ap/cvf" in page.url or "login" in page.url.lower():
-                logger.info("Login required for %s", email)
-                page.wait_for_selector('input[name="email"], input[type="email"], #ap_email', timeout=10000)
-
-                # Fill email
-                email_input = (
-                    page.query_selector('input[name="email"]') or
-                    page.query_selector('input[type="email"]') or
-                    page.query_selector('#ap_email')
-                )
-                if email_input:
-                    email_input.fill(email)
-
-                # Click continue if present
-                continue_btn = page.query_selector('input[id="continue"], #continue, [name="continue"]')
-                if continue_btn:
-                    continue_btn.click()
-                    time.sleep(2)
-
-                # Fill password
-                page.wait_for_selector('input[name="password"], input[type="password"], #ap_password', timeout=10000)
-                pw_input = (
-                    page.query_selector('input[name="password"]') or
-                    page.query_selector('input[type="password"]') or
-                    page.query_selector('#ap_password')
-                )
-                if pw_input:
-                    pw_input.fill(password)
-
-                # Submit
-                submit = (
-                    page.query_selector('input[id="signInSubmit"]') or
-                    page.query_selector('#signInSubmit') or
-                    page.query_selector('[type="submit"]')
-                )
-                if submit:
-                    submit.click()
-
-                # Wait for post-login navigation
-                page.wait_for_load_state("networkidle", timeout=20000)
-                time.sleep(3)
                 logger.info("Post-login URL: %s", page.url)
 
-            # Navigate to performance reports to trigger API calls
-            page.goto(
-                f"https://affiliate-program.amazon.com/home/reports/table?dateRangeValue=custom"
-                f"&startDate={start_date}&endDate={end_date}&type=earning",
-                wait_until="domcontentloaded",
-                timeout=30000,
-            )
-            page.wait_for_load_state("networkidle", timeout=15000)
-            time.sleep(3)
+            # ── Step 1: Land on summary, handle login ──────────────────
+            logger.info("Navigating to Associates Central for %s...", email)
+            page.goto("https://affiliate-program.amazon.com/home/summary",
+                      wait_until="domcontentloaded", timeout=30000)
+            time.sleep(2)
+            _login_if_needed()
 
-            # Also try summary page
-            page.goto(
-                "https://affiliate-program.amazon.com/home/summary",
-                wait_until="domcontentloaded",
-                timeout=20000,
+            # ── Step 2: Download the earnings CSV directly ─────────────
+            # Associates Central exposes a CSV download that doesn't need JS interaction
+            csv_url = (
+                f"https://affiliate-program.amazon.com/home/reports/download"
+                f"?reportType=earning&dateRangeValue=custom"
+                f"&startDate={start_date}&endDate={end_date}"
             )
+            logger.info("Downloading earnings CSV: %s", csv_url)
+            page.goto(csv_url, wait_until="domcontentloaded", timeout=30000)
+            time.sleep(3)
+            csv_content = page.evaluate("() => document.body.innerText")
+            logger.info("CSV response length: %d chars", len(csv_content or ""))
+            page_data["csv"] = csv_content or ""
+
+            # ── Step 3: Also scrape the summary page DOM ───────────────
+            page.goto("https://affiliate-program.amazon.com/home/summary",
+                      wait_until="domcontentloaded", timeout=20000)
             page.wait_for_load_state("networkidle", timeout=10000)
             time.sleep(2)
 
-            # Try to extract data from the page directly via JS
-            page_data = page.evaluate("""
+            summary_data = page.evaluate("""
                 () => {
-                    // Try to find summary widgets on the page
-                    const text = document.body.innerText;
-                    const result = { raw_text: text.substring(0, 3000), found: {} };
+                    const result = { metrics: {}, raw_text: '' };
 
-                    // Look for earning summary elements
-                    const earningEls = document.querySelectorAll('[data-summary-type], .earnings-summary, .summary-widget');
-                    earningEls.forEach(el => {
-                        result.found[el.className || el.dataset.summaryType] = el.innerText;
+                    // Associates Central uses data attributes on summary tiles
+                    document.querySelectorAll('[data-summary-type], [class*="summary"], [class*="metric"], [class*="earning"]').forEach(el => {
+                        const key = el.getAttribute('data-summary-type') || el.className.substring(0, 40);
+                        result.metrics[key] = el.innerText.trim().substring(0, 100);
                     });
+
+                    // Grab full page text for regex fallback
+                    result.raw_text = document.body.innerText.substring(0, 5000);
+
+                    // Look specifically for the earnings tile structure Amazon uses
+                    const tiles = document.querySelectorAll('.report-summary-tile, .summary-tile, [data-testid]');
+                    tiles.forEach((t, i) => {
+                        result.metrics['tile_' + i] = t.innerText.trim().substring(0, 150);
+                    });
+
                     return result;
                 }
             """)
-
-            logger.info("Page URL after scraping: %s", page.url)
-            logger.info("Intercepted %d API responses", len(intercepted))
+            page_data["summary"] = summary_data
+            logger.info("Summary page URL: %s, metrics extracted: %d",
+                        page.url, len(summary_data.get("metrics", {})))
+            logger.info("Page text sample: %s", (summary_data.get("raw_text") or "")[:300])
 
             browser.close()
 
@@ -230,7 +206,6 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
             pass
 
     return {
-        "intercepted": intercepted,
         "page_data": page_data,
         "start_date": start_date,
         "end_date": end_date,
@@ -239,74 +214,84 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
 
 def _parse_earnings(raw: dict) -> Optional[dict]:
     """
-    Parse intercepted API responses into standardized earnings dict.
+    Parse DOM scrape / CSV download into standardized earnings dict.
     Returns: { revenue, commission, clicks, orders }
     """
-    intercepted = raw.get("intercepted", {})
+    import re
     page_data = raw.get("page_data", {})
 
-    # Try each intercepted API response
-    for url, data in intercepted.items():
-        if not isinstance(data, dict):
-            continue
+    # ── Try CSV download first ─────────────────────────────────────────────────
+    # Associates earnings CSV columns: Date, Clicks, Ordered Items, Shipped Items,
+    #   Returns, Revenue, Converted, Total Commissions
+    csv_content = page_data.get("csv", "")
+    if csv_content and "Clicks" in csv_content and len(csv_content) > 50:
+        import csv, io
+        try:
+            reader = csv.DictReader(io.StringIO(csv_content))
+            total_clicks = total_orders = total_revenue = 0
+            rows_read = 0
+            for row in reader:
+                # Skip summary/total rows
+                if not row.get("Date") or row["Date"].lower() in ("", "total", "date"):
+                    continue
+                # Handle different column name variations
+                clicks_val = (row.get("Clicks") or row.get("clicks") or "0").replace(",", "")
+                orders_val = (row.get("Shipped Items") or row.get("Ordered Items") or
+                              row.get("shipped_items") or "0").replace(",", "")
+                rev_val = (row.get("Total Commissions") or row.get("Revenue") or
+                           row.get("total_commissions") or "0").replace(",", "").replace("$", "")
+                try:
+                    total_clicks += int(float(clicks_val))
+                    total_orders += int(float(orders_val))
+                    total_revenue += float(rev_val)
+                    rows_read += 1
+                except (ValueError, TypeError):
+                    continue
+            if rows_read > 0:
+                logger.info("Parsed CSV: %d rows, clicks=%d, orders=%d, commission=%.2f",
+                            rows_read, total_clicks, total_orders, total_revenue)
+                return {
+                    "clicks": total_clicks,
+                    "orders": total_orders,
+                    "revenue": total_revenue,
+                    "commission": total_revenue,
+                }
+        except Exception as e:
+            logger.warning("CSV parse failed: %s", e)
 
-        result = {}
+    # ── Try summary page DOM metrics ──────────────────────────────────────────
+    summary = page_data.get("summary", {})
+    raw_text = summary.get("raw_text", "")
 
-        # Pattern 1: { clicks, orders/conversions, earnings/revenue/commission }
-        clicks = (data.get("clicks") or data.get("totalClicks") or
-                  data.get("click_count") or data.get("clickCount"))
-        orders = (data.get("orders") or data.get("conversions") or
-                  data.get("orderedItems") or data.get("ordered_items") or
-                  data.get("itemsShipped"))
-        revenue = (data.get("revenue") or data.get("earnings") or
-                   data.get("estimatedRevenue") or data.get("totalRevenue") or
-                   data.get("commissions") or data.get("commission"))
-
-        if clicks is not None or orders is not None or revenue is not None:
-            return {
-                "clicks": int(clicks) if clicks is not None else 0,
-                "orders": int(orders) if orders is not None else 0,
-                "revenue": float(revenue) if revenue is not None else 0.0,
-                "commission": float(revenue) if revenue is not None else 0.0,
-            }
-
-        # Pattern 2: nested data
-        for key in ["data", "summary", "performance", "report"]:
-            nested = data.get(key)
-            if isinstance(nested, dict):
-                clicks = (nested.get("clicks") or nested.get("totalClicks") or
-                          nested.get("clickCount"))
-                orders = (nested.get("orders") or nested.get("conversions") or
-                          nested.get("orderedItems"))
-                revenue = (nested.get("revenue") or nested.get("earnings") or
-                           nested.get("estimatedRevenue") or nested.get("commissions"))
-                if clicks is not None or orders is not None or revenue is not None:
-                    return {
-                        "clicks": int(clicks) if clicks is not None else 0,
-                        "orders": int(orders) if orders is not None else 0,
-                        "revenue": float(revenue) if revenue is not None else 0.0,
-                        "commission": float(revenue) if revenue is not None else 0.0,
-                    }
-
-    # Fallback: parse page text for dollar amounts and numbers
-    raw_text = page_data.get("raw_text", "")
     if raw_text:
-        import re
-        # Find earnings amounts like $12.34
-        amounts = re.findall(r'\$([0-9,]+\.[0-9]{2})', raw_text)
-        numbers = re.findall(r'([0-9,]+)\s+(?:clicks?|Clicks?)', raw_text)
-        orders_match = re.findall(r'([0-9,]+)\s+(?:orders?|Orders?|conversions?)', raw_text)
+        # Amazon summary shows: "Clicks\n1,234" or "Earnings\n$56.78" patterns
+        clicks_match = re.search(r'Clicks\D*?([0-9,]+)', raw_text)
+        orders_match = re.search(r'(?:Ordered Items|Orders|Converted Clicks|Items Shipped)\D*?([0-9,]+)', raw_text)
+        earnings_match = re.search(r'(?:Earnings|Commission|Total Commissions|Revenue)\D*?\$([0-9,]+\.[0-9]{2})', raw_text)
 
-        if amounts:
-            # Largest amount is likely total earnings
-            parsed_amounts = sorted([float(a.replace(',', '')) for a in amounts], reverse=True)
-            clicks_val = int(numbers[0].replace(',', '')) if numbers else 0
-            orders_val = int(orders_match[0].replace(',', '')) if orders_match else 0
+        if earnings_match or clicks_match:
+            clicks_val = int(clicks_match.group(1).replace(",", "")) if clicks_match else 0
+            orders_val = int(orders_match.group(1).replace(",", "")) if orders_match else 0
+            rev_val = float(earnings_match.group(1).replace(",", "")) if earnings_match else 0.0
+            logger.info("Parsed DOM: clicks=%d, orders=%d, commission=%.2f",
+                        clicks_val, orders_val, rev_val)
             return {
                 "clicks": clicks_val,
                 "orders": orders_val,
-                "revenue": parsed_amounts[0],
-                "commission": parsed_amounts[0],
+                "revenue": rev_val,
+                "commission": rev_val,
+            }
+
+        # Last resort: find largest dollar amount on page
+        amounts = re.findall(r'\$([0-9,]+\.[0-9]{2})', raw_text)
+        if amounts:
+            parsed = sorted([float(a.replace(",", "")) for a in amounts], reverse=True)
+            logger.info("DOM fallback: found amounts %s, using largest", parsed[:3])
+            return {
+                "clicks": 0,
+                "orders": 0,
+                "revenue": parsed[0],
+                "commission": parsed[0],
             }
 
     return None
@@ -379,12 +364,12 @@ def sync_amazon(conn) -> dict:
                     "commission": earnings["commission"],
                 })
             else:
-                logger.warning("No earnings data extracted for %s. Intercepted URLs: %s",
-                               creator_id, list(raw.get("intercepted", {}).keys()))
+                csv_len = len(raw.get("page_data", {}).get("csv", ""))
+                logger.warning("No earnings data extracted for %s. CSV length: %d", creator_id, csv_len)
                 results.append({
                     "creator": creator_id,
                     "status": "no_data",
-                    "intercepted_count": len(raw.get("intercepted", {})),
+                    "csv_length": csv_len,
                 })
 
         except Exception as e:
