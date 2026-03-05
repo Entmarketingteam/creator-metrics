@@ -224,23 +224,38 @@ def sync_mavely(conn) -> dict:
     tx_inserted = 0
     logger.info("Mavely: skipping transaction insert (schema migration needed)")
 
-    # Upsert platform_earnings summary (total commission over last 30d)
-    thirty_day_start      = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-    thirty_day_start_date = (now - timedelta(days=30)).date()
-    thirty_day_links = fetch_link_metrics(token, thirty_day_start, end)
-    total_commission_30d = sum(float(l["commission"]) for l in thirty_day_links)
+    # Upsert platform_earnings summary for the current calendar month.
+    # Using a fixed calendar-month period (first→last day of current month) means
+    # each run upserts the same row in-place — no accumulation of overlapping windows.
+    from datetime import date as _date
+    today = now.date()
+    month_start = _date(today.year, today.month, 1)
+    # last day of current month: day 0 of next month
+    if today.month == 12:
+        month_end = _date(today.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        month_end = _date(today.year, today.month + 1, 1) - timedelta(days=1)
+
+    # Fetch link metrics for the current month window
+    month_start_str = month_start.strftime("%Y-%m-%d")
+    month_links = fetch_link_metrics(token, month_start_str, end)
+    total_commission = sum(float(l["commission"]) for l in month_links)
+    total_revenue = sum(float(l["revenue"]) for l in month_links)
+    total_clicks = sum(l["clicks"] for l in month_links)
+    total_orders = sum(l["orders"] for l in month_links)
 
     conn.execute("""
         INSERT INTO platform_earnings
           (creator_id, platform, period_start, period_end, revenue, commission, clicks, orders, synced_at)
-        VALUES ('nicki_entenmann', 'mavely', $1, $2, $3, $3, $4, $5, NOW())
+        VALUES ('nicki_entenmann', 'mavely', $1, $2, $3, $4, $5, $6, NOW())
         ON CONFLICT (creator_id, platform, period_start, period_end)
-        DO UPDATE SET revenue=$3, commission=$3, clicks=$4, orders=$5, synced_at=NOW()
+        DO UPDATE SET revenue=$3, commission=$4, clicks=$5, orders=$6, synced_at=NOW()
     """,
-    thirty_day_start_date, end_date,
-    str(total_commission_30d),
-    sum(l["clicks"] for l in thirty_day_links),
-    sum(l["orders"] for l in thirty_day_links))
+    month_start, month_end,
+    str(total_revenue),
+    str(total_commission),
+    total_clicks,
+    total_orders)
 
     return {
         "status": "ok",

@@ -45,75 +45,62 @@ export default async function CreatorEarningsPage({
     .from(platformConnections)
     .where(eq(platformConnections.creatorId, params.creatorId));
 
-  // Earnings summary (30 days)
-  const earningsSummary = await db
-    .select({
-      totalRevenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(
-      and(
-        eq(platformEarnings.creatorId, params.creatorId),
-        sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`
-      )
-    );
+  // Earnings summary — deduplicate per platform using most recent record per platform.
+  // This prevents inflation from Mavely/LTK daily rolling-window rows being summed.
+  const latestPerPlatform = await db.execute(sql`
+    SELECT DISTINCT ON (platform) platform,
+      CAST(revenue AS FLOAT) AS revenue,
+      CAST(commission AS FLOAT) AS commission,
+      status,
+      period_start
+    FROM platform_earnings
+    WHERE creator_id = ${params.creatorId}
+    ORDER BY platform, synced_at DESC
+  `);
 
-  // Status breakdown
-  const statusBreakdown = await db
-    .select({
-      status: platformEarnings.status,
-      total: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(
-      and(
-        eq(platformEarnings.creatorId, params.creatorId),
-        sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`
-      )
-    )
-    .groupBy(platformEarnings.status);
+  const totalRevenue = (latestPerPlatform.rows as any[]).reduce(
+    (s, r) => s + (Number(r.revenue) || 0), 0
+  );
 
-  const pending = statusBreakdown.find((s) => s.status === "pending")?.total ?? 0;
-  const paid = statusBreakdown.find((s) => s.status === "paid")?.total ?? 0;
-  const totalRevenue = earningsSummary[0]?.totalRevenue ?? 0;
+  // Status breakdown from most-recent-per-platform
+  const statusMap: Record<string, number> = {};
+  for (const r of latestPerPlatform.rows as any[]) {
+    const st = r.status ?? "open";
+    statusMap[st] = (statusMap[st] ?? 0) + (Number(r.revenue) || 0);
+  }
+  const pending = statusMap["pending"] ?? 0;
+  const paid = statusMap["paid"] ?? 0;
 
-  // Platform breakdown
-  const platformData = await db
-    .select({
-      platform: platformEarnings.platform,
-      revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(
-      and(
-        eq(platformEarnings.creatorId, params.creatorId),
-        sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`
-      )
-    )
-    .groupBy(platformEarnings.platform);
-
-  const platformTotal = platformData.reduce((s, p) => s + Number(p.revenue), 0);
-  const platformBreakdown = platformData.map((p) => ({
-    platform: p.platform,
-    revenue: Number(p.revenue),
-    percentage: platformTotal > 0 ? Math.round((Number(p.revenue) / platformTotal) * 100) : 0,
+  // Platform breakdown from most-recent-per-platform
+  const platformTotal = totalRevenue;
+  const platformBreakdown = (latestPerPlatform.rows as any[]).map((r) => ({
+    platform: r.platform as string,
+    revenue: Number(r.revenue) || 0,
+    percentage: platformTotal > 0 ? Math.round(((Number(r.revenue) || 0) / platformTotal) * 100) : 0,
   }));
 
-  // Revenue history
-  const revenueHistory = await db
-    .select({
-      date: sql<string>`${platformEarnings.periodStart}::text`,
-      Revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-    })
-    .from(platformEarnings)
-    .where(
-      and(
-        eq(platformEarnings.creatorId, params.creatorId),
-        sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`
-      )
-    )
-    .groupBy(platformEarnings.periodStart)
-    .orderBy(platformEarnings.periodStart);
+  // Revenue history — use monthly buckets to avoid overlapping-period noise.
+  // Groups by year+month of period_start using only the most recent row per (platform, month).
+  const revenueHistoryRaw = await db.execute(sql`
+    SELECT
+      to_char(date_trunc('month', period_start::date), 'YYYY-MM-DD') AS date,
+      SUM(revenue_val) AS "Revenue"
+    FROM (
+      SELECT DISTINCT ON (platform, date_trunc('month', period_start::date))
+        CAST(revenue AS FLOAT) AS revenue_val,
+        period_start
+      FROM platform_earnings
+      WHERE creator_id = ${params.creatorId}
+      ORDER BY platform, date_trunc('month', period_start::date), synced_at DESC
+    ) deduped
+    GROUP BY date_trunc('month', period_start::date)
+    ORDER BY date_trunc('month', period_start::date)
+  `);
+
+  const revenueHistory = (revenueHistoryRaw.rows as any[]).map((r) => ({
+    date: r.date as string,
+    Revenue: Number(r.Revenue) || 0,
+  }));
 
   // Recent sales
   const recentSales = await db

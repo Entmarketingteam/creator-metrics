@@ -136,13 +136,15 @@ export default async function CreatorDetailPage({
         )
     : db
         .select({
-          commission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
-          revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-          orders: sql<number>`0::int`,
-          syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
+          commission: sql<number>`COALESCE(CAST(${platformEarnings.commission} AS FLOAT), 0)`,
+          revenue: sql<number>`COALESCE(CAST(${platformEarnings.revenue} AS FLOAT), 0)`,
+          orders: sql<number>`COALESCE(${platformEarnings.orders}, 0)`,
+          syncedAt: sql<string>`${platformEarnings.syncedAt}::text`,
         })
         .from(platformEarnings)
-        .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "mavely")));
+        .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "mavely")))
+        .orderBy(desc(platformEarnings.syncedAt))
+        .limit(1);
 
   const [
     history,
@@ -506,7 +508,7 @@ export default async function CreatorDetailPage({
             data={{
               platform: "ltk",
               revenue: ltk.revenue ?? 0,
-              commission: ltk.commission ?? 0,
+              commission: ltk.revenue ?? 0,
               clicks: ltk.clicks ?? 0,
               orders: ltk.orders ?? 0,
               periodLabel: periodRangeLabel ?? "30-day",
@@ -537,7 +539,7 @@ export default async function CreatorDetailPage({
               orders: hasDateFilter
                 ? ((mavely.orders ?? 0) > 0 ? mavely.orders : null)
                 : (Number(mavelyLinkMetrics.orders) || null),
-              periodLabel: periodRangeLabel ?? "all-time",
+              periodLabel: periodRangeLabel ?? "30-day",
               syncedAt: mavely.syncedAt ?? null,
             }}
           />

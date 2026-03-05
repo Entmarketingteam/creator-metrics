@@ -69,15 +69,14 @@ export async function GET(req: NextRequest) {
             continue;
           }
 
-          // commissions_summary response shape: { commissions_summary: { open_earnings, lifetime_paid, ... } }
-          const summary = commissionsData?.commissions_summary;
-          const commissionAmount = String(summary?.open_earnings ?? 0);
-
-          // performance_summary response shape: { data: { net_commissions, clicks, orders, ... } }
+          // net_commissions = what was earned in this period window (correct number to display)
+          // open_earnings = lifetime pending balance — not period-specific, do not store in commission
           const perf = performanceData?.data;
           const clicks = perf?.clicks ?? 0;
           const orders = perf?.orders ?? 0;
-          const revenue = perf?.net_commissions != null ? String(perf.net_commissions) : commissionAmount;
+          const revenue = perf?.net_commissions != null
+            ? String(perf.net_commissions)
+            : String(commissionsData?.commissions_summary?.open_earnings ?? 0);
 
           await db
             .insert(platformEarnings)
@@ -87,7 +86,7 @@ export async function GET(req: NextRequest) {
               periodStart: startDate,
               periodEnd: endDate,
               revenue,
-              commission: commissionAmount,
+              commission: revenue,
               clicks,
               orders,
               rawPayload: JSON.stringify({ commissionsData, performanceData }),
@@ -102,7 +101,7 @@ export async function GET(req: NextRequest) {
               ],
               set: {
                 revenue,
-                commission: commissionAmount,
+                commission: revenue,
                 clicks,
                 orders,
                 rawPayload: JSON.stringify({ commissionsData, performanceData }),

@@ -282,18 +282,19 @@ def sync_ltk_data(conn) -> dict:
             perf_res.raise_for_status()
             perf = perf_res.json().get("data", {})
 
-        open_earnings = str(commissions.get("open_earnings", 0))
-        net_comm      = str(perf.get("net_commissions", commissions.get("open_earnings", 0)))
-        clicks        = int(perf.get("clicks", 0))
-        orders        = int(perf.get("orders", 0))
+        # net_commissions = what was earned in this period window (the correct number to show)
+        # open_earnings = lifetime pending balance (not period-specific — do not store in period record)
+        net_comm = str(perf.get("net_commissions", commissions.get("open_earnings", 0)))
+        clicks   = int(perf.get("clicks", 0))
+        orders   = int(perf.get("orders", 0))
 
         conn.execute("""
             INSERT INTO platform_earnings
               (creator_id, platform, period_start, period_end, revenue, commission, clicks, orders, synced_at)
-            VALUES ($1, 'ltk', $2, $3, $4, $5, $6, $7, NOW())
+            VALUES ($1, 'ltk', $2, $3, $4, $4, $5, $6, NOW())
             ON CONFLICT (creator_id, platform, period_start, period_end)
-            DO UPDATE SET revenue=$4, commission=$5, clicks=$6, orders=$7, synced_at=NOW()
-        """, "nicki_entenmann", period_start_date, period_end_date, net_comm, open_earnings, clicks, orders)
+            DO UPDATE SET revenue=$4, commission=$4, clicks=$5, orders=$6, synced_at=NOW()
+        """, "nicki_entenmann", period_start_date, period_end_date, net_comm, clicks, orders)
 
         results.append({"range": f"last_{days}_days", "clicks": clicks, "orders": orders})
 
