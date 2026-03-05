@@ -23,4 +23,18 @@ export const CREATORS: CreatorConfig[] = [
     displayName: "Emily Ogan",
     isOwned: false,
   },
+  {
+    id: "annbschulte",
+    igUserId: "17841400315480688",
+    username: "annbschulte",
+    displayName: "Ann Schulte",
+    isOwned: false,
+  },
+  {
+    id: "ellenludwigfitness",
+    igUserId: "17841401671655474",
+    username: "ellenludwigfitness",
+    displayName: "Ellen Ludwig",
+    isOwned: false,
+  },
 ];
