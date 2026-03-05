@@ -6,7 +6,7 @@ import {
   getRecentPosts,
 } from "@/lib/queries";
 import { db } from "@/lib/db";
-import { platformEarnings, sales, mavelyLinks, ltkPosts } from "@/lib/schema";
+import { platformEarnings, sales, mavelyLinks, ltkPosts, mavelyTransactions } from "@/lib/schema";
 import { eq, sql, and, desc, gte, lte } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -87,17 +87,72 @@ export default async function CreatorDetailPage({
         .orderBy(desc(platformEarnings.syncedAt))
         .limit(1);
 
+  // ShopMy: date-filtered → exact saleDate from transactions; default → all-time monthly buckets
+  const shopmyQuery = hasDateFilter
+    ? db
+        .select({
+          commission: sql<number>`COALESCE(SUM(CAST(${sales.commissionAmount} AS FLOAT)), 0)`,
+          revenue: sql<number>`COALESCE(SUM(CAST(${sales.orderValue} AS FLOAT)), 0)`,
+          orders: sql<number>`COUNT(*)::int`,
+          syncedAt: sql<string>`MAX(${sales.createdAt})::text`,
+          monthCount: sql<number>`0::int`,
+        })
+        .from(sales)
+        .where(
+          and(
+            eq(sales.creatorId, params.id),
+            eq(sales.platform, "shopmy"),
+            ...(from ? [gte(sales.saleDate, new Date(from))] : []),
+            ...(to ? [lte(sales.saleDate, new Date(to + "T23:59:59Z"))] : [])
+          )
+        )
+    : db
+        .select({
+          commission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
+          revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+          orders: sql<number>`0::int`,
+          syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
+          monthCount: sql<number>`COUNT(*)`,
+        })
+        .from(platformEarnings)
+        .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "shopmy")));
+
+  // Mavely: date-filtered → exact saleDate from transactions (last 90d); default → all-time platformEarnings
+  const mavelyEarningsQuery = hasDateFilter
+    ? db
+        .select({
+          commission: sql<number>`COALESCE(SUM(CAST(${mavelyTransactions.commissionAmount} AS FLOAT)), 0)`,
+          revenue: sql<number>`COALESCE(SUM(CAST(${mavelyTransactions.orderValue} AS FLOAT)), 0)`,
+          orders: sql<number>`COUNT(*)::int`,
+          syncedAt: sql<string>`MAX(${mavelyTransactions.syncedAt})::text`,
+        })
+        .from(mavelyTransactions)
+        .where(
+          and(
+            eq(mavelyTransactions.creatorId, params.id),
+            ...(from ? [gte(mavelyTransactions.saleDate, new Date(from))] : []),
+            ...(to ? [lte(mavelyTransactions.saleDate, new Date(to + "T23:59:59Z"))] : [])
+          )
+        )
+    : db
+        .select({
+          commission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
+          revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+          orders: sql<number>`0::int`,
+          syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
+        })
+        .from(platformEarnings)
+        .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "mavely")));
+
   const [
     history,
     allPosts,
     ltkRaw,
     shopmyRaw,
     mavelyRaw,
-    shopmyCurrentMonthRaw,
     mavelyLinksRaw,
     ltkPostsRaw,
     mavelyLinkMetricsRaw,
-    shopmySalesRaw,
   ] = await Promise.all([
     getCreatorHistory(params.id, 90),
 
@@ -106,38 +161,9 @@ export default async function CreatorDetailPage({
 
     ltkQuery,
 
-    // ShopMy — SUM periods overlapping with selected range (or all-time)
-    db
-      .select({
-        revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-        commission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
-        syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
-        monthCount: sql<number>`COUNT(*)`,
-      })
-      .from(platformEarnings)
-      .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "shopmy"), ...dateConds)),
+    shopmyQuery,
 
-    // Mavely — SUM periods overlapping with selected range (or all-time)
-    db
-      .select({
-        revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
-        commission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
-        syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
-      })
-      .from(platformEarnings)
-      .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "mavely"), ...dateConds)),
-
-    // ShopMy current month (most recent period — for label only)
-    db
-      .select({
-        revenue: sql<number>`COALESCE(CAST(${platformEarnings.revenue} AS FLOAT), 0)`,
-        periodStart: platformEarnings.periodStart,
-        periodEnd: platformEarnings.periodEnd,
-      })
-      .from(platformEarnings)
-      .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "shopmy")))
-      .orderBy(desc(platformEarnings.periodEnd))
-      .limit(1),
+    mavelyEarningsQuery,
 
     // Mavely per-link attribution — aggregate all periods, keyed by link URL
     creator.isOwned
@@ -198,20 +224,6 @@ export default async function CreatorDetailPage({
           )
       : Promise.resolve([{ clicks: 0, orders: 0 }]),
 
-    // ShopMy order count from individual sales transactions (clicks not available from API)
-    db
-      .select({
-        orders: sql<number>`COUNT(*)::int`,
-      })
-      .from(sales)
-      .where(
-        and(
-          eq(sales.creatorId, params.id),
-          eq(sales.platform, "shopmy"),
-          ...(from ? [gte(sales.saleDate, new Date(from))] : []),
-          ...(to ? [lte(sales.saleDate, new Date(to + "T23:59:59Z"))] : [])
-        )
-      ),
   ]);
 
   // Build link_url → attribution map for PostGrid (Mavely + LTK combined)
@@ -248,11 +260,9 @@ export default async function CreatorDetailPage({
   }
 
   const ltk = ltkRaw[0] ?? { revenue: 0, commission: 0, clicks: 0, orders: 0, syncedAt: null };
-  const shopmy = shopmyRaw[0] ?? { revenue: 0, commission: 0, syncedAt: null, monthCount: 0 };
-  const mavely = mavelyRaw[0] ?? { revenue: 0, commission: 0, syncedAt: null };
+  const shopmy = shopmyRaw[0] ?? { revenue: 0, commission: 0, orders: 0, syncedAt: null, monthCount: 0 };
+  const mavely = mavelyRaw[0] ?? { revenue: 0, commission: 0, orders: 0, syncedAt: null };
   const mavelyLinkMetrics = mavelyLinkMetricsRaw[0] ?? { clicks: 0, orders: 0 };
-  const shopmySalesCount = shopmySalesRaw[0]?.orders ?? 0;
-  const shopmyCurrent = shopmyCurrentMonthRaw[0];
 
   // Human-readable label for the active date range
   const periodRangeLabel = hasDateFilter
@@ -328,10 +338,6 @@ export default async function CreatorDetailPage({
       Engaged: h.accountsEngaged28d ?? 0,
       Interactions: h.totalInteractions28d ?? 0,
     }));
-
-  const shopmyCurrentLabel = shopmyCurrent
-    ? `${shopmyCurrent.periodStart} – ${shopmyCurrent.periodEnd}`
-    : "all-time";
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-4">
@@ -468,7 +474,7 @@ export default async function CreatorDetailPage({
               <p className="text-xs text-gray-500 mt-1">
                 {periodRangeLabel
                   ? `Filtered: ${periodRangeLabel}`
-                  : "LTK (30d) · ShopMy (all-time) · Mavely (all-time)"}
+                  : "LTK (30d) · ShopMy · Mavely"}
               </p>
             </div>
             <div className="flex gap-4 text-center">
@@ -510,25 +516,27 @@ export default async function CreatorDetailPage({
           <PlatformCard
             data={{
               platform: "shopmy",
-              revenue: shopmy.revenue ?? 0,
+              revenue: shopmy.commission ?? 0,
               commission: shopmy.commission ?? 0,
               clicks: null,
-              orders: shopmySalesCount > 0 ? shopmySalesCount : null,
+              orders: (shopmy.orders ?? 0) > 0 ? shopmy.orders : null,
               periodLabel:
                 periodRangeLabel ??
                 ((shopmy.monthCount ?? 0) > 1
                   ? `${shopmy.monthCount} months`
-                  : "current month"),
+                  : "this month"),
               syncedAt: shopmy.syncedAt ?? null,
             }}
           />
           <PlatformCard
             data={{
               platform: "mavely",
-              revenue: mavely.revenue ?? 0,
+              revenue: mavely.commission ?? 0,
               commission: mavely.commission ?? 0,
               clicks: Number(mavelyLinkMetrics.clicks) || null,
-              orders: Number(mavelyLinkMetrics.orders) || null,
+              orders: hasDateFilter
+                ? ((mavely.orders ?? 0) > 0 ? mavely.orders : null)
+                : (Number(mavelyLinkMetrics.orders) || null),
               periodLabel: periodRangeLabel ?? "all-time",
               syncedAt: mavely.syncedAt ?? null,
             }}
