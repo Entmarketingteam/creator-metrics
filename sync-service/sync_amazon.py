@@ -174,9 +174,11 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str,
                 pass  # Might be on login page — handle below
 
             body_text = page.evaluate("() => document.body.innerText") or ""
+            raw_html = page.evaluate("() => document.documentElement.outerHTML") or ""
             cur_url = page.url
-            logger.info("Initial URL: %s | body length: %d | first200: %s",
-                        cur_url, len(body_text), body_text[:200].replace('\n', ' '))
+            logger.info("Initial URL: %s | body_text_len: %d | html_len: %d | first300_html: %s",
+                        cur_url, len(body_text), len(raw_html),
+                        raw_html[:300].replace('\n', ' '))
 
             # Treat empty body OR login URL as needing login — Amazon's SPA
             # sometimes redirects back to /home/summary but renders nothing when
