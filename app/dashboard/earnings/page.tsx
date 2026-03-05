@@ -83,8 +83,8 @@ export default async function EarningsPage({
   // ── Summary totals across all platforms ──────────────────────────
   const totalRevenue = platformCards.reduce((s, c) => s + c.revenue, 0);
   const totalCommission = platformCards.reduce((s, c) => s + c.commission, 0);
-  const totalClicks = platformCards.reduce((s, c) => s + c.clicks, 0);
-  const totalOrders = platformCards.reduce((s, c) => s + c.orders, 0);
+  const totalClicks = platformCards.reduce((s, c) => s + (c.clicks ?? 0), 0);
+  const totalOrders = platformCards.reduce((s, c) => s + (c.orders ?? 0), 0);
   const totalCvr = totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toFixed(1) + "%" : "—";
 
   // ── Platform breakdown for bar chart ─────────────────────────────

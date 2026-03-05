@@ -4,28 +4,28 @@ import { formatCurrency, PLATFORM_LABELS, PLATFORM_LOGO_WORDMARK, PLATFORM_LOGO_
 
 const PLATFORM_ACCENT: Record<string, { bg: string; border: string; text: string; shadow: string }> = {
   ltk: {
-    bg: "bg-violet-500/5",
-    border: "border-violet-500/20",
+    bg: "bg-violet-500/10",
+    border: "border-violet-500/30",
     text: "text-violet-500 dark:text-violet-400",
-    shadow: "hover:shadow-violet-500/10",
+    shadow: "hover:shadow-violet-500/20",
   },
   shopmy: {
-    bg: "bg-pink-500/5",
-    border: "border-pink-500/20",
+    bg: "bg-pink-500/10",
+    border: "border-pink-500/30",
     text: "text-pink-500 dark:text-pink-400",
-    shadow: "hover:shadow-pink-500/10",
+    shadow: "hover:shadow-pink-500/20",
   },
   mavely: {
-    bg: "bg-emerald-500/5",
-    border: "border-emerald-500/20",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/30",
     text: "text-emerald-500 dark:text-emerald-400",
-    shadow: "hover:shadow-emerald-500/10",
+    shadow: "hover:shadow-emerald-500/20",
   },
   amazon: {
-    bg: "bg-amber-500/5",
-    border: "border-amber-500/20",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/30",
     text: "text-amber-500 dark:text-amber-400",
-    shadow: "hover:shadow-amber-500/10",
+    shadow: "hover:shadow-amber-500/20",
   },
 };
 
@@ -33,8 +33,8 @@ export interface PlatformCardData {
   platform: string;
   revenue: number;
   commission: number;
-  clicks: number;
-  orders: number;
+  clicks: number | null;
+  orders: number | null;
   periodLabel: string;
   syncedAt: string | null;
 }
@@ -58,9 +58,9 @@ export default function PlatformCard({ data }: { data: PlatformCardData }) {
     shadow: "",
   };
   const label = PLATFORM_LABELS[key] ?? data.platform;
-  const hasData = data.revenue > 0 || data.clicks > 0 || data.orders > 0;
+  const hasData = data.revenue > 0 || (data.clicks != null && data.clicks > 0) || (data.orders != null && data.orders > 0);
   const cvr =
-    data.clicks > 0
+    data.clicks != null && data.clicks > 0 && data.orders != null
       ? ((data.orders / data.clicks) * 100).toFixed(1) + "%"
       : "—";
 
@@ -74,9 +74,9 @@ export default function PlatformCard({ data }: { data: PlatformCardData }) {
           <Image
             src={PLATFORM_LOGO_WORDMARK[key]}
             alt={label}
-            height={20}
-            width={80}
-            className={`object-contain object-left h-5 w-auto ${PLATFORM_LOGO_INVERT.has(key) ? "dark:invert opacity-80" : ""}`}
+            height={24}
+            width={100}
+            className={`object-contain object-left h-6 w-auto ${PLATFORM_LOGO_INVERT.has(key) ? "dark:invert brightness-110" : ""}`}
             unoptimized
           />
         ) : (
@@ -113,7 +113,7 @@ export default function PlatformCard({ data }: { data: PlatformCardData }) {
               <MousePointerClick className="h-3 w-3" />
             </div>
             <p className="text-sm font-semibold text-foreground">
-              {data.clicks.toLocaleString()}
+              {data.clicks != null ? data.clicks.toLocaleString() : "—"}
             </p>
             <p className="text-xs text-muted-foreground">Clicks</p>
           </div>
@@ -122,7 +122,7 @@ export default function PlatformCard({ data }: { data: PlatformCardData }) {
               <ShoppingCart className="h-3 w-3" />
             </div>
             <p className="text-sm font-semibold text-foreground">
-              {data.orders.toLocaleString()}
+              {data.orders != null ? data.orders.toLocaleString() : "—"}
             </p>
             <p className="text-xs text-muted-foreground">Orders</p>
           </div>

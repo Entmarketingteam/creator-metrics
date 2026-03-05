@@ -61,6 +61,8 @@ def update_ltk_tokens_in_airtable(record_id: str, access_token: str, id_token: s
         "Consecutive_Failures": 0,
     }
     r = httpx.patch(url, json={"fields": fields}, headers=_airtable_headers(), timeout=30)
+    if not r.is_success:
+        logger.error("Airtable PATCH failed %s: %s", r.status_code, r.text)
     r.raise_for_status()
     logger.info("LTK tokens updated in Airtable, expires %s", expires_at)
 

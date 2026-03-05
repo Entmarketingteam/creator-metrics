@@ -10,6 +10,7 @@ from datetime import datetime
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -143,6 +144,91 @@ def _check_secret(req: Request):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard():
+    secret = os.environ.get("SYNC_SECRET", "")
+    jobs = scheduler.get_jobs()
+    jobs_html = "".join(
+        f"<tr><td>{j.id}</td><td>{j.next_run_time}</td></tr>"
+        for j in jobs
+    )
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>creator-metrics sync</title>
+  <style>
+    body {{ font-family: -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 32px; }}
+    h1 {{ font-size: 20px; font-weight: 600; margin-bottom: 4px; }}
+    p {{ color: #94a3b8; font-size: 14px; margin-bottom: 32px; }}
+    .grid {{ display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; }}
+    .card {{ background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px 24px; min-width: 220px; }}
+    .card h2 {{ font-size: 13px; color: #94a3b8; font-weight: 500; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: .05em; }}
+    button {{ background: #3b82f6; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer; width: 100%; }}
+    button:hover {{ background: #2563eb; }}
+    button:disabled {{ background: #475569; cursor: default; }}
+    .status {{ margin-top: 10px; font-size: 12px; color: #94a3b8; min-height: 18px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    th {{ text-align: left; color: #64748b; font-weight: 500; padding: 6px 0; border-bottom: 1px solid #334155; }}
+    td {{ padding: 8px 0; border-bottom: 1px solid #1e293b; }}
+  </style>
+</head>
+<body>
+  <h1>creator-metrics sync</h1>
+  <p>Manual triggers + scheduled job status</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Mavely Sync</h2>
+      <button onclick="trigger('/sync/mavely', this, 'mavely-status')">Run Now</button>
+      <div class="status" id="mavely-status"></div>
+    </div>
+    <div class="card">
+      <h2>LTK Data Sync</h2>
+      <button onclick="trigger('/sync/ltk', this, 'ltk-status')">Run Now</button>
+      <div class="status" id="ltk-status"></div>
+    </div>
+    <div class="card">
+      <h2>LTK Token Refresh</h2>
+      <button onclick="trigger('/sync/ltk-tokens', this, 'tokens-status')">Run Now</button>
+      <div class="status" id="tokens-status"></div>
+    </div>
+  </div>
+
+  <div class="card" style="max-width:600px">
+    <h2>Scheduled Jobs</h2>
+    <table>
+      <tr><th>Job</th><th>Next Run (UTC)</th></tr>
+      {jobs_html}
+    </table>
+  </div>
+
+  <script>
+    const SECRET = "{secret}";
+    async function trigger(path, btn, statusId) {{
+      btn.disabled = true;
+      btn.textContent = "Starting...";
+      const el = document.getElementById(statusId);
+      el.textContent = "";
+      try {{
+        const r = await fetch(path, {{
+          method: "POST",
+          headers: {{ Authorization: "Bearer " + SECRET }}
+        }});
+        const d = await r.json();
+        el.textContent = d.message || d.status || JSON.stringify(d);
+        btn.textContent = "Done ✓";
+        setTimeout(() => {{ btn.disabled = false; btn.textContent = "Run Now"; }}, 5000);
+      }} catch(e) {{
+        el.textContent = "Error: " + e.message;
+        btn.disabled = false;
+        btn.textContent = "Run Now";
+      }}
+    }}
+  </script>
+</body>
+</html>"""
+
 
 @app.get("/health")
 async def health():

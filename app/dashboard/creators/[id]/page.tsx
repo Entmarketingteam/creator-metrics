@@ -96,6 +96,8 @@ export default async function CreatorDetailPage({
     shopmyCurrentMonthRaw,
     mavelyLinksRaw,
     ltkPostsRaw,
+    mavelyLinkMetricsRaw,
+    shopmySalesRaw,
   ] = await Promise.all([
     getCreatorHistory(params.id, 90),
 
@@ -172,6 +174,44 @@ export default async function CreatorDetailPage({
           .where(eq(ltkPosts.creatorId, params.id))
           .groupBy(ltkPosts.shareUrl)
       : Promise.resolve([]),
+
+    // Mavely aggregate clicks + orders for the platform card
+    // Without date filter: use most recent sync period to avoid double-counting rolling 90d windows
+    // With date filter: use period overlap (approximate)
+    creator.isOwned
+      ? db
+          .select({
+            clicks: sql<number>`COALESCE(SUM(${mavelyLinks.clicks}), 0)`,
+            orders: sql<number>`COALESCE(SUM(${mavelyLinks.orders}), 0)`,
+          })
+          .from(mavelyLinks)
+          .where(
+            and(
+              eq(mavelyLinks.creatorId, params.id),
+              hasDateFilter
+                ? and(
+                    ...(from ? [gte(mavelyLinks.periodEnd, from)] : []),
+                    ...(to ? [lte(mavelyLinks.periodStart, to)] : [])
+                  )
+                : sql`${mavelyLinks.periodStart} = (SELECT MAX(period_start) FROM mavely_links WHERE creator_id = ${params.id})`
+            )
+          )
+      : Promise.resolve([{ clicks: 0, orders: 0 }]),
+
+    // ShopMy order count from individual sales transactions (clicks not available from API)
+    db
+      .select({
+        orders: sql<number>`COUNT(*)::int`,
+      })
+      .from(sales)
+      .where(
+        and(
+          eq(sales.creatorId, params.id),
+          eq(sales.platform, "shopmy"),
+          ...(from ? [gte(sales.saleDate, new Date(from))] : []),
+          ...(to ? [lte(sales.saleDate, new Date(to + "T23:59:59Z"))] : [])
+        )
+      ),
   ]);
 
   // Build link_url → attribution map for PostGrid (Mavely + LTK combined)
@@ -210,6 +250,8 @@ export default async function CreatorDetailPage({
   const ltk = ltkRaw[0] ?? { revenue: 0, commission: 0, clicks: 0, orders: 0, syncedAt: null };
   const shopmy = shopmyRaw[0] ?? { revenue: 0, commission: 0, syncedAt: null, monthCount: 0 };
   const mavely = mavelyRaw[0] ?? { revenue: 0, commission: 0, syncedAt: null };
+  const mavelyLinkMetrics = mavelyLinkMetricsRaw[0] ?? { clicks: 0, orders: 0 };
+  const shopmySalesCount = shopmySalesRaw[0]?.orders ?? 0;
   const shopmyCurrent = shopmyCurrentMonthRaw[0];
 
   // Human-readable label for the active date range
@@ -470,12 +512,12 @@ export default async function CreatorDetailPage({
               platform: "shopmy",
               revenue: shopmy.revenue ?? 0,
               commission: shopmy.commission ?? 0,
-              clicks: 0,
-              orders: 0,
+              clicks: null,
+              orders: shopmySalesCount > 0 ? shopmySalesCount : null,
               periodLabel:
                 periodRangeLabel ??
                 ((shopmy.monthCount ?? 0) > 1
-                  ? `${shopmy.monthCount} months (all-time)`
+                  ? `${shopmy.monthCount} months`
                   : "current month"),
               syncedAt: shopmy.syncedAt ?? null,
             }}
@@ -485,8 +527,8 @@ export default async function CreatorDetailPage({
               platform: "mavely",
               revenue: mavely.revenue ?? 0,
               commission: mavely.commission ?? 0,
-              clicks: 0,
-              orders: 0,
+              clicks: Number(mavelyLinkMetrics.clicks) || null,
+              orders: Number(mavelyLinkMetrics.orders) || null,
               periodLabel: periodRangeLabel ?? "all-time",
               syncedAt: mavely.syncedAt ?? null,
             }}
