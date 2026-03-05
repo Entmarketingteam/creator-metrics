@@ -262,6 +262,8 @@ def _scrape_creator(email: str, password: str, totp_secret: Optional[str],
     """
     from playwright.sync_api import sync_playwright
 
+    from playwright_stealth import stealth_sync
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -273,7 +275,6 @@ def _scrape_creator(email: str, password: str, totp_secret: Optional[str],
             ],
         )
         context = browser.new_context(
-            # Realistic desktop user agent to avoid basic bot detection
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -283,6 +284,8 @@ def _scrape_creator(email: str, password: str, totp_secret: Optional[str],
             locale="en-US",
         )
         page = context.new_page()
+        # Patch automation signals so Amazon doesn't detect headless Chromium
+        stealth_sync(page)
 
         try:
             authenticated = _login(page, email, password, totp_secret)
