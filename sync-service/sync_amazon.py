@@ -108,13 +108,11 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
             context = browser.contexts[0]
             page = context.pages[0] if context.pages else context.new_page()
 
-            def _login_if_needed():
-                cur = page.url
-                if not any(x in cur for x in ["ap/signin", "ap/cvf", "signin", "login"]):
-                    return
-                logger.info("Login required for %s (url=%s)", email, cur)
-
-                # Email step
+            def _do_login():
+                """Fill email → continue → password → submit. Returns True if completed."""
+                cur_url = page.url
+                logger.info("Login page detected: %s", cur_url[:80])
+                # Email
                 try:
                     page.wait_for_selector('#ap_email, input[name="email"]', timeout=8000)
                     inp = page.query_selector('#ap_email') or page.query_selector('input[name="email"]')
@@ -124,31 +122,42 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
                     if btn:
                         btn.click()
                         time.sleep(2)
-                except Exception:
-                    pass
-
-                # Password step
+                except Exception as ex:
+                    logger.warning("Email fill failed: %s", ex)
+                # Password
                 try:
-                    page.wait_for_selector('#ap_password, input[name="password"]', timeout=8000)
+                    page.wait_for_selector('#ap_password, input[name="password"]', timeout=10000)
                     pw = page.query_selector('#ap_password') or page.query_selector('input[name="password"]')
                     if pw:
                         pw.fill(password)
                     submit = page.query_selector('#signInSubmit, input[type="submit"]')
                     if submit:
                         submit.click()
-                    page.wait_for_load_state("networkidle", timeout=20000)
+                    page.wait_for_load_state("networkidle", timeout=25000)
                     time.sleep(3)
-                except Exception:
-                    pass
+                    logger.info("Post-login URL: %s", page.url)
+                    return True
+                except Exception as ex:
+                    logger.warning("Password fill failed: %s", ex)
+                    return False
 
-                logger.info("Post-login URL: %s", page.url)
+            def _check_and_login():
+                """Check if on login page by URL or by presence of login form."""
+                cur = page.url
+                has_login_url = any(x in cur for x in ["ap/signin", "ap/cvf", "signin.amazon", "login"])
+                has_login_form = bool(page.query_selector('#ap_email, input[name="email"]'))
+                if has_login_url or has_login_form:
+                    _do_login()
+                else:
+                    logger.info("No login needed (url=%s)", cur[:60])
 
-            # ── Step 1: Land on summary, handle login ──────────────────
+            # ── Step 1: Land on summary with full wait, handle login ───
             logger.info("Navigating to Associates Central for %s...", email)
             page.goto("https://affiliate-program.amazon.com/home/summary",
-                      wait_until="domcontentloaded", timeout=30000)
-            time.sleep(2)
-            _login_if_needed()
+                      wait_until="networkidle", timeout=40000)
+            logger.info("Initial URL: %s | body length: %d",
+                        page.url, len(page.evaluate("() => document.body.innerText") or ""))
+            _check_and_login()
 
             # ── Step 2: Download the earnings CSV directly ─────────────
             # Associates Central exposes a CSV download that doesn't need JS interaction
