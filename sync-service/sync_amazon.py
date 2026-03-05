@@ -1,375 +1,303 @@
 """
-Amazon Associates sync — logs into affiliate-program.amazon.com for each creator,
-intercepts the performance summary API, and writes earnings to platform_earnings.
-Uses Airtop CDP + Playwright (same pattern as LTK).
+Amazon Associates sync — logs into affiliate-program.amazon.com using
+stored credentials + TOTP 2FA, downloads the earnings CSV, and writes
+results to platform_earnings.
+
+No Airtop/CDP needed — runs local Playwright (Chromium installed in Docker).
+
+Doppler secrets per creator:
+  AMAZON_{ID}_EMAIL         e.g. AMAZON_NICKI_EMAIL
+  AMAZON_{ID}_PASSWORD      e.g. AMAZON_NICKI_PASSWORD
+  AMAZON_{ID}_TOTP_SECRET   e.g. AMAZON_NICKI_TOTP_SECRET  (base32 seed, optional)
+
+For Nicki specifically, EMAIL/PASSWORD are shared with LTK so we also
+accept LTK_EMAIL / LTK_PASSWORD as fallback env var names.
 """
-import os, json, logging, time
-from datetime import datetime, timezone, date, timedelta
+import csv
+import io
+import logging
+import os
+import time
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-AIRTOP_BASE = "https://api.airtop.ai/api/v1"
-
 CREATORS = [
     {
         "id": "nicki_entenmann",
-        "email_env": "LTK_EMAIL",         # marketingteam@nickient.com
-        "password_env": "LTK_PASSWORD",
+        "email_env": "AMAZON_NICKI_EMAIL",
+        "email_env_fallback": "LTK_EMAIL",
+        "password_env": "AMAZON_NICKI_PASSWORD",
+        "password_env_fallback": "LTK_PASSWORD",
+        "totp_env": "AMAZON_NICKI_TOTP_SECRET",
         "tag": "nickientenmann-20",
     },
     {
         "id": "annbschulte",
         "email_env": "ANN_AMAZON_EMAIL",
+        "email_env_fallback": None,
         "password_env": "ANN_AMAZON_PASSWORD",
+        "password_env_fallback": None,
+        "totp_env": "ANN_AMAZON_TOTP_SECRET",
         "tag": None,
     },
     {
         "id": "ellenludwigfitness",
         "email_env": "ELLEN_AMAZON_EMAIL",
+        "email_env_fallback": None,
         "password_env": "ELLEN_AMAZON_PASSWORD",
+        "password_env_fallback": None,
+        "totp_env": "ELLEN_AMAZON_TOTP_SECRET",
         "tag": None,
     },
     {
         "id": "livefitwithem",
         "email_env": "EMILY_AMAZON_EMAIL",
+        "email_env_fallback": None,
         "password_env": "EMILY_AMAZON_PASSWORD",
+        "password_env_fallback": None,
+        "totp_env": "EMILY_AMAZON_TOTP_SECRET",
         "tag": None,
     },
 ]
 
-# How many days of history to pull per sync
-SYNC_DAYS = 30
+# Amazon signin URL — return_to sends us back to Associates Central after login
+_SIGNIN_URL = (
+    "https://www.amazon.com/ap/signin"
+    "?openid.pape.max_auth_age=0"
+    "&openid.return_to=https%3A%2F%2Faffiliate-program.amazon.com%2Fhome%2Fsummary"
+    "&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
+    "&openid.assoc_handle=usflex"
+    "&openid.mode=checkid_setup"
+    "&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
+    "&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0"
+)
 
 
-def _airtop(airtop_key: str, method: str, path: str, body=None) -> dict:
-    import urllib.request, urllib.error
-    url = f"{AIRTOP_BASE}{path}"
-    data = json.dumps(body).encode() if body else None
-    req = urllib.request.Request(url, data=data, method=method, headers={
-        "Authorization": f"Bearer {airtop_key}",
-        "Content-Type": "application/json",
-    })
-    try:
-        resp = urllib.request.urlopen(req, timeout=90)
-        return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Airtop {method} {path} → {e.code}: {e.read().decode()}")
+def _get_env(primary: Optional[str], fallback: Optional[str] = None) -> Optional[str]:
+    val = os.environ.get(primary) if primary else None
+    if not val and fallback:
+        val = os.environ.get(fallback)
+    return val or None
 
 
-def _cleanup_sessions(airtop_key: str):
-    try:
-        existing = _airtop(airtop_key, "GET", "/sessions")
-        for s in existing.get("data", {}).get("sessions", []):
-            try:
-                _airtop(airtop_key, "DELETE", f"/sessions/{s['id']}")
-            except Exception:
-                pass
-    except Exception as e:
-        logger.warning("Could not clean up Airtop sessions: %s", e)
-
-
-def _scrape_amazon_earnings(airtop_key: str, email: str, password: str,
-                            days: int = 30,
-                            start_date_override: Optional[str] = None,
-                            end_date_override: Optional[str] = None) -> Optional[dict]:
+def _login(page, email: str, password: str, totp_secret: Optional[str]) -> bool:
     """
-    Opens Amazon Associates Central, logs in, intercepts the performance
-    summary API response. Returns dict with clicks, orders, revenue fields.
+    Complete the Amazon login flow. Returns True if we end up on Associates
+    Central, False if we couldn't authenticate.
+    """
+    import pyotp
+
+    logger.info("Navigating to Amazon signin...")
+    page.goto(_SIGNIN_URL, wait_until="domcontentloaded", timeout=30000)
+
+    # ── Email step ────────────────────────────────────────────────────────────
+    try:
+        page.wait_for_selector("#ap_email", timeout=15000)
+        page.fill("#ap_email", email)
+        page.click("#continue")
+        logger.info("Email submitted")
+    except Exception as e:
+        logger.error("Email step failed: %s (url=%s)", e, page.url[:80])
+        return False
+
+    # ── Password step ─────────────────────────────────────────────────────────
+    try:
+        page.wait_for_selector("#ap_password", timeout=15000)
+        page.fill("#ap_password", password)
+        page.click("#signInSubmit")
+        page.wait_for_load_state("networkidle", timeout=30000)
+        logger.info("Password submitted — url=%s", page.url[:80])
+    except Exception as e:
+        logger.error("Password step failed: %s (url=%s)", e, page.url[:80])
+        return False
+
+    # ── 2FA / OTP step (if required) ─────────────────────────────────────────
+    cur_url = page.url
+    on_mfa = any(x in cur_url for x in ["ap/cvf", "auth/mfa", "ap/signin", "challenge"])
+
+    if on_mfa:
+        logger.info("2FA page detected: %s", cur_url[:80])
+
+        if not totp_secret:
+            logger.warning("2FA required but no TOTP secret configured — cannot proceed")
+            return False
+
+        try:
+            # Amazon uses different selectors depending on 2FA type
+            otp_selector = (
+                "input[name='otpCode'], "
+                "#auth-mfa-otpcode, "
+                "input[name='code'], "
+                "input[autocomplete='one-time-code']"
+            )
+            page.wait_for_selector(otp_selector, timeout=15000)
+            otp_code = pyotp.TOTP(totp_secret).now()
+            logger.info("Generated TOTP code")
+            page.fill(otp_selector, otp_code)
+
+            # Find and click the submit button
+            submit_selector = (
+                "#auth-signin-button, "
+                "input[id='continue'], "
+                "input[type='submit'], "
+                "button[type='submit']"
+            )
+            page.click(submit_selector)
+            page.wait_for_load_state("networkidle", timeout=30000)
+            logger.info("2FA submitted — url=%s", page.url[:80])
+        except Exception as e:
+            logger.error("2FA step failed: %s", e)
+            return False
+
+    # ── Verify we're on Associates Central ────────────────────────────────────
+    final_url = page.url
+    if "affiliate-program.amazon.com" in final_url:
+        logger.info("Successfully authenticated — on Associates Central")
+        return True
+
+    # Might need one more navigation if we landed on a landing page
+    logger.info("Post-login URL: %s — navigating to Associates Central", final_url[:80])
+    page.goto("https://affiliate-program.amazon.com/home/summary",
+               wait_until="networkidle", timeout=30000)
+
+    if "affiliate-program.amazon.com" in page.url:
+        logger.info("On Associates Central after manual navigation")
+        return True
+
+    logger.error("Authentication failed — ended up at: %s", page.url[:80])
+    return False
+
+
+def _download_csv(page, start_date: str, end_date: str) -> Optional[str]:
+    """
+    Download the earnings CSV from Associates Central.
+    Returns raw CSV text or None if download failed.
+    """
+    csv_url = (
+        "https://affiliate-program.amazon.com/home/reports/download"
+        f"?reportType=earning&dateRangeValue=custom"
+        f"&startDate={start_date}&endDate={end_date}"
+    )
+    logger.info("Downloading earnings CSV: %s", csv_url)
+    page.goto(csv_url, wait_until="domcontentloaded", timeout=30000)
+    time.sleep(3)
+
+    content = page.evaluate("() => document.body.innerText") or ""
+    logger.info("CSV response: %d chars", len(content))
+
+    if len(content) < 20 or "Date" not in content:
+        # Might have been redirected to login — check URL
+        logger.warning("CSV download failed or empty (url=%s, len=%d)", page.url[:80], len(content))
+        return None
+
+    return content
+
+
+def _parse_csv(csv_content: str) -> Optional[dict]:
+    """
+    Parse Amazon Associates earnings CSV into { clicks, orders, revenue, commission }.
+
+    Amazon CSV columns (may vary slightly):
+      Date, Clicks, Ordered Items, Shipped Items, Returns,
+      Revenue, Converted Clicks, Total Commissions
+    """
+    try:
+        reader = csv.DictReader(io.StringIO(csv_content))
+        total_clicks = total_orders = 0
+        total_commission = 0.0
+        rows_read = 0
+
+        for row in reader:
+            date_val = (row.get("Date") or "").strip().lower()
+            # Skip header repeats and total rows
+            if not date_val or date_val in ("", "date", "total", "totals"):
+                continue
+
+            def _num(keys, is_float=False):
+                for k in keys:
+                    v = (row.get(k) or "").replace(",", "").replace("$", "").strip()
+                    if v:
+                        try:
+                            return float(v) if is_float else int(float(v))
+                        except ValueError:
+                            continue
+                return 0.0 if is_float else 0
+
+            clicks = _num(["Clicks", "clicks"])
+            # Use Shipped Items as orders (what actually earned commission)
+            orders = _num(["Shipped Items", "shipped_items", "Ordered Items", "ordered_items"])
+            commission = _num(["Total Commissions", "total_commissions", "Revenue", "revenue"],
+                               is_float=True)
+
+            total_clicks += clicks
+            total_orders += orders
+            total_commission += commission
+            rows_read += 1
+
+        if rows_read == 0:
+            logger.warning("CSV parsed 0 data rows")
+            return None
+
+        logger.info("Parsed %d CSV rows: clicks=%d, orders=%d, commission=%.2f",
+                    rows_read, total_clicks, total_orders, total_commission)
+        return {
+            "clicks": total_clicks,
+            "orders": total_orders,
+            "revenue": round(total_commission, 2),
+            "commission": round(total_commission, 2),
+            # For Amazon, commission IS the revenue (Total Commissions = what creator earns)
+        }
+    except Exception as e:
+        logger.error("CSV parse error: %s", e)
+        return None
+
+
+def _scrape_creator(email: str, password: str, totp_secret: Optional[str],
+                    start_date: str, end_date: str) -> Optional[dict]:
+    """
+    Full scrape flow: login → download CSV → parse.
+    Uses local Playwright (Chromium installed in Docker).
     """
     from playwright.sync_api import sync_playwright
 
-    # Derive a stable profile name per Amazon account so cookies persist between runs
-    import hashlib
-    profile_name = "amazon-" + hashlib.md5(email.encode()).hexdigest()[:8]
-    logger.info("Using Airtop profile: %s", profile_name)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+            ],
+        )
+        context = browser.new_context(
+            # Realistic desktop user agent to avoid basic bot detection
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 800},
+            locale="en-US",
+        )
+        page = context.new_page()
 
-    # Create session with persistent profile (saves Amazon session cookies)
-    session = _airtop(airtop_key, "POST", "/sessions", {
-        "configuration": {"timeoutMinutes": 10, "profileName": profile_name},
-    })
-    session_id = session["data"]["id"]
+        try:
+            authenticated = _login(page, email, password, totp_secret)
+            if not authenticated:
+                return None
 
-    # Wait for running
-    for _ in range(20):
-        status = _airtop(airtop_key, "GET", f"/sessions/{session_id}")["data"]["status"]
-        if status == "running":
-            break
-        time.sleep(3)
-    else:
-        raise RuntimeError("Airtop session never became running")
+            csv_content = _download_csv(page, start_date, end_date)
+            if not csv_content:
+                return None
 
-    cdp_ws = _airtop(airtop_key, "GET", f"/sessions/{session_id}")["data"]["cdpWsUrl"]
-    logger.info("Airtop session running for %s", email)
+            return _parse_csv(csv_content)
 
-    today = date.today()
-    start_date = start_date_override or (today - timedelta(days=days)).strftime("%Y-%m-%d")
-    end_date = end_date_override or today.strftime("%Y-%m-%d")
-    page_data = {}
-
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.connect_over_cdp(
-                cdp_ws,
-                headers={"Authorization": f"Bearer {airtop_key}"}
-            )
-            context = browser.contexts[0]
-            page = context.pages[0] if context.pages else context.new_page()
-
-            def _do_login():
-                """Fill email → continue → password → submit. Returns True if completed."""
-                cur_url = page.url
-                logger.info("Login page detected: %s", cur_url[:80])
-                # Email
-                try:
-                    page.wait_for_selector('#ap_email, input[name="email"]', timeout=8000)
-                    inp = page.query_selector('#ap_email') or page.query_selector('input[name="email"]')
-                    if inp:
-                        inp.fill(email)
-                    btn = page.query_selector('#continue, input[name="continue"]')
-                    if btn:
-                        btn.click()
-                        time.sleep(2)
-                except Exception as ex:
-                    logger.warning("Email fill failed: %s", ex)
-                # Password
-                try:
-                    page.wait_for_selector('#ap_password, input[name="password"]', timeout=10000)
-                    pw = page.query_selector('#ap_password') or page.query_selector('input[name="password"]')
-                    if pw:
-                        pw.fill(password)
-                    submit = page.query_selector('#signInSubmit, input[type="submit"]')
-                    if submit:
-                        submit.click()
-                    page.wait_for_load_state("networkidle", timeout=25000)
-                    time.sleep(3)
-                    logger.info("Post-login URL: %s", page.url)
-                    return True
-                except Exception as ex:
-                    logger.warning("Password fill failed: %s", ex)
-                    return False
-
-            def _check_and_login():
-                """Check if on login page by URL or by presence of login form."""
-                cur = page.url
-                has_login_url = any(x in cur for x in ["ap/signin", "ap/cvf", "signin.amazon", "login"])
-                has_login_form = bool(page.query_selector('#ap_email, input[name="email"]'))
-                if has_login_url or has_login_form:
-                    _do_login()
-                else:
-                    logger.info("No login needed (url=%s)", cur[:60])
-
-            # ── Step 1: Land on Associates Central, wait for React hydration ──
-            logger.info("Navigating to Associates Central for %s...", email)
-            page.goto("https://affiliate-program.amazon.com/home/summary",
-                      wait_until="networkidle", timeout=40000)
-
-            # Wait up to 15s for React to hydrate — look for any visible text
-            try:
-                page.wait_for_function(
-                    "() => document.body.innerText.trim().length > 50",
-                    timeout=15000
-                )
-            except Exception:
-                pass  # Might be on login page — handle below
-
-            body_text = page.evaluate("() => document.body.innerText") or ""
-            raw_html = page.evaluate("() => document.documentElement.outerHTML") or ""
-            cur_url = page.url
-            logger.info("Initial URL: %s | body_text_len: %d | html_len: %d | first300_html: %s",
-                        cur_url, len(body_text), len(raw_html),
-                        raw_html[:300].replace('\n', ' '))
-
-            # Detect if we need to log in.
-            # When not authenticated, Amazon's SPA loads a JS shell on the Associates URL
-            # (body stays empty), then client-side routes to amazon.com/ap/signin — but
-            # that redirect happens after networkidle so we miss it. Detect by empty body,
-            # then explicitly navigate to the signin page instead of waiting for the redirect.
-            on_signin_url = any(x in cur_url for x in ["ap/signin", "ap/cvf", "signin.amazon"])
-            has_login_form = bool(page.query_selector('#ap_email, input[name="email"]'))
-            needs_login = on_signin_url or has_login_form or len(body_text.strip()) < 50
-
-            if needs_login:
-                if not on_signin_url and not has_login_form:
-                    # Empty SPA shell — navigate directly to the signin page
-                    logger.info("Empty body on Associates page — navigating to Amazon signin directly")
-                    page.goto(
-                        "https://www.amazon.com/ap/signin?"
-                        "openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0"
-                        "&openid.mode=checkid_setup"
-                        "&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
-                        "&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
-                        "&openid.return_to=https%3A%2F%2Faffiliate-program.amazon.com%2Fhome%2Fsummary"
-                        "&openid.pape.max_auth_age=0",
-                        wait_until="networkidle", timeout=30000
-                    )
-                logger.info("Login page URL: %s", page.url[:100])
-                _do_login()
-                # After login, navigate back to Associates Central
-                logger.info("Post-login — navigating to Associates Central")
-                page.goto("https://affiliate-program.amazon.com/home/summary",
-                          wait_until="networkidle", timeout=40000)
-            else:
-                logger.info("Already authenticated (url=%s)", cur_url[:60])
-
-            # Wait for the dashboard to fully render after login
-            try:
-                page.wait_for_function(
-                    "() => document.body.innerText.trim().length > 100",
-                    timeout=25000
-                )
-            except Exception:
-                pass
-
-            post_body = page.evaluate("() => document.body.innerText") or ""
-            logger.info("Post-auth URL: %s | body_len: %d | sample: %s",
-                        page.url[:80], len(post_body), post_body[:150].replace('\n', ' '))
-
-            # ── Step 2: Download the earnings CSV directly ─────────────
-            # Associates Central exposes a CSV download that doesn't need JS interaction
-            csv_url = (
-                f"https://affiliate-program.amazon.com/home/reports/download"
-                f"?reportType=earning&dateRangeValue=custom"
-                f"&startDate={start_date}&endDate={end_date}"
-            )
-            logger.info("Downloading earnings CSV: %s", csv_url)
-            page.goto(csv_url, wait_until="domcontentloaded", timeout=30000)
-            time.sleep(3)
-            csv_content = page.evaluate("() => document.body.innerText")
-            logger.info("CSV response length: %d chars", len(csv_content or ""))
-            page_data["csv"] = csv_content or ""
-
-            # ── Step 3: Also scrape the summary page DOM ───────────────
-            page.goto("https://affiliate-program.amazon.com/home/summary",
-                      wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_load_state("networkidle", timeout=10000)
-            time.sleep(2)
-
-            summary_data = page.evaluate("""
-                () => {
-                    const result = { metrics: {}, raw_text: '' };
-
-                    // Associates Central uses data attributes on summary tiles
-                    document.querySelectorAll('[data-summary-type], [class*="summary"], [class*="metric"], [class*="earning"]').forEach(el => {
-                        const key = el.getAttribute('data-summary-type') || el.className.substring(0, 40);
-                        result.metrics[key] = el.innerText.trim().substring(0, 100);
-                    });
-
-                    // Grab full page text for regex fallback
-                    result.raw_text = document.body.innerText.substring(0, 5000);
-
-                    // Look specifically for the earnings tile structure Amazon uses
-                    const tiles = document.querySelectorAll('.report-summary-tile, .summary-tile, [data-testid]');
-                    tiles.forEach((t, i) => {
-                        result.metrics['tile_' + i] = t.innerText.trim().substring(0, 150);
-                    });
-
-                    return result;
-                }
-            """)
-            page_data["summary"] = summary_data
-            logger.info("Summary page URL: %s, metrics extracted: %d",
-                        page.url, len(summary_data.get("metrics", {})))
-            logger.info("Page text sample: %s", (summary_data.get("raw_text") or "")[:300])
-
+        finally:
+            context.close()
             browser.close()
-
-    finally:
-        try:
-            _airtop(airtop_key, "DELETE", f"/sessions/{session_id}")
-        except Exception:
-            pass
-
-    return {
-        "page_data": page_data,
-        "start_date": start_date,
-        "end_date": end_date,
-    }
-
-
-def _parse_earnings(raw: dict) -> Optional[dict]:
-    """
-    Parse DOM scrape / CSV download into standardized earnings dict.
-    Returns: { revenue, commission, clicks, orders }
-    """
-    import re
-    page_data = raw.get("page_data", {})
-
-    # ── Try CSV download first ─────────────────────────────────────────────────
-    # Associates earnings CSV columns: Date, Clicks, Ordered Items, Shipped Items,
-    #   Returns, Revenue, Converted, Total Commissions
-    csv_content = page_data.get("csv", "")
-    if csv_content and "Clicks" in csv_content and len(csv_content) > 50:
-        import csv, io
-        try:
-            reader = csv.DictReader(io.StringIO(csv_content))
-            total_clicks = total_orders = total_revenue = 0
-            rows_read = 0
-            for row in reader:
-                # Skip summary/total rows
-                if not row.get("Date") or row["Date"].lower() in ("", "total", "date"):
-                    continue
-                # Handle different column name variations
-                clicks_val = (row.get("Clicks") or row.get("clicks") or "0").replace(",", "")
-                orders_val = (row.get("Shipped Items") or row.get("Ordered Items") or
-                              row.get("shipped_items") or "0").replace(",", "")
-                rev_val = (row.get("Total Commissions") or row.get("Revenue") or
-                           row.get("total_commissions") or "0").replace(",", "").replace("$", "")
-                try:
-                    total_clicks += int(float(clicks_val))
-                    total_orders += int(float(orders_val))
-                    total_revenue += float(rev_val)
-                    rows_read += 1
-                except (ValueError, TypeError):
-                    continue
-            if rows_read > 0:
-                logger.info("Parsed CSV: %d rows, clicks=%d, orders=%d, commission=%.2f",
-                            rows_read, total_clicks, total_orders, total_revenue)
-                return {
-                    "clicks": total_clicks,
-                    "orders": total_orders,
-                    "revenue": total_revenue,
-                    "commission": total_revenue,
-                }
-        except Exception as e:
-            logger.warning("CSV parse failed: %s", e)
-
-    # ── Try summary page DOM metrics ──────────────────────────────────────────
-    summary = page_data.get("summary", {})
-    raw_text = summary.get("raw_text", "")
-
-    if raw_text:
-        # Amazon summary shows: "Clicks\n1,234" or "Earnings\n$56.78" patterns
-        clicks_match = re.search(r'Clicks\D*?([0-9,]+)', raw_text)
-        orders_match = re.search(r'(?:Ordered Items|Orders|Converted Clicks|Items Shipped)\D*?([0-9,]+)', raw_text)
-        earnings_match = re.search(r'(?:Earnings|Commission|Total Commissions|Revenue)\D*?\$([0-9,]+\.[0-9]{2})', raw_text)
-
-        if earnings_match or clicks_match:
-            clicks_val = int(clicks_match.group(1).replace(",", "")) if clicks_match else 0
-            orders_val = int(orders_match.group(1).replace(",", "")) if orders_match else 0
-            rev_val = float(earnings_match.group(1).replace(",", "")) if earnings_match else 0.0
-            logger.info("Parsed DOM: clicks=%d, orders=%d, commission=%.2f",
-                        clicks_val, orders_val, rev_val)
-            return {
-                "clicks": clicks_val,
-                "orders": orders_val,
-                "revenue": rev_val,
-                "commission": rev_val,
-            }
-
-        # Last resort: find largest dollar amount on page
-        amounts = re.findall(r'\$([0-9,]+\.[0-9]{2})', raw_text)
-        if amounts:
-            parsed = sorted([float(a.replace(",", "")) for a in amounts], reverse=True)
-            logger.info("DOM fallback: found amounts %s, using largest", parsed[:3])
-            return {
-                "clicks": 0,
-                "orders": 0,
-                "revenue": parsed[0],
-                "commission": parsed[0],
-            }
-
-    return None
 
 
 def sync_amazon(conn) -> dict:
@@ -377,48 +305,37 @@ def sync_amazon(conn) -> dict:
     Main entry point. Called by Railway sync service.
     Syncs Amazon Associates earnings for all configured creators.
     """
-    airtop_key = os.environ.get("AIRTOP_API_KEY")
-    if not airtop_key:
-        raise RuntimeError("AIRTOP_API_KEY not set")
-
-    # Clean up stale Airtop sessions first
-    _cleanup_sessions(airtop_key)
-
     today = date.today()
-    # Fixed calendar-month period (same as Mavely fix) — prevents rolling-window
-    # accumulation where period_start shifts daily and creates new rows each run.
+    # Fixed calendar-month period — same UPSERT key every day in the same month
     period_start = date(today.year, today.month, 1)
     if today.month == 12:
         period_end = date(today.year + 1, 1, 1) - timedelta(days=1)
     else:
         period_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
-    synced_at = datetime.now(timezone.utc).isoformat()
 
+    start_str = period_start.isoformat()
+    end_str = period_end.isoformat()
+    synced_at = datetime.now(timezone.utc)
+
+    logger.info("Amazon sync — period: %s → %s", start_str, end_str)
     results = []
 
     for creator in CREATORS:
         creator_id = creator["id"]
-        email = os.environ.get(creator["email_env"])
-        password = os.environ.get(creator["password_env"])
+        email = _get_env(creator["email_env"], creator.get("email_env_fallback"))
+        password = _get_env(creator["password_env"], creator.get("password_env_fallback"))
+        totp_secret = _get_env(creator.get("totp_env"))
 
         if not email or not password:
-            logger.warning("No credentials for %s (missing %s/%s), skipping",
-                           creator_id, creator["email_env"], creator["password_env"])
+            logger.warning("No credentials for %s — skipping", creator_id)
             results.append({"creator": creator_id, "status": "skipped", "reason": "no credentials"})
             continue
 
-        logger.info("=== Syncing Amazon for %s (%s) [%s → %s] ===",
-                    creator_id, email, period_start, period_end)
+        logger.info("=== Syncing Amazon for %s (%s) ===", creator_id, email)
         try:
-            raw = _scrape_amazon_earnings(
-                airtop_key, email, password,
-                start_date_override=period_start.isoformat(),
-                end_date_override=period_end.isoformat(),
-            )
-            earnings = _parse_earnings(raw)
+            earnings = _scrape_creator(email, password, totp_secret, start_str, end_str)
 
             if earnings:
-                logger.info("Parsed earnings for %s: %s", creator_id, earnings)
                 conn.execute("""
                     INSERT INTO platform_earnings
                         (creator_id, platform, period_start, period_end,
@@ -426,17 +343,17 @@ def sync_amazon(conn) -> dict:
                     VALUES ($1, 'amazon', $2, $3, $4, $5, $6, $7, $8)
                     ON CONFLICT (creator_id, platform, period_start, period_end)
                     DO UPDATE SET
-                        revenue = EXCLUDED.revenue,
+                        revenue    = EXCLUDED.revenue,
                         commission = EXCLUDED.commission,
-                        clicks = EXCLUDED.clicks,
-                        orders = EXCLUDED.orders,
-                        synced_at = EXCLUDED.synced_at
+                        clicks     = EXCLUDED.clicks,
+                        orders     = EXCLUDED.orders,
+                        synced_at  = EXCLUDED.synced_at
                 """,
                     creator_id,
                     period_start,
                     period_end,
-                    str(round(earnings["revenue"], 2)),
-                    str(round(earnings["commission"], 2)),
+                    str(earnings["revenue"]),
+                    str(earnings["commission"]),
                     earnings["clicks"],
                     earnings["orders"],
                     synced_at,
@@ -448,20 +365,13 @@ def sync_amazon(conn) -> dict:
                     "orders": earnings["orders"],
                     "commission": earnings["commission"],
                 })
+                logger.info("Upserted Amazon earnings for %s: %s", creator_id, earnings)
             else:
-                csv_len = len(raw.get("page_data", {}).get("csv", ""))
-                logger.warning("No earnings data extracted for %s. CSV length: %d", creator_id, csv_len)
-                results.append({
-                    "creator": creator_id,
-                    "status": "no_data",
-                    "csv_length": csv_len,
-                })
+                logger.warning("No earnings data for %s", creator_id)
+                results.append({"creator": creator_id, "status": "no_data"})
 
         except Exception as e:
             logger.error("Amazon sync failed for %s: %s", creator_id, e, exc_info=True)
             results.append({"creator": creator_id, "status": "error", "error": str(e)})
 
-        # Brief pause between creators to avoid session conflicts
-        time.sleep(5)
-
-    return {"synced": synced_at, "results": results}
+    return {"synced": synced_at.isoformat(), "results": results}

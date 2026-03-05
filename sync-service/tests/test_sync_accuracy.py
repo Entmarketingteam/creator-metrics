@@ -229,8 +229,8 @@ class TestMavelyRevenueVsCommissionSeparation(unittest.TestCase):
 class TestAmazonCSVParsing(unittest.TestCase):
 
     def _parse(self, csv_content: str):
-        from sync_amazon import _parse_earnings
-        return _parse_earnings({"page_data": {"csv": csv_content}})
+        from sync_amazon import _parse_csv
+        return _parse_csv(csv_content)
 
     def test_parses_standard_csv_columns(self):
         csv = (
