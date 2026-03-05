@@ -76,9 +76,15 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
     """
     from playwright.sync_api import sync_playwright
 
-    # Create session
+    # Derive a stable profile name per Amazon account so cookies persist between runs
+    import hashlib
+    profile_name = "amazon-" + hashlib.md5(email.encode()).hexdigest()[:8]
+    logger.info("Using Airtop profile: %s", profile_name)
+
+    # Create session with persistent profile (saves Amazon session cookies)
     session = _airtop(airtop_key, "POST", "/sessions", {
-        "configuration": {"timeoutMinutes": 8}
+        "configuration": {"timeoutMinutes": 10},
+        "profileName": profile_name,
     })
     session_id = session["data"]["id"]
 
@@ -151,15 +157,33 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
                 else:
                     logger.info("No login needed (url=%s)", cur[:60])
 
-            # ── Step 1: Land on summary with full wait, handle login ───
+            # ── Step 1: Land on Associates Central, wait for React hydration ──
             logger.info("Navigating to Associates Central for %s...", email)
             page.goto("https://affiliate-program.amazon.com/home/summary",
                       wait_until="networkidle", timeout=40000)
+
+            # Wait up to 15s for React to hydrate — look for any visible text
+            try:
+                page.wait_for_function(
+                    "() => document.body.innerText.trim().length > 50",
+                    timeout=15000
+                )
+            except Exception:
+                pass  # Might be on login page — handle below
+
             body_text = page.evaluate("() => document.body.innerText") or ""
-            html_snippet = (page.content() or "")[:500]
-            logger.info("Initial URL: %s | body length: %d | html: %s",
-                        page.url, len(body_text), html_snippet.replace('\n', ' ')[:200])
+            logger.info("Initial URL: %s | body length: %d | first200: %s",
+                        page.url, len(body_text), body_text[:200].replace('\n', ' '))
             _check_and_login()
+
+            # Wait again after potential login for the page to re-render
+            try:
+                page.wait_for_function(
+                    "() => document.body.innerText.trim().length > 100",
+                    timeout=20000
+                )
+            except Exception:
+                pass
 
             # ── Step 2: Download the earnings CSV directly ─────────────
             # Associates Central exposes a CSV download that doesn't need JS interaction
