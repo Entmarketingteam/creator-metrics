@@ -16,6 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from sync_ltk import refresh_ltk_tokens, sync_ltk_data
 from sync_mavely import sync_mavely
+from sync_amazon import sync_amazon
 
 logging.basicConfig(
     level=logging.INFO,
@@ -69,6 +70,14 @@ def _run_mavely(dsn: str) -> dict:
         conn.close()
 
 
+def _run_amazon(dsn: str) -> dict:
+    conn = SyncConn(dsn)
+    try:
+        return sync_amazon(conn)
+    finally:
+        conn.close()
+
+
 def _run_ltk_data(dsn: str) -> dict:
     conn = SyncConn(dsn)
     try:
@@ -106,6 +115,15 @@ async def job_mavely_sync():
         logger.error("Mavely sync FAILED: %s", e)
 
 
+async def job_amazon_sync():
+    logger.info("=== JOB: Amazon sync ===")
+    try:
+        result = await asyncio.to_thread(_run_amazon, _get_dsn())
+        logger.info("Amazon sync done: %s", result)
+    except Exception as e:
+        logger.error("Amazon sync FAILED: %s", e)
+
+
 # ── App lifecycle ─────────────────────────────────────────────────────────────
 
 scheduler = AsyncIOScheduler(timezone="UTC")
@@ -122,6 +140,9 @@ async def lifespan(app: FastAPI):
 
     # Mavely sync: 8:00 UTC daily
     scheduler.add_job(job_mavely_sync, CronTrigger(hour=8, minute=0), id="mavely_sync")
+
+    # Amazon sync: 9:00 UTC daily
+    scheduler.add_job(job_amazon_sync, CronTrigger(hour=9, minute=0), id="amazon_sync")
 
     scheduler.start()
     logger.info("Scheduler started. Jobs: %s", [j.id for j in scheduler.get_jobs()])
@@ -193,6 +214,11 @@ async def dashboard():
       <button onclick="trigger('/sync/ltk-tokens', this, 'tokens-status')">Run Now</button>
       <div class="status" id="tokens-status"></div>
     </div>
+    <div class="card">
+      <h2>Amazon Sync</h2>
+      <button onclick="trigger('/sync/amazon', this, 'amazon-status')">Run Now</button>
+      <div class="status" id="amazon-status"></div>
+    </div>
   </div>
 
   <div class="card" style="max-width:600px">
@@ -256,6 +282,13 @@ async def trigger_mavely_sync(req: Request):
     _check_secret(req)
     asyncio.create_task(job_mavely_sync())
     return {"status": "accepted", "message": "Mavely sync started in background"}
+
+
+@app.post("/sync/amazon")
+async def trigger_amazon_sync(req: Request):
+    _check_secret(req)
+    asyncio.create_task(job_amazon_sync())
+    return {"status": "accepted", "message": "Amazon sync started in background"}
 
 
 @app.get("/jobs")
