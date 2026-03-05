@@ -155,8 +155,10 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
             logger.info("Navigating to Associates Central for %s...", email)
             page.goto("https://affiliate-program.amazon.com/home/summary",
                       wait_until="networkidle", timeout=40000)
-            logger.info("Initial URL: %s | body length: %d",
-                        page.url, len(page.evaluate("() => document.body.innerText") or ""))
+            body_text = page.evaluate("() => document.body.innerText") or ""
+            html_snippet = (page.content() or "")[:500]
+            logger.info("Initial URL: %s | body length: %d | html: %s",
+                        page.url, len(body_text), html_snippet.replace('\n', ' ')[:200])
             _check_and_login()
 
             # ── Step 2: Download the earnings CSV directly ─────────────
