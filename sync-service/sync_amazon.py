@@ -83,8 +83,7 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
 
     # Create session with persistent profile (saves Amazon session cookies)
     session = _airtop(airtop_key, "POST", "/sessions", {
-        "configuration": {"timeoutMinutes": 10},
-        "profileName": profile_name,
+        "configuration": {"timeoutMinutes": 10, "profileName": profile_name},
     })
     session_id = session["data"]["id"]
 
