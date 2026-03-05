@@ -180,17 +180,35 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str,
                         cur_url, len(body_text), len(raw_html),
                         raw_html[:300].replace('\n', ' '))
 
-            # Treat empty body OR login URL as needing login — Amazon's SPA
-            # sometimes redirects back to /home/summary but renders nothing when
-            # the session has expired.
-            needs_login = (
-                any(x in cur_url for x in ["ap/signin", "ap/cvf", "signin.amazon", "login"])
-                or bool(page.query_selector('#ap_email, input[name="email"]'))
-                or len(body_text.strip()) < 50
-            )
+            # Detect if we need to log in.
+            # When not authenticated, Amazon's SPA loads a JS shell on the Associates URL
+            # (body stays empty), then client-side routes to amazon.com/ap/signin — but
+            # that redirect happens after networkidle so we miss it. Detect by empty body,
+            # then explicitly navigate to the signin page instead of waiting for the redirect.
+            on_signin_url = any(x in cur_url for x in ["ap/signin", "ap/cvf", "signin.amazon"])
+            has_login_form = bool(page.query_selector('#ap_email, input[name="email"]'))
+            needs_login = on_signin_url or has_login_form or len(body_text.strip()) < 50
+
             if needs_login:
-                logger.info("Login needed (url=%s, body_len=%d)", cur_url[:80], len(body_text))
+                if not on_signin_url and not has_login_form:
+                    # Empty SPA shell — navigate directly to the signin page
+                    logger.info("Empty body on Associates page — navigating to Amazon signin directly")
+                    page.goto(
+                        "https://www.amazon.com/ap/signin?"
+                        "openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0"
+                        "&openid.mode=checkid_setup"
+                        "&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
+                        "&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select"
+                        "&openid.return_to=https%3A%2F%2Faffiliate-program.amazon.com%2Fhome%2Fsummary"
+                        "&openid.pape.max_auth_age=0",
+                        wait_until="networkidle", timeout=30000
+                    )
+                logger.info("Login page URL: %s", page.url[:100])
                 _do_login()
+                # After login, navigate back to Associates Central
+                logger.info("Post-login — navigating to Associates Central")
+                page.goto("https://affiliate-program.amazon.com/home/summary",
+                          wait_until="networkidle", timeout=40000)
             else:
                 logger.info("Already authenticated (url=%s)", cur_url[:60])
 
