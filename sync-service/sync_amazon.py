@@ -69,7 +69,10 @@ def _cleanup_sessions(airtop_key: str):
         logger.warning("Could not clean up Airtop sessions: %s", e)
 
 
-def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: int) -> Optional[dict]:
+def _scrape_amazon_earnings(airtop_key: str, email: str, password: str,
+                            days: int = 30,
+                            start_date_override: Optional[str] = None,
+                            end_date_override: Optional[str] = None) -> Optional[dict]:
     """
     Opens Amazon Associates Central, logs in, intercepts the performance
     summary API response. Returns dict with clicks, orders, revenue fields.
@@ -100,8 +103,8 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
     logger.info("Airtop session running for %s", email)
 
     today = date.today()
-    start_date = (today - timedelta(days=days)).strftime("%Y-%m-%d")
-    end_date = today.strftime("%Y-%m-%d")
+    start_date = start_date_override or (today - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = end_date_override or today.strftime("%Y-%m-%d")
     page_data = {}
 
     try:
@@ -171,18 +174,36 @@ def _scrape_amazon_earnings(airtop_key: str, email: str, password: str, days: in
                 pass  # Might be on login page — handle below
 
             body_text = page.evaluate("() => document.body.innerText") or ""
+            cur_url = page.url
             logger.info("Initial URL: %s | body length: %d | first200: %s",
-                        page.url, len(body_text), body_text[:200].replace('\n', ' '))
-            _check_and_login()
+                        cur_url, len(body_text), body_text[:200].replace('\n', ' '))
 
-            # Wait again after potential login for the page to re-render
+            # Treat empty body OR login URL as needing login — Amazon's SPA
+            # sometimes redirects back to /home/summary but renders nothing when
+            # the session has expired.
+            needs_login = (
+                any(x in cur_url for x in ["ap/signin", "ap/cvf", "signin.amazon", "login"])
+                or bool(page.query_selector('#ap_email, input[name="email"]'))
+                or len(body_text.strip()) < 50
+            )
+            if needs_login:
+                logger.info("Login needed (url=%s, body_len=%d)", cur_url[:80], len(body_text))
+                _do_login()
+            else:
+                logger.info("Already authenticated (url=%s)", cur_url[:60])
+
+            # Wait for the dashboard to fully render after login
             try:
                 page.wait_for_function(
                     "() => document.body.innerText.trim().length > 100",
-                    timeout=20000
+                    timeout=25000
                 )
             except Exception:
                 pass
+
+            post_body = page.evaluate("() => document.body.innerText") or ""
+            logger.info("Post-auth URL: %s | body_len: %d | sample: %s",
+                        page.url[:80], len(post_body), post_body[:150].replace('\n', ' '))
 
             # ── Step 2: Download the earnings CSV directly ─────────────
             # Associates Central exposes a CSV download that doesn't need JS interaction
@@ -344,8 +365,13 @@ def sync_amazon(conn) -> dict:
     _cleanup_sessions(airtop_key)
 
     today = date.today()
-    period_start = (today - timedelta(days=SYNC_DAYS)).isoformat()
-    period_end = today.isoformat()
+    # Fixed calendar-month period (same as Mavely fix) — prevents rolling-window
+    # accumulation where period_start shifts daily and creates new rows each run.
+    period_start = date(today.year, today.month, 1)
+    if today.month == 12:
+        period_end = date(today.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        period_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
     synced_at = datetime.now(timezone.utc).isoformat()
 
     results = []
@@ -361,9 +387,14 @@ def sync_amazon(conn) -> dict:
             results.append({"creator": creator_id, "status": "skipped", "reason": "no credentials"})
             continue
 
-        logger.info("=== Syncing Amazon for %s (%s) ===", creator_id, email)
+        logger.info("=== Syncing Amazon for %s (%s) [%s → %s] ===",
+                    creator_id, email, period_start, period_end)
         try:
-            raw = _scrape_amazon_earnings(airtop_key, email, password, SYNC_DAYS)
+            raw = _scrape_amazon_earnings(
+                airtop_key, email, password,
+                start_date_override=period_start.isoformat(),
+                end_date_override=period_end.isoformat(),
+            )
             earnings = _parse_earnings(raw)
 
             if earnings:
@@ -384,8 +415,8 @@ def sync_amazon(conn) -> dict:
                     creator_id,
                     period_start,
                     period_end,
-                    str(earnings["revenue"]),
-                    str(earnings["commission"]),
+                    str(round(earnings["revenue"], 2)),
+                    str(round(earnings["commission"], 2)),
                     earnings["clicks"],
                     earnings["orders"],
                     synced_at,
