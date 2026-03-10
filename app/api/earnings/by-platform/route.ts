@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const creatorId = searchParams.get("creatorId");
-  const days = parseInt(searchParams.get("days") || "30");
+  const rawDays = parseInt(searchParams.get("days") || "30");
+  const days = [7, 30, 90, 365].includes(rawDays) ? rawDays : 30;
 
   const conditions = [
     sql`${platformEarnings.periodEnd} >= (NOW()::date - MAKE_INTERVAL(days => ${days}))::date`

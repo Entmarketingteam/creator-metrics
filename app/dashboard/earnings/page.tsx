@@ -49,7 +49,7 @@ export default async function EarningsPage({
       synced_at
     FROM platform_earnings
     WHERE period_end >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
-      AND synced_at >= NOW() - INTERVAL '7 days'
+      AND synced_at >= NOW() - INTERVAL '30 days'
     ORDER BY platform, synced_at DESC
   `);
 
