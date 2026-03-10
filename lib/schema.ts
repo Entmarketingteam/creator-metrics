@@ -19,6 +19,7 @@ export const platformEnum = pgEnum("platform", [
   "ltk",
   "amazon",
   "instagram",
+  "impact",
 ]);
 
 export const earningsStatusEnum = pgEnum("earnings_status", [

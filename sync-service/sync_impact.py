@@ -15,6 +15,7 @@ To set up a creator:
 API docs: https://developer.impact.com/default/documentation/Publisher-api
 Earnings endpoint: GET /Mediapartners/{AccountSID}/Reports/mp_action_listing_sku.json
 """
+import calendar
 import logging
 import os
 from datetime import date, datetime, timedelta
@@ -88,12 +89,12 @@ def _fetch_commissions(account_sid: str, auth_token: str, start_date: date, end_
 def sync_impact(conn) -> dict:
     """
     Sync Impact.com commission data for all configured creators.
-    Inserts into other_affiliate_earnings table with platform_name='impact'.
-    Syncs last 30 days by default (Impact data can update 6 months back).
+    Writes aggregate monthly totals to platform_earnings table.
+    Syncs the current calendar month (Impact data updates throughout the month).
     """
-    now = datetime.utcnow().date()
-    period_end   = now
-    period_start = now - timedelta(days=30)
+    today = datetime.utcnow().date()
+    period_start = date(today.year, today.month, 1)
+    period_end   = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
 
     results = []
     skipped = []
@@ -123,72 +124,42 @@ def sync_impact(conn) -> dict:
             results.append({"creator": creator_id, "status": "error", "error": str(e)})
             continue
 
-        # Aggregate totals for the period
+        # Aggregate totals for the calendar month
+        total_revenue    = sum(float(r.get("Sale_Amount", 0) or 0) for r in records)
         total_commission = sum(float(r.get("Payout", 0) or 0) for r in records)
-        total_sales      = sum(float(r.get("Sale_Amount", 0) or 0) for r in records)
         approved_count   = sum(1 for r in records if r.get("Status") == "APPROVED")
         pending_count    = sum(1 for r in records if r.get("Status") == "PENDING")
 
-        # Upsert aggregate period record into other_affiliate_earnings
+        # Determine overall status: paid if all approved, pending if any pending
+        agg_status = "pending" if pending_count > 0 else "paid"
+
+        # Upsert monthly aggregate into platform_earnings (unique on creator_id, platform, period_start, period_end)
         conn.execute("""
-            INSERT INTO other_affiliate_earnings
-              (creator_id, platform_name, amount, period_start, period_end, status, source, notes, external_id, synced_at)
-            VALUES ($1, 'impact', $2, $3, $4, 'pending', 'api', $5, $6, NOW())
-            ON CONFLICT (creator_id, platform_name, period_start, external_id)
-            DO UPDATE SET amount=$2, period_end=$4, notes=$5, synced_at=NOW()
+            INSERT INTO platform_earnings
+              (creator_id, platform, revenue, commission, orders, status, period_start, period_end, synced_at)
+            VALUES ($1, 'impact', $2, $3, $4, $5::earnings_status, $6, $7, NOW())
+            ON CONFLICT (creator_id, platform, period_start, period_end)
+            DO UPDATE SET
+              revenue=$2, commission=$3, orders=$4, status=$5::earnings_status, synced_at=NOW()
         """,
             creator_id,
+            str(round(total_revenue, 2)),
             str(round(total_commission, 2)),
+            len(records),
+            agg_status,
             period_start,
             period_end,
-            f"{len(records)} transactions: {approved_count} approved, {pending_count} pending. Total sales: ${total_sales:.2f}",
-            f"impact_{period_start}_{period_end}",
         )
 
-        # Also upsert individual transactions into other_affiliate_earnings
-        for r in records:
-            action_date_str = r.get("Action_Date", "")
-            try:
-                action_date = datetime.strptime(action_date_str[:10], "%Y-%m-%d").date() if action_date_str else period_start
-            except ValueError:
-                action_date = period_start
-
-            payout      = str(round(float(r.get("Payout", 0) or 0), 2))
-            status      = r.get("Status", "PENDING").lower()
-            ext_id      = r.get("@uri", "").split("/")[-1] or r.get("Id", "")
-            campaign    = r.get("Campaign", "")
-            item_name   = r.get("Item_Name", r.get("SKU", ""))
-            notes_parts = [x for x in [campaign, item_name] if x]
-            notes_str   = " | ".join(notes_parts) if notes_parts else None
-
-            if not ext_id:
-                continue
-
-            conn.execute("""
-                INSERT INTO other_affiliate_earnings
-                  (creator_id, platform_name, amount, period_start, period_end,
-                   payment_date, status, source, notes, external_id, synced_at)
-                VALUES ($1, 'impact', $2, $3, $3, NULL, $4, 'api', $5, $6, NOW())
-                ON CONFLICT (creator_id, platform_name, period_start, external_id)
-                DO UPDATE SET amount=$2, status=$4, notes=$5, synced_at=NOW()
-            """,
-                creator_id,
-                payout,
-                action_date,
-                status,
-                notes_str,
-                ext_id,
-            )
-
         logger.info(
-            "Impact sync done for %s: %d records, $%.2f commission",
-            creator_id, len(records), total_commission
+            "Impact sync done for %s: %d records, $%.2f revenue, $%.2f commission",
+            creator_id, len(records), total_revenue, total_commission
         )
         results.append({
             "creator": creator_id,
             "records": len(records),
+            "revenue": round(total_revenue, 2),
             "commission": round(total_commission, 2),
-            "sales": round(total_sales, 2),
         })
 
     return {

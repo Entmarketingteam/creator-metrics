@@ -24,13 +24,28 @@ import OpportunityCommissions from "@/components/earnings/OpportunityCommissions
 
 export const dynamic = "force-dynamic";
 
+function getDateRange(from?: string, to?: string): { start: Date; end: Date } {
+  const now = new Date();
+  const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const start = from ? new Date(from) : defaultStart;
+  const end = to ? new Date(to) : defaultEnd;
+  return { start: isNaN(start.getTime()) ? defaultStart : start, end: isNaN(end.getTime()) ? defaultEnd : end };
+}
+
 export default async function CreatorEarningsPage({
   params,
+  searchParams,
 }: {
   params: { creatorId: string };
+  searchParams: { from?: string; to?: string };
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+
+  const { start: rangeStart, end: rangeEnd } = getDateRange(searchParams.from, searchParams.to);
+  const rangeStartStr = rangeStart.toISOString().slice(0, 10);
+  const rangeEndStr = rangeEnd.toISOString().slice(0, 10);
 
   const [creator] = await db
     .select()
@@ -45,8 +60,8 @@ export default async function CreatorEarningsPage({
     .from(platformConnections)
     .where(eq(platformConnections.creatorId, params.creatorId));
 
-  // Earnings summary — deduplicate per platform using most recent record per platform.
-  // This prevents inflation from Mavely/LTK daily rolling-window rows being summed.
+  // Earnings summary — most recent row per platform within the selected date range.
+  // DISTINCT ON picks the row with the latest synced_at for each platform.
   const latestPerPlatform = await db.execute(sql`
     SELECT DISTINCT ON (platform) platform,
       CAST(revenue AS FLOAT) AS revenue,
@@ -55,6 +70,8 @@ export default async function CreatorEarningsPage({
       period_start
     FROM platform_earnings
     WHERE creator_id = ${params.creatorId}
+      AND period_start >= ${rangeStartStr}::date
+      AND period_end   <= ${rangeEndStr}::date
     ORDER BY platform, synced_at DESC
   `);
 
@@ -79,8 +96,8 @@ export default async function CreatorEarningsPage({
     percentage: platformTotal > 0 ? Math.round(((Number(r.revenue) || 0) / platformTotal) * 100) : 0,
   }));
 
-  // Revenue history — use monthly buckets to avoid overlapping-period noise.
-  // Groups by year+month of period_start using only the most recent row per (platform, month).
+  // Revenue history — monthly buckets within the selected date range.
+  // MAX per (platform, month) avoids double-counting rolling-window rows.
   const revenueHistoryRaw = await db.execute(sql`
     SELECT
       to_char(date_trunc('month', period_start::date), 'YYYY-MM-DD') AS date,
@@ -92,6 +109,8 @@ export default async function CreatorEarningsPage({
         MAX(CAST(revenue AS FLOAT)) AS revenue_val
       FROM platform_earnings
       WHERE creator_id = ${params.creatorId}
+        AND period_start >= ${rangeStartStr}::date
+        AND period_end   <= ${rangeEndStr}::date
       GROUP BY date_trunc('month', period_start::date), platform
     ) deduped
     GROUP BY date_trunc('month', period_start::date)
@@ -179,7 +198,7 @@ export default async function CreatorEarningsPage({
         <EarningsCard
           totalRevenue={totalRevenue}
           pendingPayment={pending}
-          period="30 days"
+          period={`${rangeStartStr} – ${rangeEndStr}`}
         />
         <CommissionsSummary pending={pending} paid={paid} total={totalRevenue} />
       </div>
