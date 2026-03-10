@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const days = parseInt(searchParams.get("days") || "30");
 
   const conditions = [
-    sql`${platformEarnings.syncedAt} >= NOW() - MAKE_INTERVAL(days => ${days})`
+    sql`${platformEarnings.periodEnd} >= (NOW()::date - MAKE_INTERVAL(days => ${days}))::date`
   ];
   if (creatorId) conditions.push(eq(platformEarnings.creatorId, creatorId));
 
