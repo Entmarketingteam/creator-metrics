@@ -48,7 +48,8 @@ export default async function EarningsPage({
       COALESCE(orders, 0) AS orders,
       synced_at
     FROM platform_earnings
-    WHERE period_end >= NOW() - MAKE_INTERVAL(days => ${safeDays})
+    WHERE period_end >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
+      AND synced_at >= NOW() - INTERVAL '7 days'
     ORDER BY platform, synced_at DESC
   `);
 
@@ -104,7 +105,7 @@ export default async function EarningsPage({
       platform,
       CAST(COALESCE(commission, '0') AS FLOAT) AS commission
     FROM platform_earnings
-    WHERE period_end >= NOW() - MAKE_INTERVAL(days => ${safeDays})
+    WHERE period_end >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
     ORDER BY period_end ASC, platform ASC
   `);
 
@@ -147,7 +148,7 @@ export default async function EarningsPage({
       COUNT(*)::int AS sales,
       ROUND(SUM(commission_amount::numeric), 2) AS commission
     FROM sales
-    WHERE sale_date >= NOW() - MAKE_INTERVAL(days => ${safeDays})
+    WHERE sale_date >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
       AND brand IS NOT NULL
     GROUP BY brand
     ORDER BY commission DESC
@@ -164,13 +165,13 @@ export default async function EarningsPage({
     db
       .select()
       .from(sales)
-      .where(sql`${sales.saleDate} >= NOW() - MAKE_INTERVAL(days => ${safeDays})`)
+      .where(sql`${sales.saleDate} >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'`)
       .orderBy(desc(sales.saleDate))
       .limit(20),
     db
       .select({ count: sql<number>`COUNT(*)` })
       .from(sales)
-      .where(sql`${sales.saleDate} >= NOW() - MAKE_INTERVAL(days => ${safeDays})`),
+      .where(sql`${sales.saleDate} >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'`),
     db
       .select()
       .from(products)

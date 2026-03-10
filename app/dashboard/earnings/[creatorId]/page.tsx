@@ -86,12 +86,13 @@ export default async function CreatorEarningsPage({
       to_char(date_trunc('month', period_start::date), 'YYYY-MM-DD') AS date,
       SUM(revenue_val) AS "Revenue"
     FROM (
-      SELECT DISTINCT ON (platform, date_trunc('month', period_start::date))
-        CAST(revenue AS FLOAT) AS revenue_val,
-        period_start
+      SELECT
+        date_trunc('month', period_start::date) AS month,
+        platform,
+        MAX(CAST(revenue AS FLOAT)) AS revenue_val
       FROM platform_earnings
       WHERE creator_id = ${params.creatorId}
-      ORDER BY platform, date_trunc('month', period_start::date), synced_at DESC
+      GROUP BY date_trunc('month', period_start::date), platform
     ) deduped
     GROUP BY date_trunc('month', period_start::date)
     ORDER BY date_trunc('month', period_start::date)
