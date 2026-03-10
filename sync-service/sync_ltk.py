@@ -1,8 +1,9 @@
 """
 LTK sync — token refresh (Playwright via Airtop) + data sync to Supabase.
 """
+import calendar
 import os, json, logging
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,33 @@ LTK_HEADERS   = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
 }
 
+# Add creators here as LTK credentials become available.
+# email_env / password_env: Doppler env vars used by the Playwright token-refresh flow.
+# publisher_id: LTK publisher ID used in the performance_summary API call.
+# Tokens (access_token / id_token) are stored in Airtable LTK_Credentials and looked
+# up at sync time by creator_id — see get_ltk_tokens_from_airtable().
+LTK_CREATORS = [
+    {
+        "creator_id": "nicki_entenmann",
+        "email_env": "LTK_EMAIL",
+        "password_env": "LTK_PASSWORD",
+        "publisher_id": "293045",
+    },
+    # Add more creators here once tokens are in Airtable:
+    # {
+    #     "creator_id": "ann_schulte",
+    #     "email_env": "ANN_LTK_EMAIL",
+    #     "password_env": "ANN_LTK_PASSWORD",
+    #     "publisher_id": "<ann_publisher_id>",
+    # },
+    # {
+    #     "creator_id": "ellen_ludwig",
+    #     "email_env": "ELLEN_LTK_EMAIL",
+    #     "password_env": "ELLEN_LTK_PASSWORD",
+    #     "publisher_id": "<ellen_publisher_id>",
+    # },
+]
+
 
 # ── Airtable helpers ────────────────────────────────────────────────────────
 
@@ -23,16 +51,33 @@ def _airtable_headers():
     return {"Authorization": f"Bearer {os.environ['AIRTABLE_TOKEN']}",
             "Content-Type": "application/json"}
 
-def get_ltk_tokens_from_airtable() -> dict:
+def get_ltk_tokens_from_airtable(creator_id: str | None = None) -> dict:
+    """
+    Fetch LTK tokens from Airtable LTK_Credentials.
+    If creator_id is provided, filters by the Creator_ID field.
+    Falls back to the most-recently-refreshed record for backwards compatibility.
+    """
     base_id = os.environ["AIRTABLE_BASE_ID"]
-    url = (f"{AIRTABLE_URL}/{base_id}/LTK_Credentials"
-           "?maxRecords=1&sort%5B0%5D%5Bfield%5D=Last_Refreshed"
-           "&sort%5B0%5D%5Bdirection%5D=desc")
+
+    if creator_id:
+        # Filter by Creator_ID field; fall back to most-recent if not found
+        filter_formula = f"filterByFormula=%7BCreator_ID%7D%3D%22{creator_id}%22"
+        url = (f"{AIRTABLE_URL}/{base_id}/LTK_Credentials"
+               f"?{filter_formula}&maxRecords=1"
+               "&sort%5B0%5D%5Bfield%5D=Last_Refreshed&sort%5B0%5D%5Bdirection%5D=desc")
+    else:
+        url = (f"{AIRTABLE_URL}/{base_id}/LTK_Credentials"
+               "?maxRecords=1&sort%5B0%5D%5Bfield%5D=Last_Refreshed"
+               "&sort%5B0%5D%5Bdirection%5D=desc")
+
     r = httpx.get(url, headers=_airtable_headers(), timeout=30)
     r.raise_for_status()
     records = r.json().get("records", [])
     if not records:
-        raise RuntimeError("No LTK credentials found in Airtable")
+        raise RuntimeError(
+            f"No LTK credentials found in Airtable"
+            + (f" for creator_id={creator_id}" if creator_id else "")
+        )
     f = records[0]["fields"]
     return {
         "access_token": f["Access_Token"],
@@ -240,13 +285,33 @@ def _ltk_headers(tokens: dict) -> dict:
         **LTK_HEADERS,
     }
 
-def sync_ltk_data(conn) -> dict:
+def _sync_ltk_creator(conn, creator: dict, period_start: date, period_end: date) -> dict:
     """
-    Fetch LTK commissions + performance stats and upsert into platform_earnings.
-    Uses tokens from Airtable. Syncs 7d and 30d windows.
+    Sync LTK data for a single creator. Returns a result dict.
+    Tokens are fetched from Airtable by creator_id.
     """
-    tokens = get_ltk_tokens_from_airtable()
-    publisher_id = str(tokens["publisher_id"])
+    creator_id   = creator["creator_id"]
+    publisher_id = creator["publisher_id"]
+
+    # Verify the email env var is present (indicates credentials exist for this creator)
+    email_env    = creator.get("email_env")
+    password_env = creator.get("password_env")
+    if email_env and not os.environ.get(email_env):
+        logger.warning(
+            "Skipping %s — missing LTK credentials (%s not set). "
+            "Add email/password to Doppler and ensure tokens are in Airtable LTK_Credentials.",
+            creator_id, email_env,
+        )
+        return {"creator": creator_id, "status": "skipped"}
+
+    try:
+        tokens = get_ltk_tokens_from_airtable(creator_id=creator_id)
+    except RuntimeError as e:
+        logger.warning("Skipping %s — %s", creator_id, e)
+        return {"creator": creator_id, "status": "skipped", "reason": str(e)}
+
+    # Use publisher_id from creator config; fall back to what's in Airtable
+    pub_id = publisher_id or str(tokens["publisher_id"])
 
     # Fetch commissions summary (lifetime/open earnings)
     with httpx.Client(timeout=30) as client:
@@ -257,46 +322,68 @@ def sync_ltk_data(conn) -> dict:
         comm_res.raise_for_status()
         commissions = comm_res.json().get("commissions_summary", {})
 
-    results = []
-    now = datetime.utcnow()
+    params = {
+        "start_date": f"{period_start.isoformat()}T00:00:00Z",
+        "end_date":   f"{period_end.isoformat()}T23:59:59Z",
+        "publisher_ids": pub_id,
+        "platform": "rs,ltk",
+        "timezone": "UTC",
+    }
+    with httpx.Client(timeout=30) as client:
+        perf_res = client.get(
+            f"{LTK_GATEWAY}/api/creator-analytics/v1/performance_summary",
+            params=params,
+            headers=_ltk_headers(tokens)
+        )
+        perf_res.raise_for_status()
+        perf = perf_res.json().get("data", {})
 
-    for days in [7, 30]:
-        period_start      = (now - timedelta(days=days)).strftime("%Y-%m-%d")
-        period_end        = now.strftime("%Y-%m-%d")
-        period_start_date = (now - timedelta(days=days)).date()
-        period_end_date   = now.date()
+    # net_commissions = what was earned in this period window (the correct number to show)
+    # open_earnings = lifetime pending balance (not period-specific — do not store in period record)
+    net_comm = str(perf.get("net_commissions", commissions.get("open_earnings", 0)))
+    clicks   = int(perf.get("clicks", 0))
+    orders   = int(perf.get("orders", 0))
 
-        params = {
-            "start_date": f"{period_start}T00:00:00Z",
-            "end_date":   f"{period_end}T23:59:59Z",
-            "publisher_ids": publisher_id,
-            "platform": "rs,ltk",
-            "timezone": "UTC",
-        }
-        with httpx.Client(timeout=30) as client:
-            perf_res = client.get(
-                f"{LTK_GATEWAY}/api/creator-analytics/v1/performance_summary",
-                params=params,
-                headers=_ltk_headers(tokens)
-            )
-            perf_res.raise_for_status()
-            perf = perf_res.json().get("data", {})
+    conn.execute("""
+        INSERT INTO platform_earnings
+          (creator_id, platform, period_start, period_end, revenue, commission, clicks, orders, synced_at)
+        VALUES ($1, 'ltk', $2, $3, $4, $4, $5, $6, NOW())
+        ON CONFLICT (creator_id, platform, period_start, period_end)
+        DO UPDATE SET revenue=$4, commission=$4, clicks=$5, orders=$6, synced_at=NOW()
+    """, creator_id, period_start, period_end, net_comm, clicks, orders)
 
-        # net_commissions = what was earned in this period window (the correct number to show)
-        # open_earnings = lifetime pending balance (not period-specific — do not store in period record)
-        net_comm = str(perf.get("net_commissions", commissions.get("open_earnings", 0)))
-        clicks   = int(perf.get("clicks", 0))
-        orders   = int(perf.get("orders", 0))
+    logger.info(
+        "LTK synced for %s (%s → %s): clicks=%d, orders=%d, net_comm=%s",
+        creator_id, period_start, period_end, clicks, orders, net_comm,
+    )
+    return {"creator": creator_id, "status": "ok", "clicks": clicks, "orders": orders}
 
-        conn.execute("""
-            INSERT INTO platform_earnings
-              (creator_id, platform, period_start, period_end, revenue, commission, clicks, orders, synced_at)
-            VALUES ($1, 'ltk', $2, $3, $4, $4, $5, $6, NOW())
-            ON CONFLICT (creator_id, platform, period_start, period_end)
-            DO UPDATE SET revenue=$4, commission=$4, clicks=$5, orders=$6, synced_at=NOW()
-        """, "nicki_entenmann", period_start_date, period_end_date, net_comm, clicks, orders)
 
-        results.append({"range": f"last_{days}_days", "clicks": clicks, "orders": orders})
+def sync_ltk_data(conn) -> dict:
+    """
+    Fetch LTK commissions + performance stats and upsert into platform_earnings.
+    Uses tokens from Airtable. Syncs current calendar month for all configured creators.
+    Calendar-month window aligns with Mavely and Amazon for consistent deduplication
+    by (creator_id, platform, period_start, period_end).
+    """
+    today        = date.today()
+    period_start = date(today.year, today.month, 1)
+    period_end   = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
 
-    logger.info("LTK data synced: %s", results)
-    return {"status": "ok", "results": results}
+    results  = []
+    skipped  = []
+
+    for creator in LTK_CREATORS:
+        result = _sync_ltk_creator(conn, creator, period_start, period_end)
+        if result.get("status") == "skipped":
+            skipped.append(result["creator"])
+        else:
+            results.append(result)
+
+    logger.info("LTK sync complete: %d synced, %d skipped", len(results), len(skipped))
+    return {
+        "status": "ok",
+        "synced": results,
+        "skipped": skipped,
+        "period": {"start": str(period_start), "end": str(period_end)},
+    }
