@@ -6,7 +6,7 @@ import {
   getRecentPosts,
 } from "@/lib/queries";
 import { db } from "@/lib/db";
-import { platformEarnings, sales, mavelyLinks, ltkPosts, mavelyTransactions } from "@/lib/schema";
+import { platformEarnings, sales, mavelyLinks, ltkPosts, mavelyTransactions, brandCollabs } from "@/lib/schema";
 import { eq, sql, and, desc, gte, lte } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -155,6 +155,7 @@ export default async function CreatorDetailPage({
     mavelyLinksRaw,
     ltkPostsRaw,
     mavelyLinkMetricsRaw,
+    brandCollabsRaw,
   ] = await Promise.all([
     getCreatorHistory(params.id, 90),
 
@@ -226,6 +227,15 @@ export default async function CreatorDetailPage({
           )
       : Promise.resolve([{ clicks: 0, orders: 0 }]),
 
+    // Brand collabs — only fetch for owned creators
+    creator.isOwned
+      ? db
+          .select()
+          .from(brandCollabs)
+          .where(eq(brandCollabs.creatorId, params.id))
+          .orderBy(desc(brandCollabs.paymentDate))
+      : Promise.resolve([]),
+
   ]);
 
   // Build link_url → attribution map for PostGrid (Mavely + LTK combined)
@@ -273,6 +283,11 @@ export default async function CreatorDetailPage({
 
   const totalEarnings =
     (ltk.revenue ?? 0) + (shopmy.revenue ?? 0) + (mavely.revenue ?? 0);
+
+  const totalBrandCollabRevenue = brandCollabsRaw.reduce(
+    (sum, c) => sum + (c.status === "paid" || c.status === "invoiced" ? Number(c.dealAmount ?? 0) : 0),
+    0
+  );
 
   const hasEarnings = creator.isOwned && totalEarnings > 0;
 
@@ -545,6 +560,77 @@ export default async function CreatorDetailPage({
           />
         </div>
       </section>}
+
+      {/* ── Brand Collabs ─────────────────────────────────────────────── */}
+      {creator.isOwned && brandCollabsRaw.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign className="w-4 h-4 text-amber-400" />
+            <h2 className="text-base font-semibold text-white">Brand Collabs</h2>
+          </div>
+
+          {/* Summary banner */}
+          <div className="mb-4 rounded-xl bg-gradient-to-r from-amber-950/30 via-gray-900 to-amber-950/30 border border-amber-500/20 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Total Collab Revenue</p>
+              <p className="text-2xl font-bold text-white">{formatCurrency(totalBrandCollabRevenue)}</p>
+              <p className="text-xs text-gray-500 mt-1">{brandCollabsRaw.length} deals · paid + invoiced</p>
+            </div>
+            <div className="flex gap-4 text-center text-sm">
+              <div>
+                <p className="font-semibold text-amber-400">{brandCollabsRaw.filter(c => c.status === "paid").length}</p>
+                <p className="text-xs text-gray-500">Paid</p>
+              </div>
+              <div>
+                <p className="font-semibold text-yellow-400">{brandCollabsRaw.filter(c => c.status === "invoiced").length}</p>
+                <p className="text-xs text-gray-500">Invoiced</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-400">{brandCollabsRaw.filter(c => c.status === "pending").length}</p>
+                <p className="text-xs text-gray-500">Pending</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Collabs table */}
+          <div className="rounded-xl border border-gray-800 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 bg-gray-900/50">
+                  <th className="text-left px-4 py-2.5 text-xs text-gray-500 font-medium">Brand</th>
+                  <th className="text-left px-4 py-2.5 text-xs text-gray-500 font-medium">Type</th>
+                  <th className="text-left px-4 py-2.5 text-xs text-gray-500 font-medium hidden sm:table-cell">Date</th>
+                  <th className="text-right px-4 py-2.5 text-xs text-gray-500 font-medium">Amount</th>
+                  <th className="text-left px-4 py-2.5 text-xs text-gray-500 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {brandCollabsRaw.map((collab) => (
+                  <tr key={collab.id} className="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30 transition-colors">
+                    <td className="px-4 py-2.5 text-white font-medium">{collab.brand}</td>
+                    <td className="px-4 py-2.5 text-gray-400 text-xs">{collab.campaignType ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-gray-500 text-xs hidden sm:table-cell">
+                      {collab.paymentDate ? new Date(collab.paymentDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-white">{formatCurrency(Number(collab.dealAmount ?? 0))}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        collab.status === "paid"
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          : collab.status === "invoiced"
+                          ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
+                          : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
+                      }`}>
+                        {collab.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* ── Date Filter ───────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">

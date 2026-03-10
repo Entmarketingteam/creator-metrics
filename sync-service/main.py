@@ -6,17 +6,20 @@ FastAPI provides health + manual trigger endpoints.
 """
 import os, logging, asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from sync_ltk import refresh_ltk_tokens, sync_ltk_data
 from sync_mavely import sync_mavely
 from sync_amazon import sync_amazon
+from sync_impact import sync_impact
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,6 +81,14 @@ def _run_amazon(dsn: str) -> dict:
         conn.close()
 
 
+def _run_impact(dsn: str) -> dict:
+    conn = SyncConn(dsn)
+    try:
+        return sync_impact(conn)
+    finally:
+        conn.close()
+
+
 def _run_ltk_data(dsn: str) -> dict:
     conn = SyncConn(dsn)
     try:
@@ -124,6 +135,15 @@ async def job_amazon_sync():
         logger.error("Amazon sync FAILED: %s", e)
 
 
+async def job_impact_sync():
+    logger.info("=== JOB: Impact.com sync ===")
+    try:
+        result = await asyncio.to_thread(_run_impact, _get_dsn())
+        logger.info("Impact sync done: %s", result)
+    except Exception as e:
+        logger.error("Impact sync FAILED: %s", e)
+
+
 # ── App lifecycle ─────────────────────────────────────────────────────────────
 
 scheduler = AsyncIOScheduler(timezone="UTC")
@@ -143,6 +163,9 @@ async def lifespan(app: FastAPI):
 
     # Amazon sync: 9:00 UTC daily
     scheduler.add_job(job_amazon_sync, CronTrigger(hour=9, minute=0), id="amazon_sync")
+
+    # Impact.com sync: 9:30 UTC daily (skips gracefully if no API creds configured)
+    scheduler.add_job(job_impact_sync, CronTrigger(hour=9, minute=30), id="impact_sync")
 
     scheduler.start()
     logger.info("Scheduler started. Jobs: %s", [j.id for j in scheduler.get_jobs()])
@@ -219,6 +242,11 @@ async def dashboard():
       <button onclick="trigger('/sync/amazon', this, 'amazon-status')">Run Now</button>
       <div class="status" id="amazon-status"></div>
     </div>
+    <div class="card">
+      <h2>Impact.com Sync</h2>
+      <button onclick="trigger('/sync/impact', this, 'impact-status')">Run Now</button>
+      <div class="status" id="impact-status"></div>
+    </div>
   </div>
 
   <div class="card" style="max-width:600px">
@@ -289,6 +317,85 @@ async def trigger_amazon_sync(req: Request):
     _check_secret(req)
     asyncio.create_task(job_amazon_sync())
     return {"status": "accepted", "message": "Amazon sync started in background"}
+
+
+@app.post("/sync/impact")
+async def trigger_impact_sync(req: Request):
+    _check_secret(req)
+    asyncio.create_task(job_impact_sync())
+    return {"status": "accepted", "message": "Impact.com sync started in background"}
+
+
+class AmazonPushPayload(BaseModel):
+    results: list[dict[str, Any]]
+
+
+@app.post("/sync/amazon-push")
+async def amazon_push(req: Request, payload: AmazonPushPayload):
+    """
+    Receives Amazon earnings from the local Mac cron (sync_amazon_local.py).
+    Writes each result to platform_earnings. Called from residential IP to
+    bypass Railway's AWS IP being blocked by Amazon Associates.
+    """
+    _check_secret(req)
+
+    if not payload.results:
+        return {"status": "ok", "upserted": 0}
+
+    synced_at = datetime.now(timezone.utc)
+    conn = SyncConn(_get_dsn())
+    upserted = 0
+    errors = []
+
+    try:
+        for r in payload.results:
+            creator_id = r.get("creator_id")
+            period_start = r.get("period_start")
+            period_end = r.get("period_end")
+            if not creator_id or not period_start or not period_end:
+                errors.append(f"Missing fields in result: {r}")
+                continue
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO platform_earnings
+                        (creator_id, platform, period_start, period_end,
+                         revenue, commission, clicks, orders, synced_at)
+                    VALUES ($1, 'amazon', $2::date, $3::date, $4, $5, $6, $7, $8)
+                    ON CONFLICT (creator_id, platform, period_start, period_end)
+                    DO UPDATE SET
+                        revenue    = EXCLUDED.revenue,
+                        commission = EXCLUDED.commission,
+                        clicks     = EXCLUDED.clicks,
+                        orders     = EXCLUDED.orders,
+                        synced_at  = EXCLUDED.synced_at
+                    """,
+                    creator_id,
+                    period_start,
+                    period_end,
+                    str(r.get("revenue", 0)),
+                    str(r.get("commission", 0)),
+                    int(r.get("clicks", 0)),
+                    int(r.get("orders", 0)),
+                    synced_at,
+                )
+                upserted += 1
+                logger.info(
+                    "Amazon push upserted %s: clicks=%s orders=%s commission=%s",
+                    creator_id, r.get("clicks"), r.get("orders"), r.get("commission"),
+                )
+            except Exception as e:
+                logger.error("Amazon push DB error for %s: %s", creator_id, e)
+                errors.append(str(e))
+    finally:
+        conn.close()
+
+    return {
+        "status": "ok",
+        "upserted": upserted,
+        "errors": errors,
+        "synced_at": synced_at.isoformat(),
+    }
 
 
 @app.get("/jobs")

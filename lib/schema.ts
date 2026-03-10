@@ -291,3 +291,41 @@ export const shopmyBrandRates = pgTable(
   },
   (t) => [unique().on(t.creatorId, t.brand)]
 );
+
+// ── Brand Collabs & Other Affiliate Earnings ───────────────────────
+
+export const brandCollabs = pgTable(
+  "brand_collabs",
+  {
+    id: serial("id").primaryKey(),
+    creatorId: text("creator_id").references(() => creators.id).notNull(),
+    brand: text("brand").notNull(),
+    dealAmount: numeric("deal_amount", { precision: 12, scale: 2 }),
+    campaignType: text("campaign_type"),      // "Story Share", "Reel + Story Share", "Paid Usage"
+    paymentDate: date("payment_date"),
+    status: text("status").default("pending"), // "paid", "invoiced", "pending"
+    notes: text("notes"),
+    source: text("source").default("google_sheets"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [unique().on(t.creatorId, t.brand, t.paymentDate, t.dealAmount)]
+);
+
+export const otherAffiliateEarnings = pgTable(
+  "other_affiliate_earnings",
+  {
+    id: serial("id").primaryKey(),
+    creatorId: text("creator_id").references(() => creators.id).notNull(),
+    platformName: text("platform_name").notNull(), // "Beam", "Impact", "ShareASale", etc.
+    amount: numeric("amount", { precision: 12, scale: 2 }),
+    periodStart: date("period_start"),
+    periodEnd: date("period_end"),
+    paymentDate: date("payment_date"),
+    status: text("status").default("pending"),
+    source: text("source").default("manual"),  // "email", "manual", "platform_login"
+    notes: text("notes"),
+    externalId: text("external_id"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [unique().on(t.creatorId, t.platformName, t.periodStart, t.externalId)]
+);
