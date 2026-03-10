@@ -58,13 +58,13 @@ export default async function CreatorEarningsPage({
     ORDER BY platform, synced_at DESC
   `);
 
-  const totalRevenue = (latestPerPlatform.rows as any[]).reduce(
+  const totalRevenue = (latestPerPlatform as any[]).reduce(
     (s, r) => s + (Number(r.revenue) || 0), 0
   );
 
   // Status breakdown from most-recent-per-platform
   const statusMap: Record<string, number> = {};
-  for (const r of latestPerPlatform.rows as any[]) {
+  for (const r of latestPerPlatform as any[]) {
     const st = r.status ?? "open";
     statusMap[st] = (statusMap[st] ?? 0) + (Number(r.revenue) || 0);
   }
@@ -73,7 +73,7 @@ export default async function CreatorEarningsPage({
 
   // Platform breakdown from most-recent-per-platform
   const platformTotal = totalRevenue;
-  const platformBreakdown = (latestPerPlatform.rows as any[]).map((r) => ({
+  const platformBreakdown = (latestPerPlatform as any[]).map((r) => ({
     platform: r.platform as string,
     revenue: Number(r.revenue) || 0,
     percentage: platformTotal > 0 ? Math.round(((Number(r.revenue) || 0) / platformTotal) * 100) : 0,
@@ -97,7 +97,7 @@ export default async function CreatorEarningsPage({
     ORDER BY date_trunc('month', period_start::date)
   `);
 
-  const revenueHistory = (revenueHistoryRaw.rows as any[]).map((r) => ({
+  const revenueHistory = (revenueHistoryRaw as any[]).map((r) => ({
     date: r.date as string,
     Revenue: Number(r.Revenue) || 0,
   }));
