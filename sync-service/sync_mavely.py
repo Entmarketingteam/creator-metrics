@@ -2,6 +2,15 @@
 Mavely GraphQL sync — direct API, no n8n or Airtable dependency.
 Authenticates via NextAuth (creators.mave.ly), fetches link metrics +
 individual transactions, writes to Supabase platform_earnings + mavely_links.
+
+Multi-creator support:
+  Each entry in MAVELY_CREATORS maps a creator_id to env var names for
+  their Mavely email and password. Add a creator here once their credentials
+  are stored in Doppler as MAVELY_{CREATOR_ID_UPPER}_EMAIL / _PASSWORD.
+
+  To add a creator:
+    1. Store creds in Doppler: MAVELY_<CREATOR>_EMAIL / MAVELY_<CREATOR>_PASSWORD
+    2. Add an entry to MAVELY_CREATORS below
 """
 import os, logging
 from datetime import datetime, timedelta
@@ -17,6 +26,22 @@ CLIENT_HEADERS = {
     "client-version": "1.4.2",
     "client-revision": "71e8d2f8",
 }
+
+# ── Creator list ──────────────────────────────────────────────────────────────
+# Credentials are stored in Doppler. Add creators here once their creds exist.
+MAVELY_CREATORS = [
+    {
+        "creator_id": "nicki_entenmann",
+        "email_env": "MAVELY_EMAIL",
+        "password_env": "MAVELY_PASSWORD",
+    },
+    # Add more as credentials become available, e.g.:
+    # {
+    #     "creator_id": "maganhendry",
+    #     "email_env": "MAVELY_MAGANHENDRY_EMAIL",
+    #     "password_env": "MAVELY_MAGANHENDRY_PASSWORD",
+    # },
+]
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -182,52 +207,45 @@ def fetch_transactions(token: str, start: str, end: str, max_pages: int = 50) ->
 
 # ── Main sync ─────────────────────────────────────────────────────────────────
 
-def sync_mavely(conn) -> dict:
-    email    = os.environ["MAVELY_EMAIL"]
-    password = os.environ["MAVELY_PASSWORD"]
+def _sync_one_creator(conn, creator_id: str, token: str, now: datetime) -> dict:
+    """Run the full Mavely sync for a single authenticated creator."""
+    from datetime import date as _date
 
-    token = get_mavely_token(email, password)
-    logger.info("Mavely authenticated successfully")
-
-    now        = datetime.utcnow()
-    # 90d window for link metrics (aggregates), 30d for transactions (per-row)
+    # 90d window for link metrics (aggregates)
     start      = (now - timedelta(days=90)).strftime("%Y-%m-%d")
     end        = now.strftime("%Y-%m-%d")
     start_date = (now - timedelta(days=90)).date()
     end_date   = now.date()
-    tx_start   = (now - timedelta(days=30)).strftime("%Y-%m-%d")
 
     # Fetch link metrics
     links = fetch_link_metrics(token, start, end)
-    logger.info("Mavely: fetched %d link metrics", len(links))
+    logger.info("Mavely [%s]: fetched %d link metrics", creator_id, len(links))
 
     # Bulk upsert link metrics (one round-trip)
     conn.executemany("""
         INSERT INTO mavely_links
           (creator_id, mavely_link_id, link_url, title, image_url,
            period_start, period_end, clicks, orders, commission, revenue, synced_at)
-        VALUES ('nicki_entenmann', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        VALUES ($11, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
         ON CONFLICT (creator_id, mavely_link_id, period_start, period_end)
         DO UPDATE SET clicks=$7, orders=$8, commission=$9, revenue=$10,
                       link_url=$2, title=$3, image_url=$4, synced_at=NOW()
     """, [
         (lnk["link_id"], lnk["link_url"], lnk["title"], lnk["image_url"],
          start_date, end_date, lnk["clicks"], lnk["orders"],
-         str(lnk["commission"]), str(lnk["revenue"]))
+         str(lnk["commission"]), str(lnk["revenue"]), creator_id)
         for lnk in links
     ])
     links_upserted = len(links)
 
     # Skip per-transaction insert — mavely_transactions has legacy schema (0002 migration)
     # Dashboard uses platform_earnings only; transactions can be backfilled later.
-    txns = []
     tx_inserted = 0
-    logger.info("Mavely: skipping transaction insert (schema migration needed)")
+    logger.info("Mavely [%s]: skipping transaction insert (schema migration needed)", creator_id)
 
     # Upsert platform_earnings summary for the current calendar month.
     # Using a fixed calendar-month period (first→last day of current month) means
     # each run upserts the same row in-place — no accumulation of overlapping windows.
-    from datetime import date as _date
     today = now.date()
     month_start = _date(today.year, today.month, 1)
     # last day of current month: day 0 of next month
@@ -240,17 +258,18 @@ def sync_mavely(conn) -> dict:
     month_start_str = month_start.strftime("%Y-%m-%d")
     month_links = fetch_link_metrics(token, month_start_str, end)
     total_commission = sum(float(l["commission"]) for l in month_links)
-    total_revenue = sum(float(l["revenue"]) for l in month_links)
-    total_clicks = sum(l["clicks"] for l in month_links)
-    total_orders = sum(l["orders"] for l in month_links)
+    total_revenue    = sum(float(l["revenue"]) for l in month_links)
+    total_clicks     = sum(l["clicks"] for l in month_links)
+    total_orders     = sum(l["orders"] for l in month_links)
 
     conn.execute("""
         INSERT INTO platform_earnings
           (creator_id, platform, period_start, period_end, revenue, commission, clicks, orders, synced_at)
-        VALUES ('nicki_entenmann', 'mavely', $1, $2, $3, $4, $5, $6, NOW())
+        VALUES ($1, 'mavely', $2, $3, $4, $5, $6, $7, NOW())
         ON CONFLICT (creator_id, platform, period_start, period_end)
-        DO UPDATE SET revenue=$3, commission=$4, clicks=$5, orders=$6, synced_at=NOW()
+        DO UPDATE SET revenue=$4, commission=$5, clicks=$6, orders=$7, synced_at=NOW()
     """,
+    creator_id,
     month_start, month_end,
     str(total_revenue),
     str(total_commission),
@@ -258,8 +277,54 @@ def sync_mavely(conn) -> dict:
     total_orders)
 
     return {
-        "status": "ok",
+        "creator": creator_id,
         "period": f"{start} → {end}",
         "links_upserted": links_upserted,
         "tx_inserted": tx_inserted,
+    }
+
+
+def sync_mavely(conn) -> dict:
+    """Sync Mavely data for all creators in MAVELY_CREATORS."""
+    now = datetime.utcnow()
+    results = []
+    skipped = []
+
+    for creator in MAVELY_CREATORS:
+        creator_id   = creator["creator_id"]
+        email        = os.environ.get(creator["email_env"])
+        password     = os.environ.get(creator["password_env"])
+
+        if not email or not password:
+            logger.warning(
+                "Skipping %s — missing Mavely credentials (%s / %s). "
+                "Store in Doppler to enable sync.",
+                creator_id,
+                creator["email_env"],
+                creator["password_env"],
+            )
+            skipped.append(creator_id)
+            continue
+
+        logger.info("Mavely: authenticating for %s...", creator_id)
+        try:
+            token = get_mavely_token(email, password)
+            logger.info("Mavely [%s]: authenticated successfully", creator_id)
+        except Exception as e:
+            logger.error("Mavely [%s]: authentication failed — %s", creator_id, e)
+            results.append({"creator": creator_id, "status": "error", "error": str(e)})
+            continue
+
+        try:
+            result = _sync_one_creator(conn, creator_id, token, now)
+            result["status"] = "ok"
+            results.append(result)
+        except Exception as e:
+            logger.error("Mavely [%s]: sync failed — %s", creator_id, e)
+            results.append({"creator": creator_id, "status": "error", "error": str(e)})
+
+    return {
+        "status": "ok",
+        "synced": results,
+        "skipped": skipped,
     }
