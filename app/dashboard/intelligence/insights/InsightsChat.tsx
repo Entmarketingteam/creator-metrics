@@ -1,5 +1,5 @@
 "use client";
-import { useChat } from "ai/react";
+import { useChat } from "@ai-sdk/react";
 
 export function InsightsChat({ creatorId }: { creatorId: string }) {
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
