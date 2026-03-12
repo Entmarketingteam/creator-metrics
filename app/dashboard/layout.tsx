@@ -42,7 +42,7 @@ export default async function DashboardLayout({
     const rows = await db.execute(
       sql`SELECT DISTINCT creator_id FROM creator_posts ORDER BY creator_id`
     );
-    creatorIds = rows.rows.map((r: any) => r.creator_id);
+    creatorIds = (Array.from(rows) as any[]).map((r: any) => r.creator_id);
   }
 
   return (

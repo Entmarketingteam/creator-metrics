@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     sql`SELECT * FROM search_creator_posts(${`[${embedding.join(",")}]`}::vector, ${creatorId}, 50)`
   );
 
-  const context = rows.rows
+  const context = (Array.from(rows) as any[])
     .map((p: any) =>
       `[${p.media_product_type ?? p.media_type}] ${new Date(p.posted_at).toLocaleDateString()} | likes:${p.likes ?? 0} saves:${p.saves ?? 0} reach:${p.reach ?? 0} shares:${p.shares ?? 0}\nCaption: ${(p.caption ?? "").slice(0, 200)}`
     )
@@ -42,10 +42,10 @@ export async function POST(req: NextRequest) {
     messages: [
       {
         role: "user",
-        content: `Here are ${rows.rows.length} relevant posts for creator "${creatorId}":\n\n${context}\n\nQuestion: ${question}`,
+        content: `Here are ${(Array.from(rows) as any[]).length} relevant posts for creator "${creatorId}":\n\n${context}\n\nQuestion: ${question}`,
       },
     ],
   });
 
-  return result.toDataStreamResponse();
+  return result.toTextStreamResponse();
 }

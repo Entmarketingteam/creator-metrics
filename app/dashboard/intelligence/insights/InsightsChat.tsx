@@ -1,11 +1,25 @@
 "use client";
+import { useState } from "react";
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 
 export function InsightsChat({ creatorId }: { creatorId: string }) {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: "/api/intelligence/ask",
-    body: { creatorId },
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/intelligence/ask",
+      body: { creatorId },
+    }),
   });
+  const [input, setInput] = useState("");
+  const isLoading = status === "streaming" || status === "submitted";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+    const text = input;
+    setInput("");
+    await sendMessage({ text });
+  }
 
   return (
     <div className="border border-gray-800 rounded-xl overflow-hidden">
@@ -20,7 +34,9 @@ export function InsightsChat({ creatorId }: { creatorId: string }) {
         {messages.map((m) => (
           <div key={m.id} className={`text-sm ${m.role === "user" ? "text-blue-400" : "text-gray-300"}`}>
             <span className="font-medium mr-2">{m.role === "user" ? "You:" : "AI:"}</span>
-            {m.content}
+            {m.parts?.map((part: any, i: number) =>
+              part.type === "text" ? <span key={i}>{part.text}</span> : null
+            )}
           </div>
         ))}
         {isLoading && <p className="text-gray-500 text-sm animate-pulse">Thinking…</p>}
@@ -29,7 +45,7 @@ export function InsightsChat({ creatorId }: { creatorId: string }) {
       <form onSubmit={handleSubmit} className="flex gap-3 p-4 border-t border-gray-800">
         <input
           value={input}
-          onChange={handleInputChange}
+          onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a question about this creator's content…"
           className="flex-1 bg-gray-800 text-white placeholder-gray-500 rounded-lg px-4 py-2.5 text-sm border border-gray-700 focus:outline-none focus:border-blue-500"
         />

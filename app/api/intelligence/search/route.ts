@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     sql`SELECT * FROM search_creator_posts(${embeddingStr}::vector, ${creatorId}, 100)`
   );
 
-  let results = rows.rows as any[];
+  let results = (Array.from(rows) as any[]) as any[];
 
   // Filter
   if (mediaProductType) {

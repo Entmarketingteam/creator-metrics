@@ -15,7 +15,7 @@ export async function getCreatorScope(
     const result = await db.execute(
       sql`SELECT DISTINCT creator_id FROM creator_posts WHERE creator_id = ${requestedCreatorId} LIMIT 1`
     );
-    if (result.rows.length === 0) {
+    if ((Array.from(result) as any[]).length === 0) {
       throw new Error("UNKNOWN_CREATOR_ID");
     }
     return { creatorId: requestedCreatorId };

@@ -63,7 +63,7 @@ export async function getEngagementByType(creatorId: string, since: string | nul
         GROUP BY media_product_type
         ORDER BY avg_reach DESC NULLS LAST
       `);
-  return result.rows as { type: string; avg_reach: number; avg_saves: number; avg_shares: number }[];
+  return (Array.from(result) as any[]) as { type: string; avg_reach: number; avg_saves: number; avg_shares: number }[];
 }
 
 export async function getTopPosts(creatorId: string, since: string | null, limit = 10) {
@@ -82,12 +82,12 @@ export async function getTopPosts(creatorId: string, since: string | null, limit
         ORDER BY saves DESC NULLS LAST
         LIMIT ${limit}
       `);
-  return result.rows as { post_id: string; image_url: string; saves: number; reach: number; posted_at: string }[];
+  return (Array.from(result) as any[]) as { post_id: string; image_url: string; saves: number; reach: number; posted_at: string }[];
 }
 
 export async function getAllCreatorIds(): Promise<string[]> {
   const result = await db.execute(
     sql`SELECT DISTINCT creator_id FROM creator_posts ORDER BY creator_id`
   );
-  return result.rows.map((r: any) => r.creator_id);
+  return (Array.from(result) as any[]).map((r: any) => r.creator_id);
 }
