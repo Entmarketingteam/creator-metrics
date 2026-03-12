@@ -4,6 +4,8 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/cron/(.*)",
+  "/onboarding(.*)",
+  "/api/auth/instagram/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
