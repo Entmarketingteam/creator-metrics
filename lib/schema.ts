@@ -7,7 +7,10 @@ import {
   integer,
   date,
   unique,
+  jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const creators = pgTable("creators", {
   id: text("id").primaryKey(),
@@ -60,3 +63,26 @@ export const mediaSnapshots = pgTable(
   },
   (t) => [unique().on(t.mediaIgId, t.capturedAt)]
 );
+
+export const creatorIntelligence = pgTable(
+  "creator_intelligence",
+  {
+    id:          serial("id").primaryKey(),
+    creatorId:   text("creator_id").notNull(),
+    generatedAt: date("generated_at").notNull(),
+    analysis:    jsonb("analysis").notNull(),
+  },
+  (t) => [uniqueIndex("creator_intelligence_creator_date_idx").on(t.creatorId, t.generatedAt)]
+);
+
+export const creatorTokens = pgTable("creator_tokens", {
+  id:          serial("id").primaryKey(),
+  clerkUserId: text("clerk_user_id").notNull().unique(),
+  creatorId:   text("creator_id").notNull().unique(),
+  igUserId:    text("ig_user_id").notNull(),
+  accessToken: text("access_token").notNull(),
+  expiresAt:   timestamp("expires_at", { withTimezone: true })
+                 .notNull()
+                 .default(sql`'2099-01-01'::timestamptz`),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
