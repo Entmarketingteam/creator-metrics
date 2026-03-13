@@ -12,10 +12,13 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const creatorId = searchParams.get("creatorId");
-  const days = parseInt(searchParams.get("days") || "30");
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  const startDate = searchParams.get("startDate") ?? thirtyDaysAgo;
+  const endDate = searchParams.get("endDate") ?? today;
 
   const conditions = [
-    sql`${platformEarnings.syncedAt} >= NOW() - MAKE_INTERVAL(days => ${days})`
+    sql`${platformEarnings.periodEnd} >= ${startDate}::date AND ${platformEarnings.periodStart} <= ${endDate}::date`
   ];
   if (creatorId) conditions.push(eq(platformEarnings.creatorId, creatorId));
 
