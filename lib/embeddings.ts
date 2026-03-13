@@ -8,5 +8,5 @@ export async function embedText(text: string): Promise<number[]> {
     contents: text,
     config: { outputDimensionality: 3072 },
   });
-  return result.embeddings[0].values!;
+  return result.embeddings![0].values!;
 }

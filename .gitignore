@@ -34,19 +34,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# drizzle — ignore generated config but track migrations and meta
+# drizzle
 drizzle/
-!drizzle/*.sql
-!drizzle/meta/
-!drizzle/meta/**
-!drizzle/*.mjs
 
-# Large reference PDFs — store locally, not in git
-docs/references/*.pdf
-docs/references/*.txt
-
-# sync-service logs
-sync-service/logs/
-
+.vercel
 .worktrees/
-doppler.env

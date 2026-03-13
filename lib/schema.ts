@@ -5,35 +5,12 @@ import {
   timestamp,
   serial,
   integer,
-  bigint,
   date,
   unique,
-  numeric,
-  pgEnum,
+  jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-
-// Enums
-export const platformEnum = pgEnum("platform", [
-  "mavely",
-  "shopmy",
-  "ltk",
-  "amazon",
-  "instagram",
-  "impact",
-]);
-
-export const earningsStatusEnum = pgEnum("earnings_status", [
-  "open",
-  "pending",
-  "paid",
-  "reversed",
-]);
-
-export const userRoleEnum = pgEnum("user_role", [
-  "internal",
-  "client",
-  "creator",
-]);
+import { sql } from "drizzle-orm";
 
 export const creators = pgTable("creators", {
   id: text("id").primaryKey(),
@@ -44,11 +21,6 @@ export const creators = pgTable("creators", {
   biography: text("biography"),
   isOwned: boolean("is_owned").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  // Platform IDs for affiliate networks
-  mavelyCreatorId: text("mavely_creator_id"),
-  shopmyUserId: text("shopmy_user_id"),
-  ltkPublisherId: text("ltk_publisher_id"),
-  amazonAssociateTag: text("amazon_associate_tag"),
 });
 
 export const creatorSnapshots = pgTable(
@@ -88,245 +60,29 @@ export const mediaSnapshots = pgTable(
     saved: integer("saved"),
     shares: integer("shares"),
     totalInteractions: integer("total_interactions"),
-    // Reels-specific metrics
-    reelsAvgWatchTimeMs: integer("reels_avg_watch_time_ms"),
-    reelsVideoViewTotalTimeMs: bigint("reels_video_view_total_time_ms", { mode: "number" }),
-    viewsCount: integer("views_count"),   // total plays (unique: reach; total: views_count)
-    linkUrl: text("link_url"),            // link sticker URL (stories) or first affiliate URL from caption
   },
   (t) => [unique().on(t.mediaIgId, t.capturedAt)]
 );
 
-// ── Affiliate Earnings Tables ──────────────────────────────────────
-
-export const platformConnections = pgTable(
-  "platform_connections",
+export const creatorIntelligence = pgTable(
+  "creator_intelligence",
   {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id")
-      .references(() => creators.id)
-      .notNull(),
-    platform: platformEnum("platform").notNull(),
-    isConnected: boolean("is_connected").default(true),
-    externalId: text("external_id"),
-    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    id:          serial("id").primaryKey(),
+    creatorId:   text("creator_id").notNull(),
+    generatedAt: date("generated_at").notNull(),
+    analysis:    jsonb("analysis").notNull(),
   },
-  (t) => [unique().on(t.creatorId, t.platform)]
+  (t) => [uniqueIndex("creator_intelligence_creator_date_idx").on(t.creatorId, t.generatedAt)]
 );
 
-export const platformEarnings = pgTable(
-  "platform_earnings",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id")
-      .references(() => creators.id)
-      .notNull(),
-    platform: platformEnum("platform").notNull(),
-    periodStart: date("period_start").notNull(),
-    periodEnd: date("period_end").notNull(),
-    revenue: numeric("revenue", { precision: 12, scale: 2 })
-      .default("0")
-      .notNull(),
-    commission: numeric("commission", { precision: 12, scale: 2 }).default(
-      "0"
-    ),
-    clicks: integer("clicks").default(0),
-    orders: integer("orders").default(0),
-    status: earningsStatusEnum("status").default("open"),
-    rawPayload: text("raw_payload"),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [unique().on(t.creatorId, t.platform, t.periodStart, t.periodEnd)]
-);
-
-export const sales = pgTable("sales", {
-  id: serial("id").primaryKey(),
-  creatorId: text("creator_id")
-    .references(() => creators.id)
-    .notNull(),
-  platform: platformEnum("platform").notNull(),
-  saleDate: timestamp("sale_date", { withTimezone: true }).notNull(),
-  productName: text("product_name"),
-  productSku: text("product_sku"),
-  brand: text("brand"),
-  commissionAmount: numeric("commission_amount", {
-    precision: 12,
-    scale: 2,
-  }).default("0"),
-  orderValue: numeric("order_value", { precision: 12, scale: 2 }).default("0"),
-  status: earningsStatusEnum("status").default("open"),
-  externalOrderId: text("external_order_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-export const products = pgTable(
-  "products",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id")
-      .references(() => creators.id)
-      .notNull(),
-    platform: platformEnum("platform").notNull(),
-    productName: text("product_name").notNull(),
-    brand: text("brand"),
-    imageUrl: text("image_url"),
-    totalRevenue: numeric("total_revenue", { precision: 12, scale: 2 }).default(
-      "0"
-    ),
-    totalClicks: integer("total_clicks").default(0),
-    totalSales: integer("total_sales").default(0),
-    conversionRate: numeric("conversion_rate", {
-      precision: 5,
-      scale: 2,
-    }).default("0"),
-    lastUpdated: timestamp("last_updated", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [unique().on(t.creatorId, t.platform, t.productName)]
-);
-
-export const userRoles = pgTable("user_roles", {
-  id: serial("id").primaryKey(),
+export const creatorTokens = pgTable("creator_tokens", {
+  id:          serial("id").primaryKey(),
   clerkUserId: text("clerk_user_id").notNull().unique(),
-  role: userRoleEnum("role").default("creator").notNull(),
-  creatorId: text("creator_id").references(() => creators.id),
-  assignedCreatorIds: text("assigned_creator_ids"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  creatorId:   text("creator_id").notNull().unique(),
+  igUserId:    text("ig_user_id").notNull(),
+  accessToken: text("access_token").notNull(),
+  expiresAt:   timestamp("expires_at", { withTimezone: true })
+                 .notNull()
+                 .default(sql`'2099-01-01'::timestamptz`),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
-
-// ── ShopMy-specific Tables ─────────────────────────────────────────
-
-export const shopmyOpportunityCommissions = pgTable(
-  "shopmy_opportunity_commissions",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id").references(() => creators.id),
-    externalId: integer("external_id").unique(),
-    title: text("title"),
-    commissionAmount: numeric("commission_amount", { precision: 10, scale: 2 }),
-    status: text("status"),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  }
-);
-
-export const shopmyPayments = pgTable("shopmy_payments", {
-  id: serial("id").primaryKey(),
-  creatorId: text("creator_id").references(() => creators.id),
-  externalId: integer("external_id").unique(),
-  amount: numeric("amount", { precision: 10, scale: 2 }),
-  source: text("source"),
-  sentAt: timestamp("sent_at", { withTimezone: true }),
-  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-});
-
-// ── Mavely GraphQL Tables ───────────────────────────────────────────
-
-/** Per-affiliate-link metrics synced from Mavely GraphQL API */
-export const mavelyLinks = pgTable(
-  "mavely_links",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id").references(() => creators.id),
-    mavelyLinkId: text("mavely_link_id").notNull(), // Mavely's internal link ID
-    linkUrl: text("link_url"),     // mavely.app.link URL — joins with media_snapshots.link_url
-    title: text("title"),
-    imageUrl: text("image_url"),
-    periodStart: date("period_start").notNull(),
-    periodEnd: date("period_end").notNull(),
-    clicks: integer("clicks").default(0),
-    orders: integer("orders").default(0),
-    commission: numeric("commission", { precision: 12, scale: 2 }).default("0"),
-    revenue: numeric("revenue", { precision: 12, scale: 2 }).default("0"),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [unique().on(t.creatorId, t.mavelyLinkId, t.periodStart, t.periodEnd)]
-);
-
-/** Individual Mavely sale transactions — enables referrer + content attribution */
-export const mavelyTransactions = pgTable(
-  "mavely_transactions",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id").references(() => creators.id),
-    mavelyTransactionId: text("mavely_transaction_id").notNull().unique(),
-    mavelyLinkId: text("mavely_link_id"),  // join to mavely_links
-    linkUrl: text("link_url"),             // join to media_snapshots.link_url
-    referrer: text("referrer"),            // e.g. "instagram.com"
-    commissionAmount: numeric("commission_amount", { precision: 12, scale: 2 }).default("0"),
-    orderValue: numeric("order_value", { precision: 12, scale: 2 }).default("0"),
-    saleDate: timestamp("sale_date", { withTimezone: true }),
-    status: text("status"),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  }
-);
-
-// ── LTK (LikeToKnow.it) Tables ─────────────────────────────────────
-
-/** Per-post LTK metrics — share_url is the join key with media_snapshots.link_url */
-export const ltkPosts = pgTable(
-  "ltk_posts",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id").references(() => creators.id),
-    shareUrl: text("share_url").notNull(), // liketk.it/... URL — joins with media_snapshots.link_url
-    datePublished: timestamp("date_published", { withTimezone: true }),
-    heroImage: text("hero_image"),
-    clicks: integer("clicks").default(0),
-    commissions: numeric("commissions", { precision: 12, scale: 2 }).default("0"),
-    orders: integer("orders").default(0),
-    itemsSold: integer("items_sold").default(0),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [unique().on(t.creatorId, t.shareUrl)]
-);
-
-export const shopmyBrandRates = pgTable(
-  "shopmy_brand_rates",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id").references(() => creators.id),
-    brand: text("brand"),
-    rate: numeric("rate", { precision: 5, scale: 2 }),
-    rateReturning: numeric("rate_returning", { precision: 5, scale: 2 }),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [unique().on(t.creatorId, t.brand)]
-);
-
-// ── Brand Collabs & Other Affiliate Earnings ───────────────────────
-
-export const brandCollabs = pgTable(
-  "brand_collabs",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id").references(() => creators.id).notNull(),
-    brand: text("brand").notNull(),
-    dealAmount: numeric("deal_amount", { precision: 12, scale: 2 }),
-    campaignType: text("campaign_type"),      // "Story Share", "Reel + Story Share", "Paid Usage"
-    paymentDate: date("payment_date"),
-    status: text("status").default("pending"), // "paid", "invoiced", "pending"
-    notes: text("notes"),
-    source: text("source").default("google_sheets"),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [unique().on(t.creatorId, t.brand, t.paymentDate, t.dealAmount)]
-);
-
-export const otherAffiliateEarnings = pgTable(
-  "other_affiliate_earnings",
-  {
-    id: serial("id").primaryKey(),
-    creatorId: text("creator_id").references(() => creators.id).notNull(),
-    platformName: text("platform_name").notNull(), // "Beam", "Impact", "ShareASale", etc.
-    amount: numeric("amount", { precision: 12, scale: 2 }),
-    periodStart: date("period_start"),
-    periodEnd: date("period_end"),
-    paymentDate: date("payment_date"),
-    status: text("status").default("pending"),
-    source: text("source").default("manual"),  // "email", "manual", "platform_login"
-    notes: text("notes"),
-    externalId: text("external_id"),
-    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => [unique().on(t.creatorId, t.platformName, t.periodStart, t.externalId)]
-);
