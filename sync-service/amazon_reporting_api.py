@@ -69,12 +69,12 @@ def _extract_bearer_token(html: str) -> Optional[str]:
 
 def _extract_csrf_token(html: str) -> Optional[str]:
     """Extract anti-CSRF token from reporting page HTML."""
-    # Amazon stores it in a meta tag: <meta name="anti-csrftoken-a2z" content="...">
-    m = re.search(r'<meta[^>]+name=["']anti-csrftoken-a2z["'][^>]+content=["']([^"']+)["']', html)
+    # Amazon stores it in <meta name="anti-csrftoken-a2z" content="...">
+    m = re.search(r'<meta[^>]+name="anti-csrftoken-a2z"[^>]+content="([^"]+)"', html, re.IGNORECASE)
     if m:
         return m.group(1)
-    # Also try reversed attribute order: content=... name=...
-    m = re.search(r'<meta[^>]+content=["']([^"']{20,})["'][^>]+name=["']anti-csrftoken-a2z["']', html)
+    # Try reversed attribute order
+    m = re.search(r'<meta[^>]+content="([^"]{20,})"[^>]+name="anti-csrftoken-a2z"', html, re.IGNORECASE)
     if m:
         return m.group(1)
     return None
