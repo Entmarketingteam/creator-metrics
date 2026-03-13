@@ -59,6 +59,7 @@ export default async function ContentPage({
       media_url,
       thumbnail_url,
       permalink,
+      link_url,
       like_count,
       comments_count,
       reach,
@@ -73,13 +74,13 @@ export default async function ContentPage({
   // Enrich with platform detection (from permalink — will be null for all IG URLs)
   const posts: PostCardData[] = (mediaRows as any[])
     .map((row) => {
-      const platform = detectPlatform(row.permalink);
+      const platform = detectPlatform((row as any).link_url ?? row.permalink);
       return {
         mediaIgId: String(row.media_ig_id),
         postedAt: String(row.posted_at),
         type: String(row.media_type ?? "image").toLowerCase(),
         thumbnailUrl: (row.thumbnail_url ?? row.media_url ?? null) as string | null,
-        linkUrl: (row.permalink ?? null) as string | null,
+        linkUrl: ((row as any).link_url ?? row.permalink ?? null) as string | null,
         platform,
         reach: Number(row.reach ?? 0),
         likes: Number(row.like_count ?? 0),

@@ -33,6 +33,7 @@ export async function GET(
       media_url,
       thumbnail_url,
       permalink,
+      link_url,
       like_count,
       comments_count,
       reach,
@@ -49,7 +50,7 @@ export async function GET(
   // Enrich each post with platform detection and revenue attribution
   const posts = await Promise.all(
     (mediaRows as any[]).map(async (row) => {
-      const detectedPlatform = detectPlatform(row.permalink);
+      const detectedPlatform = detectPlatform(row.link_url ?? row.permalink);
 
       // Platform filter
       if (platform && platform !== "has-link" && detectedPlatform !== platform) return null;
@@ -104,7 +105,7 @@ export async function GET(
         postedAt: row.posted_at,
         type: postType,
         thumbnailUrl: row.thumbnail_url ?? row.media_url ?? null,
-        linkUrl: row.permalink ?? null,
+        linkUrl: row.link_url ?? row.permalink ?? null,
         platform: detectedPlatform,
         reach: Number(row.reach ?? 0),
         likes: Number(row.like_count ?? 0),

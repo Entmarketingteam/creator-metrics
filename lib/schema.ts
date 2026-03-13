@@ -51,6 +51,7 @@ export const mediaSnapshots = pgTable(
     mediaProductType: text("media_product_type"),
     caption: text("caption"),
     permalink: text("permalink"),
+    linkUrl: text("link_url"),
     mediaUrl: text("media_url"),
     thumbnailUrl: text("thumbnail_url"),
     postedAt: timestamp("timestamp", { withTimezone: true }),
