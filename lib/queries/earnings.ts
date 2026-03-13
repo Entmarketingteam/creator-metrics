@@ -57,11 +57,12 @@ interface AggregateEarnings {
 // ── Queries ──────────────────────────────────────────────────────────
 
 /**
- * Get total earnings per platform for a creator within a time range.
+ * Get total earnings per platform for a creator within a date range.
  */
 export async function getCreatorEarningsSummary(
   creatorId: string,
-  days = 30
+  startDate: string,
+  endDate: string
 ): Promise<EarningsSummaryRow[]> {
   const rows = await db
     .select({
@@ -75,7 +76,8 @@ export async function getCreatorEarningsSummary(
     .where(
       and(
         eq(platformEarnings.creatorId, creatorId),
-        sql`${platformEarnings.syncedAt} >= NOW() - MAKE_INTERVAL(days => ${days})`
+        sql`${platformEarnings.periodEnd} >= ${startDate}::date`,
+        sql`${platformEarnings.periodStart} <= ${endDate}::date`
       )
     )
     .groupBy(platformEarnings.platform)
@@ -91,11 +93,18 @@ export async function getCreatorEarningsSummary(
 export async function getCreatorEarningsHistory(
   creatorId: string,
   platform?: string,
-  days = 30
+  startDate?: string,
+  endDate?: string
 ): Promise<EarningsHistoryRow[]> {
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  const start = startDate ?? thirtyDaysAgo;
+  const end = endDate ?? today;
+
   const conditions = [
     eq(platformEarnings.creatorId, creatorId),
-    sql`${platformEarnings.syncedAt} >= NOW() - MAKE_INTERVAL(days => ${days})`,
+    sql`${platformEarnings.periodEnd} >= ${start}::date`,
+    sql`${platformEarnings.periodStart} <= ${end}::date`,
   ];
 
   if (platform) {
@@ -189,11 +198,23 @@ export async function getCreatorTopProducts(
 
 /**
  * Get aggregate earnings across all creators (dashboard overview).
+ * Optionally scoped to a creatorId.
  */
 export async function getAggregateEarnings(
-  days = 30
+  startDate: string,
+  endDate: string,
+  creatorId?: string
 ): Promise<AggregateEarnings> {
-  const dateFilter = sql`${platformEarnings.syncedAt} >= NOW() - MAKE_INTERVAL(days => ${days})`;
+  const dateConditions = [
+    sql`${platformEarnings.periodEnd} >= ${startDate}::date`,
+    sql`${platformEarnings.periodStart} <= ${endDate}::date`,
+  ];
+
+  if (creatorId) {
+    dateConditions.push(eq(platformEarnings.creatorId, creatorId));
+  }
+
+  const dateFilter = and(...dateConditions);
 
   const [totals, byPlatform] = await Promise.all([
     db
@@ -234,11 +255,13 @@ export async function getAggregateEarnings(
  * Useful for pie/bar charts. Optionally scoped to a single creator.
  */
 export async function getEarningsByPlatform(
-  creatorId?: string,
-  days = 30
+  startDate: string,
+  endDate: string,
+  creatorId?: string
 ): Promise<PlatformBreakdown[]> {
   const conditions = [
-    sql`${platformEarnings.syncedAt} >= NOW() - MAKE_INTERVAL(days => ${days})`,
+    sql`${platformEarnings.periodEnd} >= ${startDate}::date`,
+    sql`${platformEarnings.periodStart} <= ${endDate}::date`,
   ];
 
   if (creatorId) {

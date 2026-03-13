@@ -10,32 +10,27 @@ import PlatformBreakdown from "@/components/earnings/PlatformBreakdown";
 import EarningsChart, { type ChartDataPoint } from "@/components/earnings/EarningsChart";
 import SalesTable from "@/components/earnings/SalesTable";
 import TopPerformers from "@/components/earnings/TopPerformers";
-import PeriodSelector from "@/components/earnings/PeriodSelector";
 import { formatCurrency } from "@/lib/utils";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
-
-const PERIOD_LABELS: Record<string, string> = {
-  "7": "Last 7 days",
-  "30": "Last 30 days",
-  "90": "Last 90 days",
-  "365": "Last year",
-};
 
 const PLATFORMS = ["ltk", "shopmy", "mavely", "amazon"] as const;
 
 export default async function EarningsPage({
   searchParams,
 }: {
-  searchParams: { days?: string };
+  searchParams: { startDate?: string; endDate?: string; creatorId?: string };
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const days = parseInt(searchParams.days ?? "30", 10);
-  const safeDays = [7, 30, 90, 365].includes(days) ? days : 30;
-  const periodLabel = PERIOD_LABELS[String(safeDays)] ?? "Last 30 days";
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  const startDate = searchParams.startDate ?? thirtyDaysAgo;
+  const endDate = searchParams.endDate ?? today;
+  const creatorId = searchParams.creatorId; // undefined = all creators
+  const periodLabel = `${startDate} – ${endDate}`;
 
   // ── Per-platform: SUM all rows for each platform within the window ──
   // GROUP BY instead of DISTINCT ON — handles Amazon (multiple monthly rows)
@@ -49,8 +44,9 @@ export default async function EarningsPage({
       COALESCE(SUM(orders), 0) AS orders,
       MAX(synced_at) AS synced_at
     FROM platform_earnings
-    WHERE period_end >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
-      AND synced_at >= NOW() - INTERVAL '30 days'
+    WHERE period_end >= ${startDate}::date
+      AND period_start <= ${endDate}::date
+      ${creatorId ? sql`AND creator_id = ${creatorId}` : sql``}
     GROUP BY platform
   `);
 
@@ -112,7 +108,9 @@ export default async function EarningsPage({
       platform,
       CAST(COALESCE(commission, '0') AS FLOAT) AS commission
     FROM platform_earnings
-    WHERE period_end >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
+    WHERE period_end >= ${startDate}::date
+      AND period_start <= ${endDate}::date
+      ${creatorId ? sql`AND creator_id = ${creatorId}` : sql``}
     ORDER BY period_end ASC, platform ASC
   `);
 
@@ -155,8 +153,10 @@ export default async function EarningsPage({
       COUNT(*)::int AS sales,
       ROUND(SUM(commission_amount::numeric), 2) AS commission
     FROM sales
-    WHERE sale_date >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
+    WHERE sale_date >= ${startDate}::date
+      AND sale_date <= ${endDate}::date
       AND brand IS NOT NULL
+      ${creatorId ? sql`AND creator_id = ${creatorId}` : sql``}
     GROUP BY brand
     ORDER BY commission DESC
     LIMIT 10
@@ -168,17 +168,21 @@ export default async function EarningsPage({
   }));
 
   // ── Recent sales + top products ───────────────────────────────────
+  const salesDateFilter = creatorId
+    ? sql`${sales.saleDate} >= ${startDate}::date AND ${sales.saleDate} <= ${endDate}::date AND ${sales.creatorId} = ${creatorId}`
+    : sql`${sales.saleDate} >= ${startDate}::date AND ${sales.saleDate} <= ${endDate}::date`;
+
   const [recentSales, salesCountResult, topProducts] = await Promise.all([
     db
       .select()
       .from(sales)
-      .where(sql`${sales.saleDate} >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'`)
+      .where(salesDateFilter)
       .orderBy(desc(sales.saleDate))
       .limit(20),
     db
       .select({ count: sql<number>`COUNT(*)` })
       .from(sales)
-      .where(sql`${sales.saleDate} >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'`),
+      .where(salesDateFilter),
     db
       .select()
       .from(products)
@@ -199,9 +203,6 @@ export default async function EarningsPage({
             </p>
           </div>
         </div>
-        <Suspense>
-          <PeriodSelector days={String(safeDays)} />
-        </Suspense>
       </div>
 
       {/* ── Summary stats row ───────────────────────────────────── */}
