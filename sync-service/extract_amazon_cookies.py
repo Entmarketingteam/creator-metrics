@@ -17,6 +17,7 @@ Saves to Doppler (ent-agency-automation, prd):
   AMAZON_NICKI_X_MAIN           — long-lived device trust token (~1 year)
   AMAZON_NICKI_TOTP_SECRET      — 2FA seed (optional — enables full headless re-auth)
 """
+import os
 import subprocess
 import sys
 import time
@@ -58,6 +59,7 @@ def run_for_creator(creator_name: str, env_prefix: str):
     print("\nOpening browser — log into Amazon Associates normally.")
     print("Complete the login including 2FA (this is the LAST TIME).")
     print("Script auto-detects when you reach Associates Central.\n")
+    sys.stdout.flush()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -76,12 +78,14 @@ def run_for_creator(creator_name: str, env_prefix: str):
         page.goto("https://affiliate-program.amazon.com/home")
 
         print("Waiting for you to complete login...")
+        sys.stdout.flush()
         while True:
             time.sleep(2)
             try:
                 url = page.url
+                print(f"  current url: {url[:80]}", flush=True)
                 if url.startswith("https://affiliate-program.amazon.com") and "signin" not in url:
-                    print(f"✓ Detected Associates Central")
+                    print("✓ Detected Associates Central", flush=True)
                     break
             except Exception:
                 pass
@@ -103,7 +107,7 @@ def run_for_creator(creator_name: str, env_prefix: str):
         elif name in DEVICE_TRUST_COOKIE_NAMES and name not in device_cookies:
             device_cookies[name] = c["value"]
 
-    print(f"\nCaptured {len(session_cookies)} session + {len(device_cookies)} device cookies")
+    print(f"\nCaptured {len(session_cookies)} session + {len(device_cookies)} device cookies", flush=True)
 
     if not session_cookies:
         print("❌ No cookies found.")
@@ -118,15 +122,15 @@ def run_for_creator(creator_name: str, env_prefix: str):
     else:
         print("⚠️  x-main not found — check 'Keep me signed in' next time")
 
-    print(f"\n{'─'*60}")
-    print("OPTIONAL: Paste your TOTP base32 seed (from authenticator app setup).")
-    print("This enables full auto re-auth if x-main ever expires after ~1 year.")
-    print("Press Enter to skip.")
-    totp = input(f"TOTP seed for {creator_name} (Enter to skip): ").strip()
+    # TOTP: read from env var if set, otherwise skip (no interactive prompt)
+    totp = os.environ.get(f"{env_prefix}_TOTP_SECRET", "").strip()
     if totp:
         save_to_doppler(f"{env_prefix}_TOTP_SECRET", totp)
+        print("✓ TOTP secret saved")
+    else:
+        print("ℹ️  No TOTP secret — skipping (add to Doppler manually if needed)")
 
-    print(f"✅ {creator_name} done!\n")
+    print(f"✅ {creator_name} done!\n", flush=True)
     return True
 
 
@@ -147,6 +151,7 @@ def main():
 
     print("Amazon Associates — One-Time Cookie Setup")
     print("Run once per creator. Auto-refresh handles everything after.\n")
+    sys.stdout.flush()
 
     for name, prefix in creators:
         run_for_creator(name, prefix)

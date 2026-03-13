@@ -305,7 +305,8 @@ CREATORS = [
         "totp_env": "AMAZON_NICKI_TOTP_SECRET",
         "session_env": "AMAZON_NICKI_SESSION_COOKIES",
         "x_main_env": "AMAZON_NICKI_X_MAIN",
-        "tag": "nickientenmann-20",
+        "customer_id_env": "AMAZON_NICKI_CUSTOMER_ID",
+        "tag": "nickientenman-20",
     },
     {
         "id": "annbschulte",
@@ -314,6 +315,7 @@ CREATORS = [
         "totp_env": "AMAZON_ANN_TOTP_SECRET",
         "session_env": "AMAZON_ANN_SESSION_COOKIES",
         "x_main_env": "AMAZON_ANN_X_MAIN",
+        "customer_id_env": "AMAZON_ANN_CUSTOMER_ID",
         "tag": None,
     },
     {
@@ -323,6 +325,7 @@ CREATORS = [
         "totp_env": "AMAZON_ELLEN_TOTP_SECRET",
         "session_env": "AMAZON_ELLEN_SESSION_COOKIES",
         "x_main_env": "AMAZON_ELLEN_X_MAIN",
+        "customer_id_env": "AMAZON_ELLEN_CUSTOMER_ID",
         "tag": None,
     },
     {
@@ -332,6 +335,7 @@ CREATORS = [
         "totp_env": "AMAZON_EMILY_TOTP_SECRET",
         "session_env": "AMAZON_EMILY_SESSION_COOKIES",
         "x_main_env": "AMAZON_EMILY_X_MAIN",
+        "customer_id_env": "AMAZON_EMILY_CUSTOMER_ID",
         "tag": None,
     },
 ]
