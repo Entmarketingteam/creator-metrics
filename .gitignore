@@ -41,11 +41,12 @@ drizzle/
 !drizzle/meta/**
 !drizzle/*.mjs
 
-.vercel
-
 # Large reference PDFs — store locally, not in git
 docs/references/*.pdf
 docs/references/*.txt
 
 # sync-service logs
 sync-service/logs/
+
+.worktrees/
+doppler.env
