@@ -31,6 +31,8 @@ import pyotp
 
 logger = logging.getLogger(__name__)
 
+SESSION_KEYS = {"session-id", "session-token", "session-id-time", "sess-at-main", "at-main", "csm-hit"}
+
 DOPPLER_PROJECT = "ent-agency-automation"
 DOPPLER_CONFIG = "prd"
 

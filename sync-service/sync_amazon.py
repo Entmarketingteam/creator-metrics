@@ -1,36 +1,29 @@
 """
-Amazon Associates sync — auto-refreshing cookie auth + new Reporting API.
+Amazon Associates sync — Airtop browser login + Reporting API.
 
 Auth flow:
-  1. Check if current cookies still work (quick health check)
-  2. If expired -> HTTP re-login with email + password + x-main (no 2FA needed)
-  3. If x-main expired -> TOTP fallback
-  4. Fresh cookies saved to Doppler
+  1. Airtop opens a cloud browser on a residential IP
+  2. Logs into Amazon Associates with email + password (+ TOTP if needed)
+  3. Navigates to reporting page, extracts Bearer JWT + CSRF token from DOM
+  4. Browser closes — tokens used for all subsequent API calls
+  5. Fresh session cookies saved back to Doppler for next run
 
 Data flow:
-  1. Load reporting page to extract Bearer JWT + CSRF token
-  2. POST /reporting/export to trigger async CSV generation
-  3. Poll /reporting/export/status until COMPLETED
-  4. Download ZIP, parse trackingid CSV -> upsert to platform_earnings
-
-First-time setup: run extract_amazon_cookies.py locally.
+  POST /reporting/export -> poll status -> download ZIP -> parse CSV -> upsert DB
 """
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
 
-from amazon_auth import CREATORS, refresh_cookies_if_needed
-from amazon_reporting_api import fetch_earnings
+from amazon_auth import CREATORS, _save_to_doppler
+from amazon_airtop import get_amazon_tokens
+from amazon_reporting_api import fetch_earnings_with_tokens
 
 logger = logging.getLogger(__name__)
 
 
 def sync_amazon(conn) -> dict:
-    """
-    Main entry point. Called by Railway sync service.
-    Auto-refreshes cookies, then pulls earnings via Reporting API.
-    """
+    """Main entry point. Called by Railway sync service."""
     today = date.today()
     period_start = date(today.year, today.month, 1)
     if today.month == 12:
@@ -53,26 +46,57 @@ def sync_amazon(conn) -> dict:
 
         logger.info("=== Syncing Amazon for %s (tag: %s) ===", creator_id, store_id)
 
-        # Step 1: Refresh cookies if needed
-        cookies = refresh_cookies_if_needed(creator)
-        if not cookies:
-            results.append({
-                "creator": creator_id,
-                "status": "auth_failed",
-                "reason": "cookie refresh failed — check logs and Doppler secrets",
-            })
-            continue
-
-        # Step 2: Fetch earnings via Reporting API
+        email = os.environ.get(creator["email_env"])
+        password = os.environ.get(creator["password_env"])
+        totp_secret = os.environ.get(creator.get("totp_env", ""), "") or None
         customer_id = os.environ.get(creator.get("customer_id_env", ""), "") or None
 
+        if not email or not password:
+            logger.error("[%s] Missing email or password — skipping", creator_id)
+            results.append({"creator": creator_id, "status": "skipped", "reason": "no credentials"})
+            continue
+
         try:
-            earnings = fetch_earnings(
-                session_cookies=cookies,
+            # Step 1: Login via Airtop browser to get fresh tokens
+            logger.info("[%s] Logging in via Airtop...", creator_id)
+            tokens = get_amazon_tokens(
+                email=email,
+                password=password,
+                totp_secret=totp_secret,
+                store_id=store_id,
+            )
+
+            if not tokens:
+                logger.error("[%s] Airtop login failed", creator_id)
+                results.append({"creator": creator_id, "status": "auth_failed",
+                                 "reason": "Airtop login failed"})
+                continue
+
+            # Use customer_id from env if known, otherwise from page extraction
+            cid = customer_id or tokens.get("customer_id")
+            if not cid:
+                logger.error("[%s] Could not determine customer ID", creator_id)
+                results.append({"creator": creator_id, "status": "auth_failed",
+                                 "reason": "missing customer_id"})
+                continue
+
+            # Save fresh session cookies back to Doppler for reference
+            session_env = creator.get("session_env")
+            if session_env and tokens.get("session_cookies"):
+                from amazon_auth import SESSION_KEYS
+                sc = {k: v for k, v in tokens["session_cookies"].items() if k in SESSION_KEYS}
+                if sc:
+                    _save_to_doppler(session_env, "; ".join(f"{k}={v}" for k, v in sc.items()))
+
+            # Step 2: Fetch earnings using extracted tokens
+            earnings = fetch_earnings_with_tokens(
+                bearer=tokens["bearer"],
+                csrf=tokens["csrf"],
+                customer_id=cid,
                 store_id=store_id,
                 start_date=period_start,
                 end_date=period_end,
-                customer_id_override=customer_id,
+                session_cookies=tokens["session_cookies"],
             )
 
             if not earnings:
@@ -84,7 +108,7 @@ def sync_amazon(conn) -> dict:
                 INSERT INTO platform_earnings
                     (creator_id, platform, period_start, period_end,
                      revenue, commission, clicks, orders, synced_at)
-                VALUES (, 'amazon', , , , , , , )
+                VALUES ($1, 'amazon', $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT (creator_id, platform, period_start, period_end)
                 DO UPDATE SET
                     revenue    = EXCLUDED.revenue,
@@ -93,18 +117,12 @@ def sync_amazon(conn) -> dict:
                     orders     = EXCLUDED.orders,
                     synced_at  = EXCLUDED.synced_at
                 """,
-                creator_id,
-                period_start,
-                period_end,
-                str(earnings["revenue"]),
-                str(earnings["commission"]),
-                earnings["clicks"],
-                earnings["orders"],
-                synced_at,
+                creator_id, period_start, period_end,
+                str(earnings["revenue"]), str(earnings["commission"]),
+                earnings["clicks"], earnings["orders"], synced_at,
             )
             results.append({
-                "creator": creator_id,
-                "status": "ok",
+                "creator": creator_id, "status": "ok",
                 "clicks": earnings["clicks"],
                 "orders": earnings["orders"],
                 "commission": earnings["commission"],

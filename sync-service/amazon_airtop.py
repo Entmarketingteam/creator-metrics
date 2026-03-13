@@ -1,0 +1,246 @@
+"""
+Amazon Associates login via Airtop cloud browser.
+
+Same pattern as LTK token refresh — Airtop spins up a real browser on a
+residential IP, logs into Amazon Associates, extracts the Bearer JWE token
+and CSRF token from the page DOM, then closes the browser.
+
+These tokens are then used by amazon_reporting_api.fetch_earnings() to
+trigger the CSV export and download earnings data — all from Railway,
+no local machine needed.
+"""
+
+import json
+import logging
+import os
+import time
+import urllib.error
+import urllib.request
+from typing import Optional
+
+import pyotp
+
+logger = logging.getLogger(__name__)
+
+AIRTOP_BASE = "https://api.airtop.ai/api/v1"
+ASSOCIATES_HOME = "https://affiliate-program.amazon.com/home"
+REPORTING_PAGE = "https://affiliate-program.amazon.com/p/reporting/earnings"
+
+
+def _airtop(method: str, path: str, body=None, airtop_key: str = None) -> dict:
+    key = airtop_key or os.environ["AIRTOP_API_KEY"]
+    url = f"{AIRTOP_BASE}{path}"
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(url, data=data, method=method, headers={
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    })
+    try:
+        resp = urllib.request.urlopen(req, timeout=60)
+        return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Airtop {method} {path} → {e.code}: {e.read().decode()}")
+
+
+def get_amazon_tokens(
+    email: str,
+    password: str,
+    totp_secret: Optional[str] = None,
+    store_id: str = None,
+) -> Optional[dict]:
+    """
+    Use Airtop to log into Amazon Associates and extract Bearer + CSRF tokens.
+
+    Returns:
+        {
+            "bearer": "eyJ6aXAi...",
+            "csrf": "hACOyE7g...",
+            "customer_id": "A1J742SMH1JPDV",
+            "session_cookies": {...},
+        }
+        or None on failure.
+    """
+    airtop_key = os.environ["AIRTOP_API_KEY"]
+
+    # Clean up stale sessions first (Airtop free plan has session limits)
+    logger.info("Cleaning up stale Airtop sessions...")
+    try:
+        existing = _airtop("GET", "/sessions", airtop_key=airtop_key)
+        for s in existing.get("data", {}).get("sessions", []):
+            try:
+                _airtop("DELETE", f"/sessions/{s['id']}", airtop_key=airtop_key)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning("Could not clean Airtop sessions: %s", e)
+
+    logger.info("Creating Airtop session for Amazon Associates login...")
+    session = _airtop("POST", "/sessions", {"configuration": {"timeoutMinutes": 10}}, airtop_key=airtop_key)
+    session_id = session["data"]["id"]
+
+    # Wait for session to be running
+    for _ in range(20):
+        status = _airtop("GET", f"/sessions/{session_id}", airtop_key=airtop_key)["data"]["status"]
+        if status == "running":
+            break
+        time.sleep(2)
+    else:
+        raise RuntimeError("Airtop session never reached running state")
+
+    _airtop("POST", f"/sessions/{session_id}/windows", {"url": ASSOCIATES_HOME}, airtop_key=airtop_key)
+    cdp_ws = _airtop("GET", f"/sessions/{session_id}", airtop_key=airtop_key)["data"]["cdpWsUrl"]
+    logger.info("Airtop session running, connecting via Playwright CDP")
+
+    from playwright.sync_api import sync_playwright
+
+    result = None
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.connect_over_cdp(
+                cdp_ws,
+                headers={"Authorization": f"Bearer {airtop_key}"}
+            )
+            context = browser.contexts[0]
+            page = context.pages[0] if context.pages else context.new_page()
+
+            # Wait for page to settle
+            page.wait_for_load_state("domcontentloaded", timeout=15000)
+            time.sleep(2)
+
+            # Check if we're on signin page
+            current_url = page.url
+            logger.info("Initial URL: %s", current_url)
+
+            if "signin" in current_url or "ap/signin" in current_url:
+                logger.info("On sign-in page, filling credentials...")
+                _do_login(page, email, password, totp_secret)
+            elif "affiliate-program.amazon.com" not in current_url:
+                # May have been redirected to signin
+                page.goto(ASSOCIATES_HOME, wait_until="domcontentloaded", timeout=30000)
+                time.sleep(2)
+                if "signin" in page.url or "ap/signin" in page.url:
+                    logger.info("Redirected to sign-in, filling credentials...")
+                    _do_login(page, email, password, totp_secret)
+
+            # Confirm we're on Associates Central
+            final_url = page.url
+            logger.info("Post-login URL: %s", final_url)
+            if "affiliate-program.amazon.com" not in final_url:
+                logger.error("Login failed — stuck at: %s", final_url)
+                return None
+
+            logger.info("Logged in. Navigating to reporting page...")
+            page.goto(REPORTING_PAGE, wait_until="domcontentloaded", timeout=30000)
+            time.sleep(3)  # Let React hydrate
+
+            # Extract Bearer token from page HTML
+            bearer = page.evaluate("""() => {
+                const m = document.documentElement.innerHTML.match(/eyJ6aXAiOiJERUYi[A-Za-z0-9._\\-]+/);
+                return m ? m[0] : null;
+            }""")
+
+            # Extract CSRF from meta tag
+            csrf = page.evaluate("""() => {
+                const el = document.querySelector('meta[name="anti-csrftoken-a2z"]');
+                return el ? el.getAttribute('content') : null;
+            }""")
+
+            # Extract customer ID from page HTML
+            customer_id = page.evaluate("""() => {
+                const m = document.documentElement.innerHTML.match(/"customerId"\\s*:\\s*"([A-Z0-9]{10,20})"/);
+                return m ? m[1] : null;
+            }""")
+
+            logger.info("Extracted — bearer: %s  csrf: %s  customer_id: %s",
+                        "✓" if bearer else "✗",
+                        "✓" if csrf else "✗",
+                        customer_id or "✗")
+
+            if not bearer or not csrf:
+                logger.error("Could not extract tokens from reporting page")
+                return None
+
+            # Grab session cookies for any follow-up requests
+            raw_cookies = context.cookies("https://www.amazon.com") + \
+                          context.cookies("https://affiliate-program.amazon.com")
+            session_cookies = {c["name"]: c["value"] for c in raw_cookies}
+
+            result = {
+                "bearer": bearer,
+                "csrf": csrf,
+                "customer_id": customer_id,
+                "session_cookies": session_cookies,
+            }
+
+            browser.close()
+
+    finally:
+        try:
+            _airtop("DELETE", f"/sessions/{session_id}", airtop_key=airtop_key)
+            logger.info("Airtop session closed")
+        except Exception:
+            pass
+
+    return result
+
+
+def _do_login(page, email: str, password: str, totp_secret: Optional[str]):
+    """Fill Amazon sign-in form and handle TOTP if required."""
+    import re
+
+    # Fill email
+    try:
+        page.fill('input[name="email"], input[type="email"]', email, timeout=10000)
+        page.click('input[id="continue"], [type="submit"]', timeout=5000)
+        time.sleep(1)
+    except Exception:
+        pass
+
+    # Fill password
+    try:
+        page.fill('input[name="password"], input[type="password"]', password, timeout=10000)
+        page.check('input[name="rememberMe"]', timeout=3000)
+    except Exception:
+        pass
+
+    try:
+        page.click('input[id="signInSubmit"], [type="submit"]', timeout=5000)
+    except Exception:
+        pass
+
+    page.wait_for_load_state("domcontentloaded", timeout=20000)
+    time.sleep(2)
+
+    # Handle TOTP / OTP if prompted
+    current_url = page.url
+    html = page.content()
+    needs_otp = (
+        "ap/mfa" in current_url.lower()
+        or "Enter OTP" in html
+        or "Verify your identity" in html
+        or 'name="otpCode"' in html
+        or "Two-Step Verification" in html
+    )
+
+    if needs_otp:
+        if not totp_secret:
+            logger.warning("2FA required but no TOTP secret — trying to proceed without")
+            return
+
+        logger.info("2FA required, generating TOTP code...")
+        otp = pyotp.TOTP(totp_secret).now()
+        try:
+            page.fill('input[name="otpCode"], input[type="tel"], input[autocomplete="one-time-code"]',
+                      otp, timeout=10000)
+            page.check('input[name="rememberDevice"]', timeout=3000)
+        except Exception:
+            pass
+        try:
+            page.click('[type="submit"]', timeout=5000)
+        except Exception:
+            pass
+        page.wait_for_load_state("domcontentloaded", timeout=20000)
+        time.sleep(2)
+
+    logger.info("Login step complete. URL: %s", page.url)

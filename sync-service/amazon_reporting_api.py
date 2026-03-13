@@ -361,3 +361,31 @@ def fetch_earnings(
 
     # Step 4: Download + parse
     return _download_and_parse_zip(file_path, session_cookies)
+
+
+def fetch_earnings_with_tokens(
+    bearer: str,
+    csrf: str,
+    customer_id: str,
+    store_id: str,
+    start_date: date,
+    end_date: date,
+    session_cookies: Optional[dict] = None,
+) -> Optional[dict]:
+    """
+    Like fetch_earnings() but uses pre-extracted tokens (from Airtop login).
+    Skips the page load step — goes straight to triggering the export.
+    """
+    cookies = session_cookies or {}
+
+    ok = _trigger_export(bearer, csrf, customer_id, store_id, start_date, end_date, cookies)
+    if not ok:
+        logger.error("Export trigger failed")
+        return None
+
+    file_path = _poll_status(bearer, csrf, customer_id, store_id, cookies)
+    if not file_path:
+        logger.error("Export did not complete in time")
+        return None
+
+    return _download_and_parse_zip(file_path, cookies)
