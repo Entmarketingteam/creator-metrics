@@ -168,8 +168,20 @@ export async function fetchLTKPerformanceStats(
   }>(`/api/creator-analytics/v1/performance_summary?${params}`, tokens);
 }
 
+export interface LTKItem {
+  event_type: string;
+  amount: { currency: string; value: string };
+  event_timestamp: string;
+  advertiser_display_name: string;
+  product_title: string;
+  product_id: string;
+  product_url: string;
+  status: string;
+  publisher_id: number;
+}
+
 /**
- * Fetch individual LTK sales transactions for a date range.
+ * Fetch individual LTK sales transactions for a date range (single page).
  * Endpoint confirmed via HAR: /api/creator-analytics/v1/items_sold/
  */
 export async function fetchLTKItemsSold(
@@ -186,16 +198,52 @@ export async function fetchLTKItemsSold(
   });
 
   return ltkFetch<{
-    items_sold: Array<{
-      event_type: string;
-      amount: { currency: string; value: string };
-      event_timestamp: string;
-      advertiser_display_name: string;
-      product_title: string;
-      product_id: string;
-      product_url: string;
-      status: string;
-      publisher_id: number;
-    }>;
+    items_sold: LTKItem[];
   }>(`/api/creator-analytics/v1/items_sold/?${params}`, tokens);
+}
+
+/**
+ * Fetch all LTK items sold for a date range using cursor pagination.
+ * Accepts exact ISO timestamps (e.g. "2026-03-01T00:00:00.000Z").
+ * Iterates pages via meta.next until exhausted.
+ */
+export async function fetchLTKItemsSoldPaginated(
+  accessToken: string,
+  idToken: string,
+  start: string,
+  end: string,
+): Promise<LTKItem[]> {
+  const allItems: LTKItem[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const params = new URLSearchParams({
+      limit: "100",
+      start,
+      end,
+      currency: "USD",
+    });
+    if (cursor) params.set("cursor", cursor);
+
+    const res = await fetch(
+      `https://api-gateway.rewardstyle.com/api/creator-analytics/v1/items_sold/?${params}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "x-id-token": idToken,
+          Origin: "https://creator.shopltk.com",
+          Referer: "https://creator.shopltk.com/",
+        },
+      }
+    );
+
+    if (!res.ok) throw new Error(`LTK items_sold ${res.status}: ${await res.text()}`);
+
+    const data = await res.json();
+    const items: LTKItem[] = data.items_sold ?? [];
+    allItems.push(...items);
+    cursor = data.meta?.next ?? null;
+  } while (cursor);
+
+  return allItems;
 }

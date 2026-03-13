@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { platformEarnings, creators } from "@/lib/schema";
-import { getLTKTokens, fetchLTKCommissionsSummary, fetchLTKPerformanceStats } from "@/lib/ltk";
+import {
+  getLTKTokens,
+  fetchLTKCommissionsSummary,
+  fetchLTKPerformanceStats,
+  fetchLTKItemsSoldPaginated,
+} from "@/lib/ltk";
 import { eq } from "drizzle-orm";
 
 export const maxDuration = 60;
@@ -26,12 +31,22 @@ export async function GET(req: NextRequest) {
   try {
     const tokens = await getLTKTokens();
 
+    // Current calendar month bounds — exact ISO for LTK API
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const startISO = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}-01T00:00:00.000Z`;
+    const endISO = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}T23:59:59.000Z`;
+    // YYYY-MM-DD slices for DB storage and performance_summary
+    const startDate = startISO.split("T")[0];
+    const endDate = endISO.split("T")[0];
+
     const ltkCreators = await db
       .select({ id: creators.id, ltkPublisherId: creators.ltkPublisherId })
       .from(creators)
       .where(eq(creators.isOwned, true));
 
-    const results: { creator: string; status: string; upserted?: number; error?: string; debug?: any }[] = [];
+    const results: { creator: string; status: string; upserted?: number; itemsFetched?: number; error?: string; debug?: any }[] = [];
 
     for (const creator of ltkCreators) {
       if (!creator.ltkPublisherId) {
@@ -40,6 +55,7 @@ export async function GET(req: NextRequest) {
       }
 
       let upserted = 0;
+      let itemsFetched = 0;
 
       try {
         for (const range of RANGES) {
@@ -47,8 +63,8 @@ export async function GET(req: NextRequest) {
           const periodStart = new Date();
           periodStart.setDate(periodEnd.getDate() - range.days);
 
-          const startDate = periodStart.toISOString().split("T")[0];
-          const endDate = periodEnd.toISOString().split("T")[0];
+          const rangeStartDate = periodStart.toISOString().split("T")[0];
+          const rangeEndDate = periodEnd.toISOString().split("T")[0];
 
           const [commissionsRes, performanceRes] = await Promise.allSettled([
             fetchLTKCommissionsSummary(tokens),
@@ -83,8 +99,8 @@ export async function GET(req: NextRequest) {
             .values({
               creatorId: creator.id,
               platform: "ltk",
-              periodStart: startDate,
-              periodEnd: endDate,
+              periodStart: rangeStartDate,
+              periodEnd: rangeEndDate,
               revenue,
               commission: revenue,
               clicks,
@@ -112,7 +128,16 @@ export async function GET(req: NextRequest) {
           upserted++;
         }
 
-        results.push({ creator: creator.id, status: "ok", upserted });
+        // Fetch all items sold for current calendar month using cursor pagination
+        const items = await fetchLTKItemsSoldPaginated(
+          tokens.accessToken,
+          tokens.idToken,
+          startISO,
+          endISO,
+        );
+        itemsFetched = items.length;
+
+        results.push({ creator: creator.id, status: "ok", upserted, itemsFetched });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         results.push({ creator: creator.id, status: "error", error: msg });
