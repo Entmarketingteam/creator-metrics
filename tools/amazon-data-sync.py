@@ -109,17 +109,18 @@ def fetch_monthly_summary(headers: dict, tag: str, year: int, month: int):
 
 
 def fetch_daily_earnings(headers: dict, tag: str, start: str, end: str):
-    """Fetch daily breakdown for a date range. Returns list of row dicts or None on error."""
+    """Fetch daily breakdown via summary endpoint with group_by=day.
+    Returns list of row dicts (one per day) or None on error.
+    NOTE: /reporting/table returns 500 — use /reporting/summary with group_by=day instead.
+    """
     params = urllib.parse.urlencode({
-        "query[type]": "earnings",
         "query[start_date]": start,
         "query[end_date]": end,
+        "query[type]": "earning",
         "query[group_by]": "day",
-        "query[columns]": "day,clicks,shipped_items,ordered_items,revenue,commission_earnings",
-        "query[limit]": "90",
         "store_id": tag,
     })
-    url = f"https://affiliate-program.amazon.com/reporting/table?{params}"
+    url = f"https://affiliate-program.amazon.com/reporting/summary?{params}"
     req = urllib.request.Request(url, headers=headers)
 
     try:
@@ -128,7 +129,7 @@ def fetch_daily_earnings(headers: dict, tag: str, start: str, end: str):
                 print(f"  ⚠ daily fetch: HTTP {resp.status}")
                 return None
             data = json.loads(resp.read().decode())
-            return data.get("rows") or []
+            return data.get("records") or []
     except urllib.error.HTTPError as e:
         body = ""
         try:
@@ -143,41 +144,17 @@ def fetch_daily_earnings(headers: dict, tag: str, start: str, end: str):
 
 
 def fetch_orders(headers: dict, tag: str, start: str, end: str):
-    """Fetch per-ASIN orders for a date range. Returns list of row dicts or None on error."""
-    params = urllib.parse.urlencode({
-        "query[type]": "orders",
-        "query[start_date]": start,
-        "query[end_date]": end,
-        "query[columns]": "asin,product_title,ordered_items,shipped_items,revenue,commission",
-        "query[limit]": "200",
-        "store_id": tag,
-    })
-    url = f"https://affiliate-program.amazon.com/reporting/table?{params}"
-    req = urllib.request.Request(url, headers=headers)
-
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            if resp.status != 200:
-                print(f"  ⚠ orders fetch: HTTP {resp.status}")
-                return None
-            data = json.loads(resp.read().decode())
-            return data.get("rows") or []
-    except urllib.error.HTTPError as e:
-        body = ""
-        try:
-            body = e.read().decode()[:200]
-        except Exception:
-            pass
-        print(f"  ⚠ orders fetch: HTTP {e.code} {body[:80]}")
-        return None
-    except Exception as e:
-        print(f"  ⚠ orders fetch: {e}")
-        return None
+    """Amazon's per-ASIN API (/reporting/table) returns 500 consistently.
+    Returns empty list — per-ASIN data is not available via the JSON API.
+    """
+    # The /reporting/table endpoint with type=orders returns HTTP 500.
+    # Returning empty list so daily sync proceeds normally.
+    return []
 
 
 def push_to_vercel(creator_id: str, monthly_rows: list, daily_rows: list, order_rows: list) -> dict:
     """POST all collected rows to the Vercel push endpoint, which writes to Supabase."""
-    cron_secret = get_secret("CRON_SECRET", project="creator-metrics", config="prd")
+    cron_secret = get_secret("CRON_SECRET")
     payload = json.dumps({
         "creator_id": creator_id,
         "monthly_rows": monthly_rows,
