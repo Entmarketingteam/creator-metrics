@@ -23,22 +23,19 @@ import urllib.parse
 from calendar import monthrange
 from datetime import datetime, timezone, timedelta
 
-try:
-    import psycopg2
-    import psycopg2.extras
-except ImportError:
-    sys.exit("ERROR: psycopg2 not installed. Run: pip3 install psycopg2-binary")
-
 
 BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
 
+# Vercel push endpoint — handles the DB write (local Mac can't reach Supabase ports directly)
+VERCEL_PUSH_URL = "https://creator-metrics.vercel.app/api/admin/amazon-data-push"
 
-def get_secret(key: str, project: str = "ent-agency-automation") -> str:
+
+def get_secret(key: str, project: str = "ent-agency-automation", config: str = "dev") -> str:
     result = subprocess.run(
-        ["doppler", "secrets", "get", key, "--project", project, "--config", "dev", "--plain"],
+        ["doppler", "secrets", "get", key, "--project", project, "--config", config, "--plain"],
         capture_output=True, text=True
     )
     return result.stdout.strip()
@@ -178,108 +175,26 @@ def fetch_orders(headers: dict, tag: str, start: str, end: str):
         return None
 
 
-def upsert_platform_earnings(conn, creator_id: str, row: dict) -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO platform_earnings
-                (creator_id, platform, period_start, period_end, revenue, commission, clicks, orders, raw_payload, synced_at)
-            VALUES (%s, 'amazon', %s, %s, %s, %s, %s, %s, %s, NOW())
-            ON CONFLICT (creator_id, platform, period_start, period_end)
-            DO UPDATE SET
-                revenue = EXCLUDED.revenue,
-                commission = EXCLUDED.commission,
-                clicks = EXCLUDED.clicks,
-                orders = EXCLUDED.orders,
-                raw_payload = EXCLUDED.raw_payload,
-                synced_at = NOW()
-            """,
-            (
-                creator_id,
-                row["period_start"],
-                row["period_end"],
-                row["revenue"],
-                row["commission"],
-                row["clicks"],
-                row["orders"],
-                row.get("raw_payload"),
-            ),
-        )
-    conn.commit()
-
-
-def upsert_daily_earnings(conn, creator_id: str, rows: list) -> int:
-    """Upsert daily rows into amazon_daily_earnings. Returns count inserted/updated."""
-    count = 0
-    with conn.cursor() as cur:
-        for row in rows:
-            try:
-                cur.execute(
-                    """
-                    INSERT INTO amazon_daily_earnings
-                        (creator_id, day, clicks, ordered_items, shipped_items, revenue, commission, synced_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (creator_id, day) DO UPDATE SET
-                        clicks = EXCLUDED.clicks,
-                        ordered_items = EXCLUDED.ordered_items,
-                        shipped_items = EXCLUDED.shipped_items,
-                        revenue = EXCLUDED.revenue,
-                        commission = EXCLUDED.commission,
-                        synced_at = EXCLUDED.synced_at
-                    """,
-                    (
-                        creator_id,
-                        row.get("day"),
-                        int(row.get("clicks") or 0),
-                        int(row.get("ordered_items") or 0),
-                        int(row.get("shipped_items") or 0),
-                        str(round(float(row.get("revenue") or 0), 2)),
-                        str(round(float(row.get("commission_earnings") or 0), 2)),
-                    ),
-                )
-                count += 1
-            except Exception as e:
-                print(f"  ⚠ daily upsert row {row.get('day')}: {e}")
-    conn.commit()
-    return count
-
-
-def upsert_orders(conn, creator_id: str, period_start: str, period_end: str, rows: list) -> int:
-    """Upsert per-ASIN rows into amazon_orders. Returns count inserted/updated."""
-    count = 0
-    with conn.cursor() as cur:
-        for row in rows:
-            try:
-                cur.execute(
-                    """
-                    INSERT INTO amazon_orders
-                        (creator_id, period_start, period_end, asin, title, ordered_items, shipped_items, revenue, commission, synced_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (creator_id, period_start, asin) DO UPDATE SET
-                        title = EXCLUDED.title,
-                        ordered_items = EXCLUDED.ordered_items,
-                        shipped_items = EXCLUDED.shipped_items,
-                        revenue = EXCLUDED.revenue,
-                        commission = EXCLUDED.commission,
-                        synced_at = EXCLUDED.synced_at
-                    """,
-                    (
-                        creator_id,
-                        period_start,
-                        period_end,
-                        row.get("asin"),
-                        row.get("product_title"),
-                        int(row.get("ordered_items") or 0),
-                        int(row.get("shipped_items") or 0),
-                        str(round(float(row.get("revenue") or 0), 2)),
-                        str(round(float(row.get("commission") or 0), 2)),
-                    ),
-                )
-                count += 1
-            except Exception as e:
-                print(f"  ⚠ orders upsert row {row.get('asin')}: {e}")
-    conn.commit()
-    return count
+def push_to_vercel(creator_id: str, monthly_rows: list, daily_rows: list, order_rows: list) -> dict:
+    """POST all collected rows to the Vercel push endpoint, which writes to Supabase."""
+    cron_secret = get_secret("CRON_SECRET", project="creator-metrics", config="prd")
+    payload = json.dumps({
+        "creator_id": creator_id,
+        "monthly_rows": monthly_rows,
+        "daily_rows": daily_rows,
+        "order_rows": order_rows,
+    }).encode()
+    req = urllib.request.Request(
+        VERCEL_PUSH_URL,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {cron_secret}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read().decode())
 
 
 def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
@@ -310,14 +225,10 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
 
     print(f"\n[{creator}] Syncing {len(periods)} months...")
 
-    if not dry_run:
-        db_url = get_secret("DATABASE_URL")
-        conn = psycopg2.connect(db_url)
-
     # Creator ID in DB (convention: {first_name}_entenmann)
     creator_db_id = f"{creator}_entenmann"
 
-    synced = 0
+    monthly_payload = []
     for year, month in sorted(periods):
         row = fetch_monthly_summary(headers, tag, year, month)
         if row is None:
@@ -328,17 +239,8 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
         clicks = row.get("clicks", 0)
         orders = row.get("orders", 0)
 
-        print(f"  {year}-{month:02d}: revenue={revenue} commission={commission} clicks={clicks} orders={orders}", end="")
-
-        if dry_run:
-            print(" [dry-run]")
-        else:
-            upsert_platform_earnings(conn, creator_db_id, row)
-            print(" ✓")
-            synced += 1
-
-    if not dry_run:
-        print(f"\n  ✅ {creator}: {synced} months upserted")
+        print(f"  {year}-{month:02d}: revenue={revenue} commission={commission} clicks={clicks} orders={orders}")
+        monthly_payload.append(row)
 
     # ── Daily earnings (last N days) ───────────────────────────────────
     print(f"\n[{creator}] Fetching daily earnings (last {days} days)...")
@@ -347,37 +249,58 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
     daily_rows = fetch_daily_earnings(headers, tag, str(day_start), str(day_end))
 
     if daily_rows is None:
-        print(f"  ⚠ Daily fetch failed — skipping (monthly sync still complete)")
-    elif dry_run:
-        print(f"  [dry-run] {len(daily_rows)} daily rows would be upserted")
-        for r in daily_rows[:3]:
-            print(f"    {r}")
-        if len(daily_rows) > 3:
-            print(f"    ... and {len(daily_rows) - 3} more")
+        print(f"  ⚠ Daily fetch failed — skipping")
+        daily_rows = []
     else:
-        count = upsert_daily_earnings(conn, creator_db_id, daily_rows)
-        print(f"  ✅ {count} daily rows upserted")
+        # Normalize commission field name from API
+        for r in daily_rows:
+            if "commission_earnings" in r and "commission" not in r:
+                r["commission"] = r.pop("commission_earnings")
+        print(f"  {len(daily_rows)} daily rows fetched")
+        if dry_run:
+            for r in daily_rows[:3]:
+                print(f"    {r}")
+            if len(daily_rows) > 3:
+                print(f"    ... and {len(daily_rows) - 3} more")
 
     # ── Per-ASIN orders (last N days) ──────────────────────────────────
     print(f"\n[{creator}] Fetching per-ASIN orders (last {days} days)...")
     order_rows = fetch_orders(headers, tag, str(day_start), str(day_end))
 
     if order_rows is None:
-        print(f"  ⚠ Orders fetch failed — skipping (monthly sync still complete)")
-    elif dry_run:
-        print(f"  [dry-run] {len(order_rows)} order rows would be upserted")
-        for r in order_rows[:3]:
-            print(f"    {r}")
-        if len(order_rows) > 3:
-            print(f"    ... and {len(order_rows) - 3} more")
+        print(f"  ⚠ Orders fetch failed — skipping")
+        order_rows = []
     else:
-        count = upsert_orders(conn, creator_db_id, str(day_start), str(day_end), order_rows)
-        print(f"  ✅ {count} order rows upserted")
+        # Add period dates and normalize field name
+        for r in order_rows:
+            r["period_start"] = str(day_start)
+            r["period_end"] = str(day_end)
+            if "product_title" in r and "title" not in r:
+                r["title"] = r.pop("product_title")
+        print(f"  {len(order_rows)} order rows fetched")
+        if dry_run:
+            for r in order_rows[:3]:
+                print(f"    {r}")
+            if len(order_rows) > 3:
+                print(f"    ... and {len(order_rows) - 3} more")
 
-    if not dry_run:
-        conn.close()
-    else:
-        print(f"\n  [dry-run] {creator}: done")
+    if dry_run:
+        print(f"\n  [dry-run] {creator}: {len(monthly_payload)} months, {len(daily_rows)} daily, {len(order_rows)} orders — not written")
+        return
+
+    # ── Push everything to Vercel → Supabase ───────────────────────────
+    print(f"\n[{creator}] Pushing to DB via Vercel endpoint...")
+    try:
+        result = push_to_vercel(creator_db_id, monthly_payload, daily_rows, order_rows)
+        m = result.get("results", {}).get("monthly", {})
+        d = result.get("results", {}).get("daily", {})
+        o = result.get("results", {}).get("orders", {})
+        print(f"  ✅ monthly={m.get('upserted',0)} daily={d.get('upserted',0)} orders={o.get('upserted',0)}")
+        errs = result.get("total_errors", 0)
+        if errs:
+            print(f"  ⚠ {errs} errors — check response")
+    except Exception as e:
+        print(f"  ❌ Push failed: {e}")
 
 
 if __name__ == "__main__":

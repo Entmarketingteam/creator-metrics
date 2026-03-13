@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState } from "react";
 import {
   presetToDateRange,
   PRESETS,
@@ -21,7 +20,7 @@ export default function DateRangePicker() {
   const currentPreset = (searchParams.get("preset") ?? "30d") as Preset;
   const currentStart = searchParams.get("startDate") ?? "";
   const currentEnd = searchParams.get("endDate") ?? "";
-  const [showCustom, setShowCustom] = useState(currentPreset === "custom");
+  const showCustom = currentPreset === "custom";
 
   function applyPreset(preset: Preset) {
     const params = new URLSearchParams(searchParams.toString());
@@ -30,9 +29,6 @@ export default function DateRangePicker() {
       const { startDate, endDate } = presetToDateRange(preset);
       params.set("startDate", startDate);
       params.set("endDate", endDate);
-      setShowCustom(false);
-    } else {
-      setShowCustom(true);
     }
     router.push(`${pathname}?${params.toString()}`);
   }
@@ -77,7 +73,7 @@ export default function DateRangePicker() {
         <div className="flex items-center gap-2 mt-1 w-full">
           <input
             type="date"
-            defaultValue={currentStart}
+            value={currentStart}
             max={currentEnd || undefined}
             onChange={(e) => applyCustom(e.target.value, currentEnd)}
             className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-gray-200 focus:outline-none [color-scheme:dark]"
@@ -85,7 +81,7 @@ export default function DateRangePicker() {
           <span className="text-gray-600 text-xs">→</span>
           <input
             type="date"
-            defaultValue={currentEnd}
+            value={currentEnd}
             min={currentStart || undefined}
             onChange={(e) => applyCustom(currentStart, e.target.value)}
             className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-gray-200 focus:outline-none [color-scheme:dark]"
