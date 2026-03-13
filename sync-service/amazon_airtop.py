@@ -78,14 +78,17 @@ def get_amazon_tokens(
     session = _airtop("POST", "/sessions", {"configuration": {"timeoutMinutes": 10}}, airtop_key=airtop_key)
     session_id = session["data"]["id"]
 
-    # Wait for session to be running
-    for _ in range(20):
-        status = _airtop("GET", f"/sessions/{session_id}", airtop_key=airtop_key)["data"]["status"]
+    # Wait for session to be running (up to 3 min)
+    for attempt in range(90):
+        session_data = _airtop("GET", f"/sessions/{session_id}", airtop_key=airtop_key)["data"]
+        status = session_data.get("status", "unknown")
         if status == "running":
             break
+        if attempt % 5 == 0:
+            logger.info("Airtop session status: %s (attempt %d/90)", status, attempt + 1)
         time.sleep(2)
     else:
-        raise RuntimeError("Airtop session never reached running state")
+        raise RuntimeError(f"Airtop session never reached running state (last status: {status})")
 
     _airtop("POST", f"/sessions/{session_id}/windows", {"url": ASSOCIATES_HOME}, airtop_key=airtop_key)
     cdp_ws = _airtop("GET", f"/sessions/{session_id}", airtop_key=airtop_key)["data"]["cdpWsUrl"]
