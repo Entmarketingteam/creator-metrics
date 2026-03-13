@@ -146,9 +146,9 @@ def get_amazon_tokens(
                     # Wait up to 8 seconds for any JS redirects to settle
                     for _ in range(8):
                         time.sleep(1)
-                        if "signin" in page.url or page.url == ASSOCIATES_HOME or "affiliate-program.amazon.com" in page.url:
+                        if "signin" in page.url or page.url == ASSOCIATES_HOME or page.url.startswith("https://affiliate-program.amazon.com"):
                             break
-                    if "affiliate-program.amazon.com" in page.url and "signin" not in page.url:
+                    if page.url.startswith("https://affiliate-program.amazon.com"):
                         logger.info("Cookie injection succeeded (url=%s) — skipped login", page.url)
                     else:
                         logger.info("Cookies invalid/expired (url=%s) — falling back to login", page.url)
@@ -175,7 +175,7 @@ def get_amazon_tokens(
             # Confirm we're on Associates Central
             final_url = page.url
             logger.info("Post-login URL: %s", final_url)
-            if "affiliate-program.amazon.com" not in final_url:
+            if not final_url.startswith("https://affiliate-program.amazon.com"):
                 # Capture page state for diagnosis
                 try:
                     error_text = page.evaluate("""() => {
