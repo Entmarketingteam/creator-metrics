@@ -37,24 +37,29 @@ export default async function EarningsPage({
   const safeDays = [7, 30, 90, 365].includes(days) ? days : 30;
   const periodLabel = PERIOD_LABELS[String(safeDays)] ?? "Last 30 days";
 
-  // ── Per-platform: latest row per platform within the window ──────
-  // Use DISTINCT ON to get the most recent sync per platform
+  // ── Per-platform: SUM all rows for each platform within the window ──
+  // GROUP BY instead of DISTINCT ON — handles Amazon (multiple monthly rows)
+  // and other platforms (one row per period) correctly.
   const latestPerPlatform = await db.execute(sql`
-    SELECT DISTINCT ON (platform)
+    SELECT
       platform,
-      CAST(COALESCE(revenue, '0') AS FLOAT) AS revenue,
-      CAST(COALESCE(commission, '0') AS FLOAT) AS commission,
-      COALESCE(clicks, 0) AS clicks,
-      COALESCE(orders, 0) AS orders,
-      synced_at
+      CAST(COALESCE(SUM(CAST(revenue AS FLOAT)), 0) AS FLOAT) AS revenue,
+      CAST(COALESCE(SUM(CAST(commission AS FLOAT)), 0) AS FLOAT) AS commission,
+      COALESCE(SUM(clicks), 0) AS clicks,
+      COALESCE(SUM(orders), 0) AS orders,
+      MAX(synced_at) AS synced_at
     FROM platform_earnings
     WHERE period_end >= DATE_TRUNC('day', NOW()) - INTERVAL '${safeDays} days'
       AND synced_at >= NOW() - INTERVAL '30 days'
-    ORDER BY platform, synced_at DESC
+    GROUP BY platform
   `);
 
   // Build a map of platform → data, with zeros for missing platforms
   const platformMap = new Map<string, PlatformCardData>();
+  const PLATFORM_DETAIL_HREF: Partial<Record<string, string>> = {
+    amazon: "/dashboard/earnings/amazon",
+  };
+
   for (const platform of PLATFORMS) {
     platformMap.set(platform, {
       platform,
@@ -64,6 +69,7 @@ export default async function EarningsPage({
       orders: 0,
       periodLabel,
       syncedAt: null,
+      detailHref: PLATFORM_DETAIL_HREF[platform],
     });
   }
   for (const row of latestPerPlatform as any[]) {
@@ -76,6 +82,7 @@ export default async function EarningsPage({
       orders: Number(row.orders),
       periodLabel,
       syncedAt: row.synced_at ? String(row.synced_at) : null,
+      detailHref: PLATFORM_DETAIL_HREF[key],
     });
   }
 

@@ -1,5 +1,6 @@
 import Image from "next/image";
-import { MousePointerClick, ShoppingCart, TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { MousePointerClick, ShoppingCart, TrendingUp, RefreshCw, AlertCircle, ChevronRight } from "lucide-react";
 import { formatCurrency, PLATFORM_LABELS, PLATFORM_LOGO_WORDMARK, PLATFORM_LOGO_INVERT } from "@/lib/utils";
 
 const PLATFORM_ACCENT: Record<string, { bg: string; border: string; text: string; shadow: string }> = {
@@ -37,6 +38,7 @@ export interface PlatformCardData {
   orders: number | null;
   periodLabel: string;
   syncedAt: string | null;
+  detailHref?: string;
 }
 
 function timeAgo(isoString: string | null): string {
@@ -50,6 +52,11 @@ function timeAgo(isoString: string | null): string {
 }
 
 export default function PlatformCard({ data }: { data: PlatformCardData }) {
+  const Wrapper = data.detailHref
+    ? ({ children }: { children: React.ReactNode }) => (
+        <Link href={data.detailHref!} className="block">{children}</Link>
+      )
+    : ({ children }: { children: React.ReactNode }) => <>{children}</>;
   const key = data.platform.toLowerCase();
   const accent = PLATFORM_ACCENT[key] ?? {
     bg: "bg-muted/50",
@@ -65,8 +72,9 @@ export default function PlatformCard({ data }: { data: PlatformCardData }) {
       : "—";
 
   return (
+    <Wrapper>
     <div
-      className={`rounded-xl border ${accent.border} ${accent.bg} p-5 space-y-4 shadow-card dark:shadow-card-dark transition-shadow hover:shadow-lg ${accent.shadow}`}
+      className={`rounded-xl border ${accent.border} ${accent.bg} p-5 space-y-4 shadow-card dark:shadow-card-dark transition-shadow hover:shadow-lg ${accent.shadow} ${data.detailHref ? "cursor-pointer" : ""}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -139,6 +147,14 @@ export default function PlatformCard({ data }: { data: PlatformCardData }) {
           <p className="text-xs text-muted-foreground/60 text-center">Awaiting sync</p>
         </div>
       )}
+      {data.detailHref && (
+        <div className="border-t border-border pt-3 flex items-center justify-end">
+          <span className={`text-xs font-medium flex items-center gap-0.5 ${accent.text}`}>
+            View details <ChevronRight className="h-3 w-3" />
+          </span>
+        </div>
+      )}
     </div>
+    </Wrapper>
   );
 }

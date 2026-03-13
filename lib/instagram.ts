@@ -186,6 +186,27 @@ export async function fetchPublicProfile(
   };
 }
 
+/**
+ * Fetch the first child's media_url for a CAROUSEL_ALBUM post.
+ * The top-level carousel object has no media_url — this gets the first slide's image.
+ */
+export async function fetchCarouselFirstChildUrl(
+  mediaId: string,
+  token: string
+): Promise<string | null> {
+  try {
+    const res = await igFetch<{ data: { id: string; media_url?: string; thumbnail_url?: string; media_type?: string }[] }>(
+      `/${mediaId}/children?fields=id,media_type,media_url,thumbnail_url`,
+      token
+    );
+    const first = res.data?.[0];
+    if (!first) return null;
+    return first.media_url ?? first.thumbnail_url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function exchangeToken(
   appId: string,
   appSecret: string,

@@ -6,7 +6,7 @@ import {
   getRecentPosts,
 } from "@/lib/queries";
 import { db } from "@/lib/db";
-import { platformEarnings, sales, mavelyLinks, ltkPosts, mavelyTransactions, brandCollabs } from "@/lib/schema";
+import { platformEarnings, sales, mavelyLinks, ltkPosts, mavelyTransactions, brandCollabs, creators as creatorsTable } from "@/lib/schema";
 import { eq, sql, and, desc, gte, lte } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -146,6 +146,20 @@ export default async function CreatorDetailPage({
         .orderBy(desc(platformEarnings.syncedAt))
         .limit(1);
 
+  // Amazon: SUM all months in date range (or all-time if no filter)
+  const amazonQuery = creator.isOwned
+    ? db
+        .select({
+          commission: sql<number>`COALESCE(SUM(CAST(${platformEarnings.commission} AS FLOAT)), 0)`,
+          revenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+          clicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
+          orders: sql<number>`COALESCE(SUM(${platformEarnings.orders}), 0)`,
+          syncedAt: sql<string>`MAX(${platformEarnings.syncedAt})::text`,
+        })
+        .from(platformEarnings)
+        .where(and(eq(platformEarnings.creatorId, params.id), eq(platformEarnings.platform, "amazon"), ...dateConds))
+    : Promise.resolve([{ commission: 0, revenue: 0, clicks: 0, orders: 0, syncedAt: null }]);
+
   const [
     history,
     allPosts,
@@ -156,6 +170,7 @@ export default async function CreatorDetailPage({
     ltkPostsRaw,
     mavelyLinkMetricsRaw,
     brandCollabsRaw,
+    amazonRaw,
   ] = await Promise.all([
     getCreatorHistory(params.id, 90),
 
@@ -236,6 +251,8 @@ export default async function CreatorDetailPage({
           .orderBy(desc(brandCollabs.paymentDate))
       : Promise.resolve([]),
 
+    amazonQuery,
+
   ]);
 
   // Build link_url → attribution map for PostGrid (Mavely + LTK combined)
@@ -275,6 +292,7 @@ export default async function CreatorDetailPage({
   const shopmy = shopmyRaw[0] ?? { revenue: 0, commission: 0, orders: 0, syncedAt: null, monthCount: 0 };
   const mavely = mavelyRaw[0] ?? { revenue: 0, commission: 0, orders: 0, syncedAt: null };
   const mavelyLinkMetrics = mavelyLinkMetricsRaw[0] ?? { clicks: 0, orders: 0 };
+  const amazon = amazonRaw[0] ?? { commission: 0, revenue: 0, clicks: 0, orders: 0, syncedAt: null };
 
   // Human-readable label for the active date range
   const periodRangeLabel = hasDateFilter
@@ -282,7 +300,7 @@ export default async function CreatorDetailPage({
     : null;
 
   const totalEarnings =
-    (ltk.revenue ?? 0) + (shopmy.revenue ?? 0) + (mavely.revenue ?? 0);
+    (ltk.revenue ?? 0) + (shopmy.revenue ?? 0) + (mavely.revenue ?? 0) + (amazon.commission ?? 0);
 
   const totalBrandCollabRevenue = brandCollabsRaw.reduce(
     (sum, c) => sum + (c.status === "paid" || c.status === "invoiced" ? Number(c.dealAmount ?? 0) : 0),
@@ -424,6 +442,11 @@ export default async function CreatorDetailPage({
                 Mavely
               </span>
             )}
+            {creator.amazonAssociateTag && (
+              <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                Amazon · {creator.amazonAssociateTag}
+              </span>
+            )}
           </div>
 
           {creator.biography && (
@@ -491,7 +514,7 @@ export default async function CreatorDetailPage({
               <p className="text-xs text-gray-500 mt-1">
                 {periodRangeLabel
                   ? `Filtered: ${periodRangeLabel}`
-                  : "LTK (30d) · ShopMy · Mavely"}
+                  : "LTK (30d) · ShopMy · Mavely · Amazon"}
               </p>
             </div>
             <div className="flex gap-4 text-center">
@@ -513,12 +536,18 @@ export default async function CreatorDetailPage({
                   <p className="text-xs text-gray-500">Mavely</p>
                 </div>
               )}
+              {(amazon.commission ?? 0) > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-amber-400">{formatCurrency(amazon.commission)}</p>
+                  <p className="text-xs text-gray-500">Amazon</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Per-platform cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <PlatformCard
             data={{
               platform: "ltk",
@@ -558,6 +587,20 @@ export default async function CreatorDetailPage({
               syncedAt: mavely.syncedAt ?? null,
             }}
           />
+          {creator.amazonAssociateTag && (
+            <PlatformCard
+              data={{
+                platform: "amazon",
+                revenue: amazon.commission ?? 0,
+                commission: amazon.commission ?? 0,
+                clicks: (amazon.clicks ?? 0) > 0 ? amazon.clicks : null,
+                orders: (amazon.orders ?? 0) > 0 ? amazon.orders : null,
+                periodLabel: periodRangeLabel ?? "all-time",
+                syncedAt: amazon.syncedAt ?? null,
+                detailHref: "/dashboard/earnings/amazon",
+              }}
+            />
+          )}
         </div>
       </section>}
 

@@ -9,6 +9,7 @@ import {
   fetchOwnedMediaInsights,
   fetchOwnedAccountInsights,
   fetchPublicProfile,
+  fetchCarouselFirstChildUrl,
   extractAffiliateUrl,
 } from "@/lib/instagram";
 
@@ -76,6 +77,15 @@ export async function GET(req: NextRequest) {
           const insights = await fetchOwnedMediaInsights(m.id, token, m.media_product_type);
           // For posts/reels: link sticker isn't available, but extract affiliate URLs from caption
           const linkUrl = m.link ?? extractAffiliateUrl(m.caption) ?? null;
+
+          // Carousels have no top-level media_url — fetch first child's image
+          let mediaUrl = m.media_url ?? null;
+          let thumbnailUrl = m.thumbnail_url ?? null;
+          if (m.media_type === "CAROUSEL_ALBUM" && !mediaUrl && !thumbnailUrl) {
+            const childUrl = await fetchCarouselFirstChildUrl(m.id, token);
+            if (childUrl) mediaUrl = childUrl;
+          }
+
           await db
             .insert(mediaSnapshots)
             .values({
@@ -86,8 +96,8 @@ export async function GET(req: NextRequest) {
               mediaProductType: m.media_product_type ?? null,
               caption: m.caption ?? null,
               permalink: m.permalink ?? null,
-              mediaUrl: m.media_url ?? null,
-              thumbnailUrl: m.thumbnail_url ?? null,
+              mediaUrl,
+              thumbnailUrl,
               postedAt: m.timestamp ? new Date(m.timestamp) : null,
               likeCount: m.like_count ?? null,
               commentsCount: m.comments_count ?? null,
@@ -103,8 +113,8 @@ export async function GET(req: NextRequest) {
             .onConflictDoUpdate({
               target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
               set: {
-                mediaUrl: m.media_url ?? null,
-                thumbnailUrl: m.thumbnail_url ?? null,
+                mediaUrl,
+                thumbnailUrl,
                 likeCount: m.like_count ?? null,
                 commentsCount: m.comments_count ?? null,
                 reach: insights.reach ?? null,
