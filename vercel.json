@@ -3,6 +3,26 @@
     {
       "path": "/api/cron/collect",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/ltk-sync",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/shopmy-sync",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/mavely-sync",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/collect-stories",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/mavely-graphql-sync",
+      "schedule": "0 8 * * *"
     }
   ]
 }

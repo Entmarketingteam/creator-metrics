@@ -9,6 +9,7 @@ import {
   fetchOwnedMediaInsights,
   fetchOwnedAccountInsights,
   fetchPublicProfile,
+  extractAffiliateUrl,
 } from "@/lib/instagram";
 
 export const maxDuration = 60;
@@ -72,7 +73,9 @@ export async function GET(req: NextRequest) {
           .onConflictDoNothing();
 
         for (const m of media) {
-          const insights = await fetchOwnedMediaInsights(m.id, token);
+          const insights = await fetchOwnedMediaInsights(m.id, token, m.media_product_type);
+          // For posts/reels: link sticker isn't available, but extract affiliate URLs from caption
+          const linkUrl = m.link ?? extractAffiliateUrl(m.caption) ?? null;
           await db
             .insert(mediaSnapshots)
             .values({
@@ -92,6 +95,10 @@ export async function GET(req: NextRequest) {
               saved: insights.saved ?? null,
               shares: insights.shares ?? null,
               totalInteractions: insights.total_interactions ?? null,
+              reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
+              reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
+              viewsCount: insights.views ?? null,
+              linkUrl,
             })
             .onConflictDoUpdate({
               target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
@@ -104,6 +111,10 @@ export async function GET(req: NextRequest) {
                 saved: insights.saved ?? null,
                 shares: insights.shares ?? null,
                 totalInteractions: insights.total_interactions ?? null,
+                reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
+                reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
+                viewsCount: insights.views ?? null,
+                linkUrl,
               },
             });
         }

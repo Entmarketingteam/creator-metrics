@@ -1,5 +1,8 @@
 import { getAllCreatorsSummary, getComparison } from "@/lib/queries";
-import { formatNumber } from "@/lib/utils";
+import { db } from "@/lib/db";
+import { platformEarnings } from "@/lib/schema";
+import { sql, inArray } from "drizzle-orm";
+import { formatNumber, formatCurrency } from "@/lib/utils";
 import { BarChart } from "@tremor/react";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +15,26 @@ export default async function ComparePage({
   const allCreators = await getAllCreatorsSummary();
   const selectedIds = searchParams.ids?.split(",").filter(Boolean) ?? [];
   const comparison = selectedIds.length > 0 ? await getComparison(selectedIds) : [];
+
+  // Fetch earnings for selected creators
+  const earningsComparison =
+    selectedIds.length > 0
+      ? await db
+          .select({
+            creatorId: platformEarnings.creatorId,
+            totalRevenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+            totalOrders: sql<number>`COALESCE(SUM(${platformEarnings.orders}), 0)`,
+            totalClicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
+          })
+          .from(platformEarnings)
+          .where(inArray(platformEarnings.creatorId, selectedIds))
+          .groupBy(platformEarnings.creatorId)
+      : [];
+
+  // Map earnings by creator ID for easy lookup
+  const earningsMap = new Map(
+    earningsComparison.map((e) => [e.creatorId, e])
+  );
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -116,6 +139,42 @@ export default async function ComparePage({
                 className="h-48"
               />
             </div>
+          )}
+
+          {/* Earnings Comparison */}
+          {earningsComparison.length > 0 && (
+            <>
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+                <h3 className="text-sm font-semibold text-gray-400 mb-4">Total Revenue</h3>
+                <BarChart
+                  data={comparison.map((c) => ({
+                    name: c.displayName ?? c.username ?? "",
+                    Revenue: earningsMap.get(c.creatorId ?? "")?.totalRevenue ?? 0,
+                  }))}
+                  index="name"
+                  categories={["Revenue"]}
+                  colors={["amber"]}
+                  showAnimation
+                  className="h-48"
+                  valueFormatter={(v) => formatCurrency(v)}
+                />
+              </div>
+
+              <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+                <h3 className="text-sm font-semibold text-gray-400 mb-4">Total Orders</h3>
+                <BarChart
+                  data={comparison.map((c) => ({
+                    name: c.displayName ?? c.username ?? "",
+                    Orders: earningsMap.get(c.creatorId ?? "")?.totalOrders ?? 0,
+                  }))}
+                  index="name"
+                  categories={["Orders"]}
+                  colors={["pink"]}
+                  showAnimation
+                  className="h-48"
+                />
+              </div>
+            </>
           )}
         </div>
       )}

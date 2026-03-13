@@ -1,16 +1,30 @@
 import { getAllCreatorsSummary, getAggregateStats } from "@/lib/queries";
-import { Users, UserCheck, Calendar } from "lucide-react";
+import { db } from "@/lib/db";
+import { platformEarnings } from "@/lib/schema";
+import { sql } from "drizzle-orm";
+import { Users, UserCheck, Calendar, DollarSign, TrendingUp, ShoppingBag } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import CreatorCard from "@/components/CreatorCard";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, formatCurrency } from "@/lib/utils";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardOverview() {
-  const [creatorsList, stats] = await Promise.all([
+  const [creatorsList, stats, earningsData] = await Promise.all([
     getAllCreatorsSummary(),
     getAggregateStats(),
+    db
+      .select({
+        totalRevenue: sql<number>`COALESCE(SUM(CAST(${platformEarnings.revenue} AS FLOAT)), 0)`,
+        totalOrders: sql<number>`COALESCE(SUM(${platformEarnings.orders}), 0)`,
+        totalClicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
+      })
+      .from(platformEarnings)
+      .where(sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`),
   ]);
+
+  const earnings = earningsData[0];
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -41,6 +55,34 @@ export default async function DashboardOverview() {
               : "No data yet"
           }
           icon={<Calendar className="w-4 h-4" />}
+        />
+      </div>
+
+      {/* Earnings summary cards */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-white">Earnings (30d)</h2>
+        <Link
+          href="/dashboard/earnings"
+          className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          View all earnings →
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <MetricCard
+          title="Total Revenue"
+          value={formatCurrency(earnings?.totalRevenue)}
+          icon={<DollarSign className="w-4 h-4" />}
+        />
+        <MetricCard
+          title="Total Orders"
+          value={earnings?.totalOrders ?? 0}
+          icon={<ShoppingBag className="w-4 h-4" />}
+        />
+        <MetricCard
+          title="Total Clicks"
+          value={earnings?.totalClicks ?? 0}
+          icon={<TrendingUp className="w-4 h-4" />}
         />
       </div>
 
