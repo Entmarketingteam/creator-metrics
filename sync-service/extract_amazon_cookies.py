@@ -40,6 +40,11 @@ SESSION_COOKIE_NAMES = {
 DEVICE_TRUST_COOKIE_NAMES = {"x-main", "ubid-main"}
 
 
+RAILWAY_PROJECT_ID = "3049136c-fc4d-4ee4-bf1c-db6c664c303a"
+RAILWAY_SERVICE_ID = "b28d7c36-70b2-4589-a1b7-0f4ec7b1074a"
+RAILWAY_ENV_ID = "be03e440-4dcd-46d1-b89d-7dd474c97331"
+
+
 def save_to_doppler(key: str, value: str):
     result = subprocess.run(
         ["doppler", "secrets", "set", f"{key}={value}",
@@ -47,9 +52,59 @@ def save_to_doppler(key: str, value: str):
         capture_output=True, text=True,
     )
     if result.returncode != 0:
-        print(f"  ⚠️  Doppler error for {key}: {result.stderr.strip()}")
+        print(f"  WARNING  Doppler error for {key}: {result.stderr.strip()}")
     else:
-        print(f"  ✓  {key} → Doppler")
+        print(f"  OK  {key} -> Doppler")
+    # Also push to Railway env vars
+    _save_to_railway(key, value)
+
+
+def _save_to_railway(key: str, value: str):
+    """Push secret to Railway service env vars via GraphQL API."""
+    import json
+    import urllib.request
+    import urllib.error
+    token = os.environ.get("RAILWAY_API_TOKEN", "")
+    if not token:
+        # Try getting from doppler
+        try:
+            result = subprocess.run(
+                ["doppler", "secrets", "get", "RAILWAY_API_TOKEN", "--plain",
+                 "--project", "example-project", "--config", "prd"],
+                capture_output=True, text=True,
+            )
+            token = result.stdout.strip()
+        except Exception:
+            pass
+    if not token:
+        print(f"  SKIP  Railway push skipped (no RAILWAY_API_TOKEN)")
+        return
+    mutation = """
+    mutation {
+        variableUpsert(input: {
+            projectId: "%s",
+            serviceId: "%s",
+            environmentId: "%s",
+            name: "%s",
+            value: "%s"
+        })
+    }
+    """ % (RAILWAY_PROJECT_ID, RAILWAY_SERVICE_ID, RAILWAY_ENV_ID, key, value.replace('"', '\"'))
+    body = json.dumps({"query": mutation}).encode()
+    req = urllib.request.Request(
+        "https://backboard.railway.app/graphql/v2",
+        data=body,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        data = json.loads(resp.read())
+        if data.get("data", {}).get("variableUpsert"):
+            print(f"  OK  {key} -> Railway")
+        else:
+            print(f"  WARNING  Railway push may have failed: {data}")
+    except Exception as e:
+        print(f"  WARNING  Railway push error for {key}: {e}")
 
 
 def run_for_creator(creator_name: str, env_prefix: str):
