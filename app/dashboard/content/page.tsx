@@ -91,10 +91,12 @@ export default async function ContentPage({
       } satisfies PostCardData;
     })
     .filter((p) => {
-      if (platformFilter === "has-link") return !!p.platform;
-      if (platformFilter) return p.platform === platformFilter;
-      if (typeFilter) return p.type.includes(typeFilter);
-      return true;
+      const platformMatch =
+        !platformFilter ||
+        (platformFilter === "has-link" ? !!p.platform : p.platform === platformFilter);
+      const typeMatch =
+        !typeFilter || p.type.includes(typeFilter);
+      return platformMatch && typeMatch;
     });
 
   const buildFilterUrl = (key: string, value: string) => {

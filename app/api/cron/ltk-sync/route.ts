@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 
           const [commissionsRes, performanceRes] = await Promise.allSettled([
             fetchLTKCommissionsSummary(tokens),
-            fetchLTKPerformanceStats(tokens, startDate, endDate, creator.ltkPublisherId),
+            fetchLTKPerformanceStats(tokens, rangeStartDate, rangeEndDate, creator.ltkPublisherId),
           ]);
 
           const commissionsData = commissionsRes.status === "fulfilled" ? commissionsRes.value : null;
