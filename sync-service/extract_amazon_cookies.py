@@ -1,58 +1,71 @@
 """
-One-time script to extract Amazon Associates session cookies.
+One-time setup: extract Amazon Associates cookies via visible browser.
 
-Run locally (not on Railway) so Amazon sees your real IP:
+Run this locally (NOT on Railway) so Amazon sees your real IP and won't flag it.
+After this, the auto-refresh system handles everything — you shouldn't need to run
+this again for ~1 year (when x-main expires).
+
+Usage:
   cd sync-service
   pip install playwright pyotp
-  python extract_amazon_cookies.py
+  playwright install chromium
+  python extract_amazon_cookies.py           # all creators
+  python extract_amazon_cookies.py nicki     # just Nicki
 
-Opens a real browser window. Log in normally (including 2FA if prompted).
-Once you're on Associates Central, the script grabs the cookies and
-saves them to Doppler automatically.
+Saves to Doppler (ent-agency-automation, prd):
+  AMAZON_NICKI_SESSION_COOKIES  — short-lived session cookies
+  AMAZON_NICKI_X_MAIN           — long-lived device trust token (~1 year)
+  AMAZON_NICKI_TOTP_SECRET      — 2FA seed (optional — enables full headless re-auth)
 """
-import json
 import subprocess
+import sys
 import time
+
 from playwright.sync_api import sync_playwright
 
 DOPPLER_PROJECT = "ent-agency-automation"
-DOPPLER_CONFIG  = "dev"
+DOPPLER_CONFIG = "prd"
 
-COOKIE_NAMES = [
+SESSION_COOKIE_NAMES = {
     "session-id",
     "session-token",
-    "ubid-main",
-    "x-main",
-    "at-main",
+    "session-id-time",
     "sess-at-main",
+    "at-main",
     "csm-hit",
-]
+}
+
+# x-main is the "trusted device" token — present = Amazon skips 2FA on re-login
+DEVICE_TRUST_COOKIE_NAMES = {"x-main", "ubid-main"}
+
 
 def save_to_doppler(key: str, value: str):
     result = subprocess.run(
-        [
-            "doppler", "secrets", "set", f"{key}={value}",
-            "--project", DOPPLER_PROJECT,
-            "--config", DOPPLER_CONFIG,
-        ],
-        capture_output=True, text=True
+        ["doppler", "secrets", "set", f"{key}={value}",
+         "--project", DOPPLER_PROJECT, "--config", DOPPLER_CONFIG],
+        capture_output=True, text=True,
     )
     if result.returncode != 0:
         print(f"  ⚠️  Doppler error for {key}: {result.stderr.strip()}")
     else:
-        print(f"  ✓  {key} saved to Doppler")
+        print(f"  ✓  {key} → Doppler")
 
-def main():
-    print("Opening browser — log into Amazon Associates normally.")
-    print("The script will detect when you're logged in and grab the cookies.\n")
+
+def run_for_creator(creator_name: str, env_prefix: str):
+    print(f"\n{'='*60}")
+    print(f"  Setting up: {creator_name}  ({env_prefix})")
+    print(f"{'='*60}")
+    print("\nOpening browser — log into Amazon Associates normally.")
+    print("Complete the login including 2FA (this is the LAST TIME).")
+    print("Script auto-detects when you reach Associates Central.\n")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=False,  # visible window so you can log in
-            args=["--start-maximized"],
+            headless=False,
+            args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
         )
         context = browser.new_context(
-            viewport=None,  # use maximized window size
+            viewport=None,
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -60,57 +73,86 @@ def main():
             ),
         )
         page = context.new_page()
-        # Navigate directly to Associates Central — Amazon will show login form if needed
         page.goto("https://affiliate-program.amazon.com/home")
 
-        print("Waiting for you to log in...")
-        print("(Complete the login in the browser window that just opened)\n")
-        # Poll until we land on Associates Central dashboard (not the login redirect)
+        print("Waiting for you to complete login...")
         while True:
-            time.sleep(3)
+            time.sleep(2)
             try:
                 url = page.url
-                print(f"  url={url[:80]}")
-                # Must be on affiliate-program.amazon.com (login pages are on www.amazon.com)
-                on_associates = url.startswith("https://affiliate-program.amazon.com")
-                if on_associates:
-                    print(f"\n✓ Detected login complete (url={url[:60]})")
+                if url.startswith("https://affiliate-program.amazon.com") and "signin" not in url:
+                    print(f"✓ Detected Associates Central")
                     break
             except Exception:
-                pass  # page navigating — retry next loop
+                pass
 
-        # Playwright context.cookies() returns ALL cookies including HttpOnly
-        all_cookies = context.cookies("https://www.amazon.com")
-        all_cookies += context.cookies("https://affiliate-program.amazon.com")
+        time.sleep(2)  # let React hydrate
 
-        found = {}
-        for c in all_cookies:
-            if c["name"] in COOKIE_NAMES and c["name"] not in found:
-                found[c["name"]] = c["value"]
-
+        all_cookies = (
+            context.cookies("https://www.amazon.com")
+            + context.cookies("https://affiliate-program.amazon.com")
+        )
         browser.close()
 
-    print(f"\nExtracted {len(found)} cookies: {list(found.keys())}\n")
+    session_cookies = {}
+    device_cookies = {}
+    for c in all_cookies:
+        name = c["name"]
+        if name in SESSION_COOKIE_NAMES and name not in session_cookies:
+            session_cookies[name] = c["value"]
+        elif name in DEVICE_TRUST_COOKIE_NAMES and name not in device_cookies:
+            device_cookies[name] = c["value"]
 
-    if not found:
-        print("No cookies found — something went wrong.")
-        return
+    print(f"\nCaptured {len(session_cookies)} session + {len(device_cookies)} device cookies")
 
-    # Build cookie string for httpx (name=value; name=value)
-    cookie_str = "; ".join(f"{k}={v}" for k, v in found.items())
+    if not session_cookies:
+        print("❌ No cookies found.")
+        return False
 
-    print("Saving to Doppler...")
-    save_to_doppler("AMAZON_NICKI_COOKIES", cookie_str)
+    session_str = "; ".join(f"{k}={v}" for k, v in session_cookies.items())
+    save_to_doppler(f"{env_prefix}_SESSION_COOKIES", session_str)
 
-    # Also save individual cookies for debugging
-    for name, value in found.items():
-        env_key = "AMAZON_NICKI_" + name.upper().replace("-", "_")
-        save_to_doppler(env_key, value)
+    if "x-main" in device_cookies:
+        save_to_doppler(f"{env_prefix}_X_MAIN", device_cookies["x-main"])
+        print("✅ x-main saved — future re-logins will NOT require 2FA")
+    else:
+        print("⚠️  x-main not found — check 'Keep me signed in' next time")
 
-    print("\nAll done! Cookie string also printed below for Railway:\n")
-    print(f"AMAZON_NICKI_COOKIES={cookie_str}\n")
-    print("Add it to Railway with:")
-    print(f'  railway variables set AMAZON_NICKI_COOKIES="{cookie_str}"')
+    print(f"\n{'─'*60}")
+    print("OPTIONAL: Paste your TOTP base32 seed (from authenticator app setup).")
+    print("This enables full auto re-auth if x-main ever expires after ~1 year.")
+    print("Press Enter to skip.")
+    totp = input(f"TOTP seed for {creator_name} (Enter to skip): ").strip()
+    if totp:
+        save_to_doppler(f"{env_prefix}_TOTP_SECRET", totp)
+
+    print(f"✅ {creator_name} done!\n")
+    return True
+
+
+def main():
+    creators = [
+        ("Nicki Entenmann",       "AMAZON_NICKI"),
+        ("Ann Schulte",           "AMAZON_ANN"),
+        ("Ellen Ludwig",          "AMAZON_ELLEN"),
+        ("Emily (livefitwithem)", "AMAZON_EMILY"),
+    ]
+
+    if len(sys.argv) > 1:
+        arg = sys.argv[1].lower()
+        creators = [(n, p) for n, p in creators if arg in n.lower() or arg in p.lower()]
+        if not creators:
+            print(f"No match for '{arg}'. Options: nicki, ann, ellen, emily")
+            sys.exit(1)
+
+    print("Amazon Associates — One-Time Cookie Setup")
+    print("Run once per creator. Auto-refresh handles everything after.\n")
+
+    for name, prefix in creators:
+        run_for_creator(name, prefix)
+
+    print("🎉 All done — cookies saved to Doppler.")
+
 
 if __name__ == "__main__":
     main()
