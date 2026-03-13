@@ -90,7 +90,8 @@ def get_amazon_tokens(
     else:
         raise RuntimeError(f"Airtop session never reached running state (last status: {status})")
 
-    _airtop("POST", f"/sessions/{session_id}/windows", {"url": ASSOCIATES_HOME}, airtop_key=airtop_key)
+    # Open a blank page first so we can inject cookies before navigating
+    _airtop("POST", f"/sessions/{session_id}/windows", {"url": "https://www.amazon.com"}, airtop_key=airtop_key)
     cdp_ws = _airtop("GET", f"/sessions/{session_id}", airtop_key=airtop_key)["data"]["cdpWsUrl"]
     logger.info("Airtop session running, connecting via Playwright CDP")
 
@@ -107,24 +108,57 @@ def get_amazon_tokens(
             context = browser.contexts[0]
             page = context.pages[0] if context.pages else context.new_page()
 
-            # Wait for page to settle
+            # Wait for page to settle (amazon.com loaded)
             page.wait_for_load_state("domcontentloaded", timeout=15000)
-            time.sleep(2)
 
-            # Check if we're on signin page
-            current_url = page.url
-            logger.info("Initial URL: %s", current_url)
+            # Try injecting saved session cookies first (avoids login + 2FA)
+            saved_cookies_str = os.environ.get(f"AMAZON_{store_id.upper().replace('-','_')}_SESSION_COOKIES", "") if store_id else ""
+            # Also try AMAZON_NICKI_SESSION_COOKIES pattern
+            if not saved_cookies_str:
+                # Map store_id to creator name for env var lookup
+                store_env_map = {"nickientenman-20": "NICKI", "nickientenmann-20": "NICKI"}
+                creator_key = store_env_map.get(store_id, "")
+                if creator_key:
+                    saved_cookies_str = os.environ.get(f"AMAZON_{creator_key}_SESSION_COOKIES", "")
 
-            if "signin" in current_url or "ap/signin" in current_url:
-                logger.info("On sign-in page, filling credentials...")
-                _do_login(page, email, password, totp_secret)
-            elif "affiliate-program.amazon.com" not in current_url:
-                # May have been redirected to signin
-                page.goto(ASSOCIATES_HOME, wait_until="domcontentloaded", timeout=30000)
-                time.sleep(2)
-                if "signin" in page.url or "ap/signin" in page.url:
-                    logger.info("Redirected to sign-in, filling credentials...")
+            if saved_cookies_str:
+                logger.info("Injecting saved session cookies into browser...")
+                cookies = []
+                for pair in saved_cookies_str.split(";"):
+                    pair = pair.strip()
+                    if "=" in pair:
+                        name, _, value = pair.partition("=")
+                        cookies.append({"name": name.strip(), "value": value.strip(),
+                                        "domain": ".amazon.com", "path": "/"})
+                try:
+                    context = page.context
+                    context.add_cookies(cookies)
+                    logger.info("Injected %d cookies — navigating to Associates...", len(cookies))
+                    page.goto(ASSOCIATES_HOME, wait_until="domcontentloaded", timeout=30000)
+                    time.sleep(3)
+                    if "affiliate-program.amazon.com" in page.url:
+                        logger.info("Cookie injection succeeded — skipped login")
+                    else:
+                        logger.info("Cookies expired/invalid (url=%s) — falling back to login", page.url)
+                        saved_cookies_str = ""  # Force login fallback
+                except Exception as ce:
+                    logger.warning("Cookie injection failed: %s — falling back to login", ce)
+                    saved_cookies_str = ""
+
+            if not saved_cookies_str:
+                # Fall back to fresh login
+                current_url = page.url
+                logger.info("Initial URL: %s", current_url)
+
+                if "signin" in current_url or "ap/signin" in current_url:
+                    logger.info("On sign-in page, filling credentials...")
                     _do_login(page, email, password, totp_secret)
+                else:
+                    page.goto(ASSOCIATES_HOME, wait_until="domcontentloaded", timeout=30000)
+                    time.sleep(2)
+                    if "signin" in page.url or "ap/signin" in page.url:
+                        logger.info("Redirected to sign-in, filling credentials...")
+                        _do_login(page, email, password, totp_secret)
 
             # Confirm we're on Associates Central
             final_url = page.url
