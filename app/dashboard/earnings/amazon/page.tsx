@@ -1,8 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { platformEarnings } from "@/lib/schema";
-import { sql, eq, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { formatCurrency } from "@/lib/utils";
 import {
   DollarSign,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import AmazonEarningsChart from "@/components/earnings/AmazonEarningsChart";
+import AmazonDailyChart from "@/components/earnings/AmazonDailyChart";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,6 @@ export default async function AmazonEarningsPage() {
   if (!userId) redirect("/sign-in");
 
   // ── All Amazon monthly history ────────────────────────────────────
-  // Get clean monthly rows (period_end = last day of month = full month)
   const monthlyHistory = await db.execute(sql`
     SELECT
       period_start,
@@ -70,6 +69,64 @@ export default async function AmazonEarningsPage() {
   const commissionRate = ytdRevenue > 0 ? ((ytdCommission / ytdRevenue) * 100).toFixed(1) : "—";
   const ytdCvr = ytdClicks > 0 ? ((ytdOrders / ytdClicks) * 100).toFixed(1) + "%" : "—";
 
+  // ── Daily earnings (last 90 days) ─────────────────────────────────
+  let dailyData: { date: string; Commission: number }[] = [];
+  try {
+    const dailyRaw = await db.execute(sql`
+      SELECT day, clicks, ordered_items, revenue, CAST(commission AS FLOAT) AS commission
+      FROM amazon_daily_earnings
+      WHERE creator_id = 'nicki_entenmann'
+        AND day >= NOW() - INTERVAL '90 days'
+      ORDER BY day ASC
+    `);
+    dailyData = (dailyRaw as any[]).map((r) => ({
+      date: new Date(String(r.day) + "T00:00:00").toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      }),
+      Commission: Number(r.commission),
+    }));
+  } catch {
+    // Table may not exist yet — fall through to monthly chart
+  }
+
+  // ── Top products (last 90 days) ───────────────────────────────────
+  let topProducts: {
+    asin: string;
+    title: string;
+    ordered_items: number;
+    shipped_items: number;
+    revenue: number;
+    commission: number;
+  }[] = [];
+  try {
+    const productsRaw = await db.execute(sql`
+      SELECT
+        asin,
+        MAX(title) AS title,
+        SUM(ordered_items) AS ordered_items,
+        SUM(shipped_items) AS shipped_items,
+        CAST(SUM(revenue) AS FLOAT) AS revenue,
+        CAST(SUM(commission) AS FLOAT) AS commission
+      FROM amazon_orders
+      WHERE creator_id = 'nicki_entenmann'
+        AND period_start >= NOW() - INTERVAL '90 days'
+      GROUP BY asin
+      ORDER BY SUM(commission) DESC
+      LIMIT 20
+    `);
+    topProducts = (productsRaw as any[]).map((r) => ({
+      asin: String(r.asin),
+      title: r.title ? String(r.title) : "",
+      ordered_items: Number(r.ordered_items),
+      shipped_items: Number(r.shipped_items),
+      revenue: Number(r.revenue),
+      commission: Number(r.commission),
+    }));
+  } catch {
+    // Table may not exist yet
+  }
+
   // ── Instagram posts that mention Amazon ──────────────────────────
   const amazonPostsRaw = await db.execute(sql`
     SELECT * FROM (
@@ -113,8 +170,8 @@ export default async function AmazonEarningsPage() {
     comments: r.comments_count ? Number(r.comments_count) : null,
   }));
 
-  // ── Chart data ────────────────────────────────────────────────────
-  const chartData = months.map((m) => ({
+  // ── Chart data (monthly fallback) ────────────────────────────────
+  const monthlyChartData = months.map((m) => ({
     date: m.label,
     Commission: m.commission,
     Revenue: m.revenue,
@@ -183,10 +240,14 @@ export default async function AmazonEarningsPage() {
         </div>
       </div>
 
-      {/* Monthly earnings chart */}
-      <AmazonEarningsChart data={chartData} />
+      {/* Daily chart (primary) — falls back to monthly if no daily data */}
+      {dailyData.length > 0 ? (
+        <AmazonDailyChart data={dailyData} />
+      ) : (
+        <AmazonEarningsChart data={monthlyChartData} />
+      )}
 
-      {/* Monthly table */}
+      {/* Monthly breakdown table */}
       <div className="rounded-xl border border-gray-800 bg-card overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800">
           <h2 className="text-sm font-semibold text-foreground">Monthly Breakdown</h2>
@@ -232,6 +293,51 @@ export default async function AmazonEarningsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Top Products (Last 90 Days) */}
+      <div className="rounded-xl border border-gray-800 bg-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800">
+          <h2 className="text-sm font-semibold text-foreground">Top Products (Last 90 Days)</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">By commission earned</p>
+        </div>
+        {topProducts.length === 0 ? (
+          <div className="px-5 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              Sync running daily — product data will appear after next sync.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-left">
+                  <th className="px-5 py-3 text-xs font-medium text-muted-foreground w-8">#</th>
+                  <th className="px-5 py-3 text-xs font-medium text-muted-foreground">Product</th>
+                  <th className="px-5 py-3 text-xs font-medium text-muted-foreground text-right">Ordered</th>
+                  <th className="px-5 py-3 text-xs font-medium text-muted-foreground text-right">Revenue</th>
+                  <th className="px-5 py-3 text-xs font-medium text-muted-foreground text-right">Commission</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {topProducts.map((p, i) => (
+                  <tr key={p.asin} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-5 py-3 text-muted-foreground text-xs">{i + 1}</td>
+                    <td className="px-5 py-3">
+                      <p className="text-foreground text-sm leading-snug">
+                        {p.title ? (p.title.length > 60 ? p.title.slice(0, 60) + "…" : p.title) : "—"}
+                      </p>
+                      <p className="text-[11px] font-mono text-muted-foreground/60 mt-0.5">{p.asin}</p>
+                    </td>
+                    <td className="px-5 py-3 text-right text-muted-foreground">{p.ordered_items.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(p.revenue)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-foreground">{formatCurrency(p.commission)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Instagram posts that promoted Amazon */}
