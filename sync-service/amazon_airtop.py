@@ -202,6 +202,17 @@ def _do_login(page, email: str, password: str, totp_secret=None):
     """Fill Amazon two-step sign-in form (email → continue → password → submit)."""
     logger.info("Step 1: filling email...")
 
+    # Dismiss passkey prompt if shown (Amazon shows this on accounts with passkeys set up)
+    try:
+        # Look for "Sign in a different way" or "Use a different sign-in method" button
+        different_way = page.locator('button:has-text("different"), a:has-text("different"), button:has-text("password"), [data-action="sign-in-password"]')
+        if different_way.count() > 0:
+            logger.info("Passkey prompt detected � clicking 'sign in a different way'")
+            different_way.first.click(timeout=3000)
+            page.wait_for_load_state("domcontentloaded", timeout=10000)
+    except Exception:
+        pass  # No passkey prompt, proceed normally
+
     # Step 1: Email field
     page.wait_for_selector('input[name="email"]', timeout=15000)
     page.fill('input[name="email"]', email)
