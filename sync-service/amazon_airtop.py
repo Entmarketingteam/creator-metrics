@@ -185,62 +185,102 @@ def get_amazon_tokens(
     return result
 
 
-def _do_login(page, email: str, password: str, totp_secret: Optional[str]):
-    """Fill Amazon sign-in form and handle TOTP if required."""
-    import re
+def _do_login(page, email: str, password: str, totp_secret=None):
+    """Fill Amazon two-step sign-in form (email → continue → password → submit)."""
+    logger.info("Step 1: filling email...")
 
-    # Fill email
+    # Step 1: Email field
+    page.wait_for_selector('input[name="email"]', timeout=15000)
+    page.fill('input[name="email"]', email)
+    # Click Continue button
     try:
-        page.fill('input[name="email"], input[type="email"]', email, timeout=10000)
-        page.click('input[id="continue"], [type="submit"]', timeout=5000)
-        time.sleep(1)
+        page.click('input[id="continue"]', timeout=5000)
+    except Exception:
+        try:
+            page.click('button[type="submit"]', timeout=5000)
+        except Exception:
+            page.keyboard.press("Enter")
+
+    # Step 2: Wait for password field to appear
+    logger.info("Step 2: waiting for password field...")
+    try:
+        page.wait_for_selector('input[name="password"]', timeout=15000)
+    except Exception:
+        logger.warning("Password field did not appear after email step")
+        return
+
+    page.fill('input[name="password"]', password)
+
+    # Check "Keep me signed in" if available
+    try:
+        page.check('input[name="rememberMe"]', timeout=2000)
     except Exception:
         pass
 
-    # Fill password
+    # Submit
+    logger.info("Step 3: submitting password...")
     try:
-        page.fill('input[name="password"], input[type="password"]', password, timeout=10000)
-        page.check('input[name="rememberMe"]', timeout=3000)
+        page.click('input[id="signInSubmit"]', timeout=5000)
+    except Exception:
+        try:
+            page.click('button[type="submit"]', timeout=5000)
+        except Exception:
+            page.keyboard.press("Enter")
+
+    # Wait for navigation
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=20000)
     except Exception:
         pass
-
-    try:
-        page.click('input[id="signInSubmit"], [type="submit"]', timeout=5000)
-    except Exception:
-        pass
-
-    page.wait_for_load_state("domcontentloaded", timeout=20000)
-    time.sleep(2)
+    import time; time.sleep(3)
 
     # Handle TOTP / OTP if prompted
-    current_url = page.url
     html = page.content()
+    current_url = page.url
     needs_otp = (
         "ap/mfa" in current_url.lower()
         or "Enter OTP" in html
         or "Verify your identity" in html
         or 'name="otpCode"' in html
         or "Two-Step Verification" in html
+        or "approval needed" in html.lower()
     )
 
     if needs_otp:
         if not totp_secret:
-            logger.warning("2FA required but no TOTP secret — trying to proceed without")
+            logger.warning("2FA required but no TOTP secret available")
             return
 
-        logger.info("2FA required, generating TOTP code...")
-        otp = pyotp.TOTP(totp_secret).now()
+        import pyotp as _pyotp
+        logger.info("2FA required — generating TOTP code...")
+        otp = _pyotp.TOTP(totp_secret).now()
         try:
-            page.fill('input[name="otpCode"], input[type="tel"], input[autocomplete="one-time-code"]',
-                      otp, timeout=10000)
-            page.check('input[name="rememberDevice"]', timeout=3000)
+            page.wait_for_selector(
+                'input[name="otpCode"], input[type="tel"], input[autocomplete="one-time-code"]',
+                timeout=10000
+            )
+            page.fill(
+                'input[name="otpCode"], input[type="tel"], input[autocomplete="one-time-code"]',
+                otp
+            )
+        except Exception as e:
+            logger.warning("Could not fill OTP field: %s", e)
+            return
+
+        try:
+            page.check('input[name="rememberDevice"]', timeout=2000)
         except Exception:
             pass
+
         try:
             page.click('[type="submit"]', timeout=5000)
         except Exception:
+            page.keyboard.press("Enter")
+
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=20000)
+        except Exception:
             pass
-        page.wait_for_load_state("domcontentloaded", timeout=20000)
         time.sleep(2)
 
     logger.info("Login step complete. URL: %s", page.url)
