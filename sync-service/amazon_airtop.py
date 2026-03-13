@@ -127,6 +127,16 @@ def get_amazon_tokens(
             final_url = page.url
             logger.info("Post-login URL: %s", final_url)
             if "affiliate-program.amazon.com" not in final_url:
+                # Capture page state for diagnosis
+                try:
+                    error_text = page.evaluate("""() => {
+                        const els = [...document.querySelectorAll(".a-alert-content, #auth-error-message-box, #auth-warning, h1, h4, p")];
+                        return els.map(e => e.textContent.trim()).filter(Boolean).slice(0, 5).join(" | ");
+                    }""")
+                    logger.error("Amazon page content after login: %s", error_text or "(empty)")
+                    logger.error("Page title: %s", page.title())
+                except Exception as _dbg:
+                    logger.warning("Debug capture failed: %s", _dbg)
                 logger.error("Login failed — stuck at: %s", final_url)
                 return None
 
