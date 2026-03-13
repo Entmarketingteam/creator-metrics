@@ -130,16 +130,28 @@ def get_amazon_tokens(
                         name, _, value = pair.partition("=")
                         cookies.append({"name": name.strip(), "value": value.strip(),
                                         "domain": ".amazon.com", "path": "/"})
+
+                # Also inject x-main cookie (long-lived, stored separately)
+                creator_key2 = store_env_map.get(store_id, "") if store_id else ""
+                x_main = os.environ.get(f"AMAZON_{creator_key2}_X_MAIN", "") if creator_key2 else ""
+                if x_main:
+                    cookies.append({"name": "x-main", "value": x_main,
+                                    "domain": ".amazon.com", "path": "/"})
+
                 try:
                     context = page.context
                     context.add_cookies(cookies)
                     logger.info("Injected %d cookies — navigating to Associates...", len(cookies))
                     page.goto(ASSOCIATES_HOME, wait_until="domcontentloaded", timeout=30000)
-                    time.sleep(3)
-                    if "affiliate-program.amazon.com" in page.url:
-                        logger.info("Cookie injection succeeded — skipped login")
+                    # Wait up to 8 seconds for any JS redirects to settle
+                    for _ in range(8):
+                        time.sleep(1)
+                        if "signin" in page.url or page.url == ASSOCIATES_HOME or "affiliate-program.amazon.com" in page.url:
+                            break
+                    if "affiliate-program.amazon.com" in page.url and "signin" not in page.url:
+                        logger.info("Cookie injection succeeded (url=%s) — skipped login", page.url)
                     else:
-                        logger.info("Cookies expired/invalid (url=%s) — falling back to login", page.url)
+                        logger.info("Cookies invalid/expired (url=%s) — falling back to login", page.url)
                         saved_cookies_str = ""  # Force login fallback
                 except Exception as ce:
                     logger.warning("Cookie injection failed: %s — falling back to login", ce)
