@@ -1,195 +1,158 @@
 # Amazon Affiliate Sync — Implementation Plan
-**Date:** 2026-03-12
-**Status:** Ready to implement
+**Date:** 2026-03-12 (updated after API research)
+**Status:** Ready to implement — two viable paths
 **Priority:** High — last missing platform for Nicki's full earnings dashboard
 
 ---
 
-## Context / What Failed Before
+## Hard Reality: There Is No Amazon Earnings API
 
-| Attempt | Approach | Why It Failed |
-|---------|----------|---------------|
-| 1 | Airtop + DOM scraping | Associates Central SPA loads blank HTML, can't scrape |
-| 2 | Playwright + TOTP 2FA | Amazon bot detection, CAPTCHAs |
-| 3 | Playwright + stealth | Still flagged |
-| 4 | Stored session cookies | Cookies expire, manual re-extraction needed, fragile |
+| What we tried / researched | Verdict |
+|---------------------------|---------|
+| Playwright + TOTP 2FA | Killed by bot detection |
+| Playwright + stealth | Still flagged |
+| Stored session cookies | Works but expires; manual re-extraction needed |
+| Amazon Creators API (`creatorsapi::default`) | **Product search API only** — zero earnings data |
+| S3 Data Feed (bulk export) | **Deprecated Jan 31, 2026** — already gone |
+| PA-API credentials from Associates dashboard | Product lookup only; also deprecated Apr 30, 2026 |
+| Any future earnings API | Amazon keeps promising one; nothing exists as of March 2026 |
 
-**Key insight:** We have a registered Amazon developer app with OAuth credentials already in Doppler (`ent-agency-analytics`). None of the previous attempts used the official API — they all tried to scrape the Associates Central UI. The proper path is the **Amazon Creators API** via OAuth2.
+**Amazon's official position:** There is no programmatic earnings API for the Associates program. This has been the case for years and has not changed with the Creators API launch.
 
----
-
-## What We Have in Doppler (ent-agency-analytics)
-
-```
-AMAZON_CLIENT_ID     = amzn1.application-oa2-client.f756...
-AMAZON_CLIENT_SECRET = amzn1.oa2-cs.v1.b734...
-AMAZON_OAUTH_SCOPE   = creatorsapi::default
-AMAZON_TOKEN_ENDPOINT = https://api.amazon.com/auth/O2/token
-AMAZON_ASSOCIATE_TAG = nickientenman-20
-AMAZON_API_VERSION   = 3.1
-```
-
-This is an **Amazon Influencer / Creators API** app — not the old Product Advertising API.
+The credentials Nicki can generate in her Associates Central dashboard are PA-API keys (product search) — not useful for earnings.
 
 ---
 
-## Step 1 — Test Auth Flow (do this first)
+## Two Paths That Can Actually Work
 
-### Option A: Client Credentials (no user involvement)
+---
 
-Try this first. Some Creators API scopes support machine-to-machine auth:
+### Path A: Manual CSV Upload (Recommended — Build This First)
 
-```bash
-curl -X POST https://api.amazon.com/auth/O2/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=$AMAZON_CLIENT_ID" \
-  -d "client_secret=$AMAZON_CLIENT_SECRET" \
-  -d "scope=creatorsapi::default"
+**How it works:** Amazon lets you export a CSV from Associates Central manually. Build a drag-and-drop upload page in creator-metrics. Creator uploads it once a month. System parses and stores it.
+
+**Why this is the right call:**
+- Zero Amazon auth complexity
+- No cookies to expire
+- No bot detection
+- Amazon's own export format is reliable
+- Takes ~30 seconds for a creator to do monthly
+- Same data you'd get from any API anyway
+
+**Files to build:**
+
+```
+app/dashboard/earnings/upload/page.tsx        # Upload UI — drag & drop CSV
+app/api/earnings/amazon-upload/route.ts       # Parse CSV + upsert to DB
+lib/amazon-csv.ts                             # CSV parser (see format below)
 ```
 
-**If this returns a token → we're done with auth, go to Step 2.**
-
-**If it returns `unsupported_grant_type` or `invalid_scope`:**
-
-### Option B: Authorization Code Flow (creator must authorize once)
-
-The creator visits a URL, logs in, and grants access. We get a one-time `code`, exchange it for `access_token` + `refresh_token`. Store the refresh token in Doppler. From that point on, the cron uses the refresh token silently.
-
-**One-time auth URL to send to Nicki:**
-```
-https://www.amazon.com/ap/oa
-  ?client_id=amzn1.application-oa2-client.f75634668bf3400dacf6b3c13f9e28a2
-  &scope=creatorsapi::default
-  &response_type=code
-  &redirect_uri=https://creator-metrics.vercel.app/api/amazon/callback
-  &state=nicki_entenmann
+**Amazon Associates CSV format** (from Reports > Earnings Report):
+```csv
+Date,Clicks,Ordered Items,Shipped Items,Returns,Shipped Revenue,Shipped Earnings,...
+2026-02-01,45,3,3,0,"$147.50","$8.85",...
 ```
 
-**Callback handler** (`/api/amazon/callback`) exchanges code for tokens:
+Key columns: `Date`, `Clicks`, `Ordered Items`, `Shipped Items`, `Shipped Revenue`, `Shipped Earnings`
+
+**Upsert logic:**
+- Parse each row → insert into `platform_earnings` with `platform = 'amazon'`
+- Use `period_start = date`, `period_end = date` (daily rows)
+- On conflict: update (idempotent re-uploads are fine)
+
+**UI:** Add an "Upload Amazon Report" button on the earnings page, visible only for creators where `platform = amazon`. Keep it simple — file input + upload button, show "X rows imported."
+
+---
+
+### Path B: Stored Cookies Refresh (Automated — Build This Second)
+
+The last working approach (`commit 3ac49e5`) used stored cookies to download the CSV programmatically. It worked. The problem was cookies expiring with no alert.
+
+**Fix: add a cookie health check + Slack alert.**
+
+**How it works:**
+1. Nicki or Ethan runs `extract_amazon_cookies.py` locally once (takes ~2 min — just logs in via browser script)
+2. Cookie string saved to Doppler as `AMAZON_NICKI_COOKIES`
+3. Daily cron downloads CSV via HTTP using stored cookies
+4. If cookies expired (redirect to login page detected) → post Slack alert with instructions to re-extract
+
+**Files to build:**
+
 ```
-POST https://api.amazon.com/auth/O2/token
-  grant_type=authorization_code
-  code={code from callback}
-  client_id=...
-  client_secret=...
-  redirect_uri=https://creator-metrics.vercel.app/api/amazon/callback
+sync-service/extract_amazon_cookies.py        # Already exists at commit 3ac49e5
+app/api/cron/amazon-sync/route.ts             # Daily cron (see commit 3ac49e5 for Python version)
+lib/amazon.ts                                  # Cookie-based HTTP download + CSV parse
 ```
 
-Store `refresh_token` in Doppler as `AMAZON_NICKI_REFRESH_TOKEN`.
-
-**Token refresh in cron:**
+**Cookie health check in cron:**
+```typescript
+// After fetching, check if we got the login page instead of CSV
+if (responseText.includes('ap/signin') || responseText.includes('Sign in to your account')) {
+  await notifySlack('⚠️ Amazon cookies expired for Nicki — re-run extract_amazon_cookies.py');
+  return NextResponse.json({ error: 'cookies_expired' }, { status: 200 }); // 200 so cron doesn't retry
+}
 ```
-POST https://api.amazon.com/auth/O2/token
-  grant_type=refresh_token
-  refresh_token=$AMAZON_NICKI_REFRESH_TOKEN
-  client_id=...
-  client_secret=...
+
+**Cookie lifespan:** Amazon session cookies typically last 3–6 months. With an alert, re-extraction is a 2-minute task.
+
+**Doppler secrets needed:**
+```
+AMAZON_NICKI_COOKIES = "session-id=...; session-id-time=...; ubid-main=...; ..."
 ```
 
 ---
 
-## Step 2 — Find the Earnings Endpoints
+## Recommendation: Build Path A First
 
-The `creatorsapi::default` scope is the **Amazon Influencer Program / Creators API**. Possible base URLs (try in order):
+Path A (CSV upload) takes ~2 hours to build and gives you reliable data with zero Amazon auth headaches. It's also how most serious affiliate analytics tools actually work under the hood.
 
-### Candidate A: Amazon Creators API (Influencer program)
-```
-GET https://api.amazon.com/creators/v1/earnings
-GET https://api.amazon.com/creators/v1/analytics/earnings
-Authorization: Bearer {access_token}
-```
-
-### Candidate B: Associates API
-```
-GET https://affiliate-program.amazon.com/v1/reports
-GET https://affiliate-program.amazon.com/v3/commissions
-Authorization: Bearer {access_token}
-```
-
-### Candidate C: SP-API (Selling Partner — unlikely for affiliates)
-```
-GET https://sellingpartnerapi-na.amazon.com/finances/v0/financialEvents
-```
-
-### How to discover endpoints:
-After getting a valid token, try:
-```bash
-# Test with Creators API base
-curl https://api.amazon.com/creators/v1/profile \
-  -H "Authorization: Bearer {token}" \
-  -H "x-amz-date: $(date -u +%Y%m%dT%H%M%SZ)"
-
-# Check what error you get — 404 means wrong path, 403 means wrong scope/permissions
-```
-
-**The API docs are at:** https://developer.amazon.com/docs/creators/overview.html
-(May require logging into Amazon developer account to view)
+Path B (stored cookies) takes longer and requires Nicki to run a local script — save it for after Path A is live and you want full automation.
 
 ---
 
-## Step 3 — Data Model
+## CSV Upload Implementation (Path A Detail)
 
-What we want from Amazon (matches `platform_earnings` schema):
+### Route: `POST /api/earnings/amazon-upload`
 
-| Field | Amazon equivalent |
-|-------|-------------------|
-| `revenue` | Gross sales (shipped items × price) |
-| `commission` | Net affiliate earnings |
-| `clicks` | Clicks on affiliate links |
-| `orders` | Total orders placed |
-| `platform` | `"amazon"` |
-| `creator_id` | `"nicki_entenmann"` |
-| `period_start` | Start of reporting window |
-| `period_end` | End of reporting window |
+```typescript
+// lib/amazon-csv.ts — parse Amazon Associates earnings CSV
+export function parseAmazonEarningsCSV(csvText: string): AmazonRow[] {
+  // Skip Amazon's header rows (first ~3 rows are metadata)
+  // Find the row that starts with "Date" — that's the real header
+  // Parse each data row
+  // Return normalized rows
+}
 
-For `sales` table (transaction-level):
-- `product_name` — product title
-- `brand` — seller name
-- `revenue` — item price
-- `commission` — commission earned
-- `status` — `open` / `pending` / `paid`
+export interface AmazonRow {
+  date: string;          // "2026-02-01"
+  clicks: number;
+  orderedItems: number;
+  shippedItems: number;
+  shippedRevenue: number; // parse "$147.50" → 147.50
+  shippedEarnings: number;
+}
+```
+
+### Upsert to DB:
+```typescript
+// Upsert into platform_earnings per row
+// platform = 'amazon', creator_id from session
+// period_start = period_end = row.date (daily granularity)
+// revenue = shippedRevenue, commission = shippedEarnings
+// clicks = clicks, orders = shippedItems
+```
+
+### Upload UI:
+- Simple file input on `/dashboard/earnings/upload`
+- Show preview of first 5 rows before confirming
+- Progress indicator while upserting
+- "X rows imported, Y updated" result message
 
 ---
 
-## Step 4 — Implementation Files
+## Cron (Path B only)
 
-### Files to create:
-```
-lib/amazon.ts                          # Auth + API client
-app/api/cron/amazon-sync/route.ts      # Daily cron
-app/api/amazon/callback/route.ts       # OAuth callback (one-time setup)
-app/api/amazon/auth/route.ts           # Generates the auth URL
-```
-
-### Files to update:
-```
-vercel.json                            # Add amazon-sync cron
-lib/schema.ts                          # Add amazon_refresh_token to creator_tokens if needed
-```
-
-### Pattern to follow:
-Mirror `app/api/cron/shopmy-sync/route.ts` — it's the cleanest:
-1. Get token (from Doppler refresh_token or client_credentials)
-2. Fetch earnings summary → upsert to `platform_earnings`
-3. Fetch transactions → upsert to `sales`
-4. Return `{ success, upserted, errors }`
-
----
-
-## Step 5 — Fallback Plan (if API is inaccessible)
-
-If the Creators API doesn't expose earnings (some Creators API scopes only give content/storefront data, not earnings), the cleanest non-scraping fallback is:
-
-**Amazon Associates CSV download via cookie refresh:**
-- Build a one-time local script that a person runs in their browser (extension or bookmarklet) to export and upload the CSV
-- Or use the **SiteStripe API** (limited, but doesn't require full login)
-- Or check if Amazon has added an official Associates API (they've been promising one since 2023)
-
----
-
-## Cron Schedule to Add
-
+When Path B is built, add to `vercel.json`:
 ```json
 {
   "path": "/api/cron/amazon-sync",
@@ -197,44 +160,24 @@ If the Creators API doesn't expose earnings (some Creators API scopes only give 
 }
 ```
 
-9am UTC = 4am EST — after all other syncs settle.
+---
+
+## Start Here
+
+**For Path A (CSV upload):**
+1. Build `lib/amazon-csv.ts` parser
+2. Build `POST /api/earnings/amazon-upload` route
+3. Add upload button/page to dashboard
+4. Test with a real exported CSV from Nicki's Associates Central
+
+**To get a test CSV:**
+Associates Central → Reports → Earnings Report → select date range → Download
 
 ---
 
-## Env Vars Needed in Vercel
+## Reference
 
-Add from Doppler `ent-agency-analytics`:
-```
-AMAZON_CLIENT_ID
-AMAZON_CLIENT_SECRET
-AMAZON_OAUTH_SCOPE
-AMAZON_TOKEN_ENDPOINT
-```
-
-Add after OAuth flow completes (one per creator):
-```
-AMAZON_NICKI_REFRESH_TOKEN    (or to Doppler)
-```
-
----
-
-## Start Here Tomorrow
-
-```bash
-# 1. Load the env vars
-doppler run --project ent-agency-analytics --config prd -- bash
-
-# 2. Try client credentials first
-curl -X POST $AMAZON_TOKEN_ENDPOINT \
-  -d "grant_type=client_credentials&client_id=$AMAZON_CLIENT_ID&client_secret=$AMAZON_CLIENT_SECRET&scope=$AMAZON_OAUTH_SCOPE"
-
-# 3. If token returned, test against Creators API
-# 4. If 401/403, build the callback route and do auth code flow
-```
-
----
-
-## Notes
-- Associate tag for Nicki: `nickientenman-20` (already in Doppler)
-- Previous sync code lives in git history at commit `3ac49e5` (cookie approach) and `9400a69` (Playwright approach) — can reference for data parsing logic
-- The sync-service Python scripts (`sync-service/sync_amazon.py`) also have CSV parsing logic worth porting to TypeScript
+- Prior cookie-based sync: `git show 3ac49e5 -- sync-service/sync_amazon.py`
+- Prior cookie extractor: `git show 3ac49e5 -- sync-service/extract_amazon_cookies.py`
+- Schema: `amazonAssociateTag` column already exists in `creators` table
+- Associate tag for Nicki: `nickientenman-20` (in Doppler `ent-agency-analytics`)
