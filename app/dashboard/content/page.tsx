@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import PostCard, { type PostCardData } from "@/components/PostCard";
-import { detectPlatform } from "@/lib/attribution";
+import { detectPlatform, detectManyChat } from "@/lib/attribution";
 import { ImageIcon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 const PLATFORM_FILTERS = [
   { label: "All",       value: "" },
   { label: "Has Link",  value: "has-link" },
+  { label: "ManyChat",  value: "manychat" },
   { label: "Mavely",    value: "mavely" },
   { label: "ShopMy",    value: "shopmy" },
   { label: "LTK",       value: "ltk" },
@@ -48,9 +49,6 @@ export default async function ContentPage({
   const platformFilter = params.platform ?? "";
   const typeFilter = params.type ?? "";
 
-  // Fetch latest snapshot per post in date range
-  // Schema columns: media_ig_id, timestamp (postedAt), media_type, media_url,
-  // thumbnail_url, permalink, like_count, comments_count, reach, saved, captured_at
   const mediaRows = await db.execute(sql`
     SELECT DISTINCT ON (media_ig_id)
       media_ig_id,
@@ -60,6 +58,7 @@ export default async function ContentPage({
       thumbnail_url,
       permalink,
       link_url,
+      caption,
       like_count,
       comments_count,
       reach,
@@ -71,10 +70,10 @@ export default async function ContentPage({
     ORDER BY media_ig_id, captured_at DESC
   `);
 
-  // Enrich with platform detection (from permalink — will be null for all IG URLs)
   const posts: PostCardData[] = (mediaRows as any[])
     .map((row) => {
       const platform = detectPlatform((row as any).link_url ?? row.permalink);
+      const manychatKeyword = detectManyChat(row.caption);
       return {
         mediaIgId: String(row.media_ig_id),
         postedAt: String(row.posted_at),
@@ -82,6 +81,7 @@ export default async function ContentPage({
         thumbnailUrl: (row.thumbnail_url ?? row.media_url ?? null) as string | null,
         linkUrl: ((row as any).link_url ?? row.permalink ?? null) as string | null,
         platform,
+        manychatKeyword,
         reach: Number(row.reach ?? 0),
         likes: Number(row.like_count ?? 0),
         comments: Number(row.comments_count ?? 0),
@@ -94,7 +94,9 @@ export default async function ContentPage({
     .filter((p) => {
       const platformMatch =
         !platformFilter ||
-        (platformFilter === "has-link" ? !!p.platform : p.platform === platformFilter);
+        (platformFilter === "has-link" ? !!p.platform :
+         platformFilter === "manychat" ? !!p.manychatKeyword :
+         p.platform === platformFilter);
       const typeMatch =
         !typeFilter || p.type.includes(typeFilter);
       return platformMatch && typeMatch;
@@ -116,6 +118,8 @@ export default async function ContentPage({
     );
     return `/dashboard/content${urlParams.size > 0 ? `?${urlParams.toString()}` : ""}`;
   };
+
+  const manychatCount = posts.filter((p) => p.manychatKeyword).length;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -169,6 +173,7 @@ export default async function ContentPage({
       <div className="flex items-center gap-6 text-sm text-gray-500">
         <span>{posts.length} posts</span>
         <span>{posts.filter((p) => p.platform).length} with affiliate links</span>
+        <span className="text-orange-400">{manychatCount} ManyChat triggers</span>
         <span>{posts.filter((p) => p.platform === "mavely").length} Mavely</span>
         <span>{posts.filter((p) => p.platform === "ltk").length} LTK</span>
         <span>{posts.filter((p) => p.platform === "shopmy").length} ShopMy</span>

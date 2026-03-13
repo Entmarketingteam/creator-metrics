@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { detectPlatform } from "@/lib/attribution";
+import { detectPlatform, detectManyChat } from "@/lib/attribution";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +19,9 @@ export async function GET(
   const startDate = searchParams.get("startDate") ?? thirtyDaysAgo;
   const endDate = searchParams.get("endDate") ?? today;
   const type = searchParams.get("type"); // "reel" | "image" | "story" | null
-  const platform = searchParams.get("platform"); // "mavely" | "ltk" | etc | null
+  const platform = searchParams.get("platform"); // "mavely" | "ltk" | "manychat" | etc | null
   const creatorId = params.id;
 
-  // Fetch media snapshots for the date range
-  // NOTE: DB column for postedAt is "timestamp" (not "posted_at")
-  // We deduplicate by taking the latest snapshot per media_ig_id
   const mediaRows = await db.execute(sql`
     SELECT DISTINCT ON (media_ig_id)
       media_ig_id,
@@ -34,6 +31,7 @@ export async function GET(
       thumbnail_url,
       permalink,
       link_url,
+      caption,
       like_count,
       comments_count,
       reach,
@@ -47,13 +45,14 @@ export async function GET(
     LIMIT 100
   `);
 
-  // Enrich each post with platform detection and revenue attribution
   const posts = await Promise.all(
     (mediaRows as any[]).map(async (row) => {
       const detectedPlatform = detectPlatform(row.link_url ?? row.permalink);
+      const manychatKeyword = detectManyChat(row.caption);
 
       // Platform filter
-      if (platform && platform !== "has-link" && detectedPlatform !== platform) return null;
+      if (platform === "manychat" && !manychatKeyword) return null;
+      if (platform && platform !== "has-link" && platform !== "manychat" && detectedPlatform !== platform) return null;
       if (platform === "has-link" && !detectedPlatform) return null;
 
       // Type filter
@@ -65,7 +64,6 @@ export async function GET(
       let orders: number | null = null;
 
       if (detectedPlatform === "mavely" && row.permalink) {
-        // mavely_transactions: referrer column, sale_date column, commission_amount is NUMERIC
         const revenueRow = await db.execute(sql`
           SELECT COALESCE(SUM(commission_amount), 0) AS revenue,
                  COUNT(*) AS orders
@@ -83,7 +81,6 @@ export async function GET(
       }
 
       if (detectedPlatform === "ltk" && row.permalink) {
-        // ltk_posts: commissions column, share_url column, date_published column
         const revenueRow = await db.execute(sql`
           SELECT COALESCE(SUM(commissions), 0) AS revenue,
                  COALESCE(SUM(orders), 0) AS orders
@@ -107,6 +104,7 @@ export async function GET(
         thumbnailUrl: row.thumbnail_url ?? row.media_url ?? null,
         linkUrl: row.link_url ?? row.permalink ?? null,
         platform: detectedPlatform,
+        manychatKeyword,
         reach: Number(row.reach ?? 0),
         likes: Number(row.like_count ?? 0),
         comments: Number(row.comments_count ?? 0),

@@ -26,3 +26,14 @@ export function detectPlatform(url: string | null | undefined): AffiliatePlatfor
   }
   return null;
 }
+
+/**
+ * Detects ManyChat comment-trigger keywords in a caption.
+ * Matches patterns like "comment SHOP", "comment "WORD"", "comment 222".
+ * Returns the trigger keyword (uppercase), or null if none found.
+ */
+export function detectManyChat(caption: string | null | undefined): string | null {
+  if (!caption) return null;
+  const m = caption.match(/\bcomment\s+["']?([A-Z0-9][A-Z0-9 ]{1,30})["']?/);
+  return m ? m[1].trim() : null;
+}

@@ -1,5 +1,6 @@
 import { formatCurrency } from "@/lib/utils";
 import type { AffiliatePlatform } from "@/lib/attribution";
+import { MessageCircle } from "lucide-react";
 
 export interface PostCardData {
   mediaIgId: string;
@@ -8,6 +9,7 @@ export interface PostCardData {
   thumbnailUrl: string | null;
   linkUrl: string | null;
   platform: AffiliatePlatform | null;
+  manychatKeyword: string | null;
   reach: number;
   likes: number;
   comments: number;
@@ -68,6 +70,11 @@ export default function PostCard({ post }: { post: PostCardData }) {
         {platformStyle ? (
           <span className={`absolute top-2 left-2 ${platformStyle.bg} ${platformStyle.text} text-[10px] font-bold px-2 py-0.5 rounded-full`}>
             {platformStyle.label}
+          </span>
+        ) : post.manychatKeyword ? (
+          <span className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+            <MessageCircle className="w-2.5 h-2.5" />
+            {post.manychatKeyword}
           </span>
         ) : (
           <span className="absolute top-2 left-2 bg-gray-800/80 text-gray-400 text-[10px] font-medium px-2 py-0.5 rounded-full">
