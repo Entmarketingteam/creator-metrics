@@ -138,7 +138,6 @@ export default async function AmazonEarningsPage() {
         permalink,
         caption,
         reach,
-        views_count,
         like_count,
         comments_count,
         total_interactions
@@ -165,7 +164,6 @@ export default async function AmazonEarningsPage() {
     permalink: r.permalink ? String(r.permalink) : null,
     caption: r.caption ? String(r.caption).slice(0, 180) : "",
     reach: r.reach ? Number(r.reach) : null,
-    views: r.views_count ? Number(r.views_count) : null,
     likes: r.like_count ? Number(r.like_count) : null,
     comments: r.comments_count ? Number(r.comments_count) : null,
   }));
@@ -406,12 +404,12 @@ export default async function AmazonEarningsPage() {
                   </div>
                   {/* Engagement metrics */}
                   <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground">
-                    {(post.views ?? post.reach) != null && (
+                    {post.reach != null && (
                       <span className="flex items-center gap-0.5">
                         <Eye className="h-3 w-3" />
-                        {((post.views ?? post.reach)! >= 1000
-                          ? ((post.views ?? post.reach)! / 1000).toFixed(1) + "K"
-                          : (post.views ?? post.reach)!.toLocaleString())}
+                        {post.reach >= 1000
+                          ? (post.reach / 1000).toFixed(1) + "K"
+                          : post.reach.toLocaleString()}
                       </span>
                     )}
                     {post.likes != null && (
