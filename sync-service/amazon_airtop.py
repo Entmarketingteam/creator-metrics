@@ -259,8 +259,22 @@ def _do_login(page, email: str, password: str, totp_secret=None):
         pass
 
     # Step 1: Email field
-    page.wait_for_selector('input[name="email"]', timeout=15000)
-    page.fill('input[name="email"]', email)
+    # Amazon may pre-fill the email (hidden input) — check if email is visible or pre-filled
+    try:
+        # Check if email is already pre-filled (hidden input with our email value)
+        pre_filled = page.locator(f'input[name="email"][value="{email}"][type="hidden"]')
+        if pre_filled.count() > 0:
+            logger.info("Email pre-filled by Amazon — clicking Continue...")
+        else:
+            # Email field is visible — fill it
+            page.wait_for_selector('input[name="email"]:not([type="hidden"])', timeout=10000)
+            page.fill('input[name="email"]', email)
+    except Exception:
+        # Fallback: try to fill visible email field
+        try:
+            page.fill('input[name="email"]', email)
+        except Exception:
+            pass
     # Click Continue button
     try:
         page.click('input[id="continue"]', timeout=5000)
