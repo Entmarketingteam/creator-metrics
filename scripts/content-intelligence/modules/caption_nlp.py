@@ -56,6 +56,9 @@ STOP_WORDS = {
 # SEO scoring (IG July 2025 Google indexing update)
 # ---------------------------------------------------------------------------
 
+_RE_HASHTAG = re.compile(r"#\w+")
+_RE_MENTION = re.compile(r"@(\w+)")
+
 _RE_DM_CTA = re.compile(
     r"\b(dm\s+me|dm\s+for|comment\s+.{1,20}\s+and\s+i|reply\s+.{0,10}\s+for|"
     r"send\s+me\s+a\s+dm|message\s+me)\b",
@@ -176,13 +179,8 @@ def calculate_seo_score(caption: str, features: dict) -> dict:
         cta_pts = 8
         cta_type = "link_bio"
     else:
-        generic_cta = re.compile(r"\b(shop|buy|click|tap|get)\b", re.IGNORECASE)
-        if generic_cta.search(caption):
-            cta_pts = 4
-            cta_type = "link_bio"
-        else:
-            cta_pts = 0
-            cta_type = "none"
+        cta_pts = 0
+        cta_type = "none"
 
     # ── Brand mentions ────────────────────────────────────────────────
     mention_count = features.get("mention_count") if features else None
@@ -210,7 +208,7 @@ def calculate_seo_score(caption: str, features: dict) -> dict:
         "alt_text_flag":        alt_pts,
         "engagement_mechanics": eng_mech_pts,
     }
-    total = sum(breakdown.values())
+    total = int(sum(breakdown.values()))
 
     return {
         "seo_score":          total,
@@ -277,8 +275,6 @@ _RE_EMOJI = re.compile(
     "]+",
     flags=re.UNICODE,
 )
-_RE_HASHTAG = re.compile(r"#\w+")
-_RE_MENTION = re.compile(r"@(\w+)")
 _RE_URL = re.compile(r"https?://\S+|www\.\S+")
 _RE_LTK = re.compile(r"liketk\.it/\S+")
 _RE_AMAZON = re.compile(r"amazon\.com/\S+|amzn\.to/\S+")
