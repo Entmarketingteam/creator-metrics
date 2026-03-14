@@ -262,7 +262,14 @@ export async function POST(req: NextRequest) {
   const slackData = await slackRes.json() as { ok: boolean; error?: string };
   if (!slackData.ok) {
     return NextResponse.json(
-      { error: "Slack post failed", detail: slackData.error },
+      {
+        error: "Slack post failed",
+        detail: slackData.error,
+        debug: {
+          channel: slackChannelId,
+          tokenPrefix: slackBotToken.slice(0, 20),
+        },
+      },
       { status: 502 }
     );
   }
