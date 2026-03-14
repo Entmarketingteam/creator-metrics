@@ -27,6 +27,7 @@
     {
       "path": "/api/cron/amazon-sync",
       "schedule": "30 8 * * *"
-    }
+    },
+    { "path": "/api/cron/caption-analyze", "schedule": "0 9 * * *" }
   ]
 }
