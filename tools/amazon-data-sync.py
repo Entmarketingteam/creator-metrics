@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import os
 import subprocess
 import sys
 import json
@@ -244,26 +245,37 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
         print(f"  {year}-{month:02d}: revenue={revenue} commission={commission} clicks={clicks} orders={orders}")
         monthly_payload.append(row)
 
-    # ── Daily earnings (last N days) ───────────────────────────────────
-    print(f"\n[{creator}] Fetching daily earnings (last {days} days)...")
+    # ── Daily earnings (last N days) — chunked in 90-day windows ──────
+    # Amazon returns aggregated (non-daily) rows for large date ranges;
+    # chunking to <=90 days ensures per-day granularity.
+    CHUNK_DAYS = 90
+    print(f"\n[{creator}] Fetching daily earnings (last {days} days, {CHUNK_DAYS}-day chunks)...")
     day_end = now.date()
     day_start = day_end - timedelta(days=days - 1)
-    daily_rows = fetch_daily_earnings(headers, tag, str(day_start), str(day_end))
-
-    if daily_rows is None:
-        print(f"  WARN Daily fetch failed — skipping")
-        daily_rows = []
-    else:
-        # Normalize commission field name from API
-        for r in daily_rows:
-            if "commission_earnings" in r and "commission" not in r:
-                r["commission"] = r.pop("commission_earnings")
-        print(f"  {len(daily_rows)} daily rows fetched")
-        if dry_run:
-            for r in daily_rows[:3]:
-                print(f"    {r}")
-            if len(daily_rows) > 3:
-                print(f"    ... and {len(daily_rows) - 3} more")
+    daily_rows = []
+    chunk_end = day_end
+    while chunk_end >= day_start:
+        chunk_start = max(day_start, chunk_end - timedelta(days=CHUNK_DAYS - 1))
+        chunk = fetch_daily_earnings(headers, tag, str(chunk_start), str(chunk_end))
+        if chunk is None:
+            print(f"  WARN Daily chunk {chunk_start}..{chunk_end} failed — skipping")
+        else:
+            # Only keep rows that have a 'day' field (true daily granularity)
+            valid = [r for r in chunk if r.get("day")]
+            if len(valid) < len(chunk):
+                print(f"  WARN Skipped {len(chunk)-len(valid)} rows without day field in {chunk_start}..{chunk_end}")
+            # Normalize commission field name from API
+            for r in valid:
+                if "commission_earnings" in r and "commission" not in r:
+                    r["commission"] = r.pop("commission_earnings")
+            daily_rows.extend(valid)
+        chunk_end = chunk_start - timedelta(days=1)
+    print(f"  {len(daily_rows)} daily rows fetched total")
+    if dry_run:
+        for r in daily_rows[:3]:
+            print(f"    {r}")
+        if len(daily_rows) > 3:
+            print(f"    ... and {len(daily_rows) - 3} more")
 
     # ── Per-ASIN orders (last N days) ──────────────────────────────────
     print(f"\n[{creator}] Fetching per-ASIN orders (last {days} days)...")
@@ -290,18 +302,27 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
         print(f"\n  [dry-run] {creator}: {len(monthly_payload)} months, {len(daily_rows)} daily, {len(order_rows)} orders — not written")
         return
 
-    # ── Push everything to Vercel → Supabase ───────────────────────────
+    # ── Push everything to Vercel → Supabase (batched to avoid timeouts) ──
+    DAILY_BATCH = 100
     print(f"\n[{creator}] Pushing to DB via Vercel endpoint...")
     push_ok = False
+    total_monthly = total_daily = total_orders = 0
     try:
-        result = push_to_vercel(creator_db_id, monthly_payload, daily_rows, order_rows)
-        m = result.get("results", {}).get("monthly", {})
-        d = result.get("results", {}).get("daily", {})
-        o = result.get("results", {}).get("orders", {})
-        print(f"  OK monthly={m.get('upserted',0)} daily={d.get('upserted',0)} orders={o.get('upserted',0)}")
-        errs = result.get("total_errors", 0)
-        if errs:
-            print(f"  WARN {errs} errors — check response")
+        # First pass: monthly + first daily batch + all orders
+        first_daily = daily_rows[:DAILY_BATCH]
+        result = push_to_vercel(creator_db_id, monthly_payload, first_daily, order_rows)
+        total_monthly += result.get("results", {}).get("monthly", {}).get("upserted", 0)
+        total_daily += result.get("results", {}).get("daily", {}).get("upserted", 0)
+        total_orders += result.get("results", {}).get("orders", {}).get("upserted", 0)
+        # Subsequent daily batches (no monthly/orders to avoid duplicate work)
+        for i in range(DAILY_BATCH, len(daily_rows), DAILY_BATCH):
+            batch = daily_rows[i:i + DAILY_BATCH]
+            r = push_to_vercel(creator_db_id, [], batch, [])
+            upserted = r.get("results", {}).get("daily", {}).get("upserted", 0)
+            total_daily += upserted
+            errs = r.get("total_errors", 0)
+            print(f"  batch {i//DAILY_BATCH+1}: {upserted} daily upserted" + (f" ({errs} errors)" if errs else ""))
+        print(f"  OK monthly={total_monthly} daily={total_daily} orders={total_orders}")
         push_ok = True
     except Exception as e:
         print(f"  ERROR Push failed: {e}")
