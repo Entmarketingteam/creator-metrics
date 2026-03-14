@@ -1,0 +1,2136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Content Intelligence Report — {{CREATOR_NAME}}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-light: #e0e7ff;
+      --primary-dark: #4338ca;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #d1fae5;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ─── Page Header ─── */
+    .page-header {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #818cf8 100%);
+      color: white;
+      padding: 48px 40px 40px;
+    }
+    .page-header .inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    .header-title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+    .header-subtitle { font-size: 15px; opacity: 0.8; margin-top: 4px; }
+    .date-badge {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 24px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+    }
+    .generated-at {
+      font-size: 12px;
+      opacity: 0.6;
+      margin-top: 16px;
+    }
+
+    /* ─── Layout ─── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ─── Hero Stats ─── */
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 900px) { .hero-stats { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .hero-stats { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border-top: 3px solid var(--primary);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .stat-card.accent { border-top-color: var(--accent); }
+    .stat-card.success { border-top-color: var(--success); }
+    .stat-icon { font-size: 22px; margin-bottom: 8px; }
+    .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--gray-500); margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 800; color: var(--gray-900); line-height: 1.1; }
+    .stat-sub { font-size: 12px; color: var(--gray-500); margin-top: 4px; }
+
+    /* ─── Insight Cards ─── */
+    .insight-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    @media (max-width: 768px) { .insight-cards { grid-template-columns: 1fr; } }
+
+    .insight-card {
+      background: linear-gradient(135deg, var(--primary-light), white);
+      border: 1px solid var(--primary-light);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .insight-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
+    .insight-text { font-size: 14px; color: var(--gray-700); line-height: 1.5; font-weight: 500; }
+
+    /* ─── Section ─── */
+    .section {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .section-icon { font-size: 20px; }
+    .section-title { font-size: 18px; font-weight: 700; color: var(--gray-900); }
+    .section-sub { font-size: 13px; color: var(--gray-500); margin-left: auto; }
+
+    /* ─── Chart containers ─── */
+    .chart-wrap { position: relative; }
+    .chart-wrap canvas { max-width: 100%; }
+
+    /* ─── Toggle buttons ─── */
+    .toggle-group {
+      display: flex;
+      gap: 4px;
+      background: var(--gray-100);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+      width: fit-content;
+    }
+    .toggle-btn {
+      padding: 6px 16px;
+      border: none;
+      background: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--gray-600);
+      transition: all 0.15s;
+    }
+    .toggle-btn.active {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      font-weight: 600;
+    }
+
+    /* ─── Attribution Table ─── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      background: var(--gray-50);
+      color: var(--gray-600);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      white-space: nowrap;
+    }
+    tbody td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+    tbody tr:hover { background: var(--gray-50); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--gray-200);
+      display: block;
+    }
+    .thumb-placeholder {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--primary-light), var(--accent-light));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .badge-url { background: var(--success-light); color: #065f46; }
+    .badge-date { background: var(--accent-light); color: #92400e; }
+    .badge-none { background: var(--gray-100); color: var(--gray-500); }
+
+    .confidence-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .conf-track {
+      width: 60px;
+      height: 6px;
+      background: var(--gray-200);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .conf-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--success);
+    }
+    .conf-fill.medium { background: var(--accent); }
+    .conf-fill.low { background: var(--gray-400); }
+    .conf-label { font-size: 11px; color: var(--gray-500); }
+
+    /* ─── Attribution stats bar ─── */
+    .attr-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 640px) { .attr-stats { grid-template-columns: repeat(2, 1fr); } }
+
+    .attr-stat { text-align: center; }
+    .attr-stat-value { font-size: 28px; font-weight: 800; color: var(--primary); }
+    .attr-stat-label { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+
+    /* ─── Post Cards Grid ─── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 900px) { .cards-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .post-card {
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .post-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+
+    .post-img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent-light) 100%);
+      display: block;
+    }
+    .post-img-placeholder {
+      width: 100%;
+      aspect-ratio: 1;
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent-light) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+    .post-body { padding: 12px; }
+    .post-commission { font-size: 18px; font-weight: 800; color: var(--success); }
+    .post-date { font-size: 11px; color: var(--gray-500); margin-bottom: 6px; }
+    .post-meta { display: flex; gap: 10px; margin-top: 8px; }
+    .post-metric { font-size: 12px; color: var(--gray-600); }
+    .post-metric span { font-weight: 600; color: var(--gray-800); }
+    .post-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .post-tag {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+    .post-rank {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: var(--accent);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .post-img-wrap { position: relative; }
+
+    /* ─── Theme donut + cards ─── */
+    .themes-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 32px;
+      align-items: flex-start;
+    }
+    @media (max-width: 768px) { .themes-layout { grid-template-columns: 1fr; } }
+
+    .theme-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 500px) { .theme-cards-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .theme-card {
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      transition: border-color 0.15s;
+    }
+    .theme-card:hover { border-color: var(--primary); }
+    .theme-name { font-size: 13px; font-weight: 600; text-transform: capitalize; margin-bottom: 4px; }
+    .theme-avg { font-size: 16px; font-weight: 700; color: var(--success); }
+    .theme-count { font-size: 11px; color: var(--gray-500); }
+    .theme-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+    /* ─── Caption Stats Chips ─── */
+    .caption-stat-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .caption-stat-chip {
+      background: white;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 140px;
+      flex: 1;
+      box-shadow: var(--shadow);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .caption-stat-chip:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+    .caption-stat-chip-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1.1;
+    }
+    .caption-stat-chip-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+
+    /* ─── What Goes Viral panel ─── */
+    .viral-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 0;
+    }
+    @media (max-width: 768px) { .viral-grid { grid-template-columns: 1fr; } }
+
+    .viral-chart-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-600);
+      margin-bottom: 12px;
+      text-transform: none;
+    }
+
+    /* ─── Caption / NLP ─── */
+    .captions-layout {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 32px;
+    }
+    @media (max-width: 768px) { .captions-layout { grid-template-columns: 1fr; } }
+
+    .caption-examples { display: flex; flex-direction: column; gap: 14px; }
+    .caption-example {
+      background: var(--gray-50);
+      border-left: 3px solid var(--primary);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 12px 14px;
+    }
+    .caption-example-text { font-size: 13px; color: var(--gray-700); line-height: 1.6; font-style: italic; }
+    .caption-example-meta { font-size: 11px; color: var(--gray-500); margin-top: 6px; }
+
+    /* ─── Reels Table ─── */
+    .reel-metric { display: flex; align-items: center; gap: 4px; }
+    .reel-metric-icon { font-size: 13px; }
+    .top-reel { background: linear-gradient(90deg, rgba(99,102,241,0.06) 0%, transparent 100%); }
+
+    /* ─── Seasonal annotation labels ─── */
+    .season-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-600); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ─── Top Performers ─── */
+    .top-performers {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 900px) { .top-performers { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .top-performers { grid-template-columns: 1fr; } }
+
+    .performer-card {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      border-top: 3px solid var(--accent);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .performer-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+    .performer-card.ltk-card  { border-top-color: var(--success); }
+    .performer-card.story-card { border-top-color: var(--primary); }
+    .performer-card.reel-card  { border-top-color: var(--accent); }
+
+    .performer-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .performer-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--gray-500);
+    }
+    .performer-tier {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .tier-hero    { background: var(--accent-light);   color: #92400e; }
+    .tier-viral   { background: var(--danger-light);   color: #991b1b; }
+    .tier-strong  { background: var(--success-light);  color: #065f46; }
+    .tier-average { background: var(--gray-100);       color: var(--gray-600); }
+
+    .performer-img-wrap { position: relative; }
+    .performer-img {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent-light) 100%);
+      display: block;
+    }
+    .performer-img-placeholder {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent-light) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+    }
+    .performer-score-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background: rgba(0,0,0,0.65);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+    }
+
+    .performer-body { padding: 14px 16px; }
+    .performer-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-800);
+      line-height: 1.4;
+      margin-bottom: 10px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .performer-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .performer-metric { }
+    .performer-metric-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--gray-400);
+      margin-bottom: 1px;
+    }
+    .performer-metric-value {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--gray-900);
+      line-height: 1.1;
+    }
+    .performer-metric-value.green { color: var(--success); }
+    .performer-metric-value.purple { color: var(--primary); }
+
+    .performers-section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .performers-section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+    .performers-section-sub {
+      font-size: 12px;
+      color: var(--gray-400);
+      margin-left: auto;
+    }
+
+    /* ─── Footer ─── */
+    .page-footer {
+      text-align: center;
+      padding: 32px;
+      color: var(--gray-400);
+      font-size: 12px;
+    }
+    .footer-brand { font-weight: 700; color: var(--primary); }
+
+    /* ─── Caption Intelligence extras ─── */
+    .caption-charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 768px) { .caption-charts-grid { grid-template-columns: 1fr; } }
+
+    .caption-lists-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 900px) { .caption-lists-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .caption-lists-grid { grid-template-columns: 1fr; } }
+
+    .mini-list-card {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+    }
+    .mini-list-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--gray-500);
+      margin-bottom: 12px;
+    }
+    .mini-list-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--gray-200);
+      font-size: 13px;
+    }
+    .mini-list-row:last-child { border-bottom: none; }
+    .mini-list-label { font-weight: 500; color: var(--gray-800); text-transform: capitalize; }
+    /* SEO KPI grid */
+    .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .kpi-card  { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
+    .kpi-value { font-size:28px; font-weight:700; color:var(--white); margin-bottom:4px; }
+    .kpi-label { font-size:11px; color:var(--gray-500); text-transform:uppercase; letter-spacing:.05em; }
+
+    /* Caption length cards */
+    .caption-length-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .length-card { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px; }
+    .length-card-label { font-size:11px; font-weight:600; color:var(--gray-500); text-transform:uppercase; margin-bottom:4px; }
+    .length-card-value { font-size:22px; font-weight:700; color:var(--white); }
+    .length-card-sub   { font-size:11px; color:var(--gray-500); margin-top:4px; }
+    .length-card.best  { border-color: var(--accent); }
+
+    /* Prescription box */
+    .prescription-box { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .prescription-title { font-size:13px; font-weight:700; color:var(--white); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+    .prescription-item { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; font-size:13px; color:var(--gray-300); line-height:1.5; }
+    .prescription-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+    .dot-high    { background:#ef4444; }
+    .dot-medium  { background:#f59e0b; }
+    .dot-low     { background:#22c55e; }
+
+    /* 125-char hook highlight in caption examples */
+    .caption-hook-highlight { background:rgba(99,102,241,.15); border-left:3px solid var(--accent); padding:2px 6px; border-radius:0 4px 4px 0; }
+    .seo-badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; margin-left:8px; }
+    .seo-badge-strong   { background:rgba(34,197,94,.2);  color:#22c55e; }
+    .seo-badge-moderate { background:rgba(245,158,11,.2); color:#f59e0b; }
+    .seo-badge-weak     { background:rgba(239,68,68,.2);  color:#ef4444; }
+
+    /* Engagement by intent table */
+    .intent-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .intent-table th { text-align:left; padding:8px 12px; color:var(--gray-500); font-weight:500; border-bottom:1px solid var(--border); }
+    .intent-table td { padding:8px 12px; color:var(--gray-300); border-bottom:1px solid rgba(255,255,255,.04); }
+    .intent-table tr:hover td { background:var(--surface-2); }
+
+    .mini-list-count {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* ─── Themes data table ─── */
+    .themes-data-table {
+      margin-top: 20px;
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .themes-data-table thead th {
+      background: var(--gray-50);
+      color: var(--gray-600);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .themes-data-table tbody td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--gray-100);
+      vertical-align: middle;
+    }
+    .themes-data-table tbody tr:last-child td { border-bottom: none; }
+    .themes-data-table tbody tr:hover { background: var(--gray-50); }
+  </style>
+</head>
+<body>
+
+<script>
+// ─── DATA INJECTION ───────────────────────────────────────────────────────────
+const DATA = {{DATA_JSON}};
+// ─────────────────────────────────────────────────────────────────────────────
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     PAGE HEADER
+════════════════════════════════════════════════════════════ -->
+<header class="page-header">
+  <div class="inner">
+    <div class="header-top">
+      <div>
+        <div class="header-title" id="hdr-title">Content Intelligence Report</div>
+        <div class="header-subtitle" id="hdr-sub">Spring 2025 — Performance Analysis</div>
+      </div>
+      <div class="date-badge" id="hdr-date-badge">Spring 2025 — March 1 to May 31</div>
+    </div>
+    <div class="generated-at" id="hdr-generated">Generated —</div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN CONTENT
+════════════════════════════════════════════════════════════ -->
+<main class="container">
+
+  <!-- ── Section 1: Executive Summary ────────────────────── -->
+  <div class="hero-stats" id="hero-stats">
+    <!-- populated by JS -->
+  </div>
+
+  <div class="insight-cards" id="insight-cards">
+    <!-- populated by JS -->
+  </div>
+
+  <!-- ── Top Performers Hero ──────────────────────────────── -->
+  <div id="top-performers-section" style="display:none;">
+    <div class="performers-section-header">
+      <span style="font-size:18px;">🏆</span>
+      <span class="performers-section-title">Top Performers</span>
+      <span class="performers-section-sub" id="top-performers-sub">Highest scoring content this season</span>
+    </div>
+    <div class="top-performers" id="top-performers-grid">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
+  <!-- ── Section 2: Revenue by Brand ─────────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">📊</span>
+      <span class="section-title">Revenue by Brand</span>
+      <span class="section-sub" id="brands-sub"></span>
+    </div>
+    <div class="chart-wrap" style="height:380px;">
+      <canvas id="brandsChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Section 3: Content Attribution Map ───────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">🔗</span>
+      <span class="section-title">Content Attribution Map</span>
+      <span class="section-sub" id="attr-sub"></span>
+    </div>
+    <div class="attr-stats" id="attr-stats"><!-- populated by JS --></div>
+    <div class="table-wrap">
+      <table id="attribution-table">
+        <thead>
+          <tr>
+            <th>Post</th>
+            <th>Published</th>
+            <th>IG Story</th>
+            <th>LTK Clicks</th>
+            <th>Commissions</th>
+            <th>Story Views</th>
+            <th>Link Clicks</th>
+            <th>Match Type</th>
+            <th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="attribution-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Section 4: Top Performing LTK Posts ──────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">⭐</span>
+      <span class="section-title">Top Performing LTK Posts</span>
+      <span class="section-sub">By commissions — Top 12</span>
+    </div>
+    <div class="cards-grid" id="posts-grid"><!-- populated by JS --></div>
+  </div>
+
+  <!-- ── Section 5: Top Products ──────────────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">🛍️</span>
+      <span class="section-title">Top Products</span>
+      <span class="section-sub">By commissions — Top 20</span>
+    </div>
+    <div class="table-wrap">
+      <div id="top-products-table"><!-- populated by JS --></div>
+    </div>
+  </div>
+
+  <!-- ── Section 6: Visual Themes Analysis ────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">🎨</span>
+      <span class="section-title">Visual Themes Analysis</span>
+      <span class="section-sub" id="themes-sub"></span>
+    </div>
+    <div class="themes-layout">
+      <div>
+        <div class="chart-wrap" style="height:280px;">
+          <canvas id="themesChart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.6px;">Avg Commission per Theme</div>
+        <div class="theme-cards-grid" id="theme-cards"><!-- populated by JS --></div>
+      </div>
+    </div>
+    <!-- Theme breakdown table -->
+    <div style="margin-top:24px;overflow-x:auto;">
+      <table class="themes-data-table" id="themes-detail-table">
+        <thead>
+          <tr>
+            <th>Theme</th>
+            <th>Posts</th>
+            <th>Avg Commissions</th>
+            <th>Avg Clicks</th>
+            <th>Avg Score</th>
+          </tr>
+        </thead>
+        <tbody id="themes-detail-tbody"><!-- populated by JS --></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Section 7: Caption Intelligence (SEO-enhanced) ──────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">✍️</span>
+      <span class="section-title">Caption Intelligence</span>
+      <span class="section-sub">IG SEO scoring, intent, hooks, engagement patterns &amp; prescriptions</span>
+    </div>
+
+    <!-- Panel 1: SEO Overview KPIs + distribution -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;">IG SEO Overview</div>
+      <div class="kpi-grid" id="seo-kpi-grid"><!-- populated by JS --></div>
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;">Score Distribution</div>
+        <div class="chart-wrap" style="height:80px;">
+          <canvas id="seoDistributionChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 2: Intent & Hook Distribution -->
+    <div class="caption-charts-grid" style="margin-bottom:28px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Caption Intent Distribution</div>
+        <div class="chart-wrap" style="height:260px;">
+          <canvas id="intentDistributionChart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Hook Type Distribution</div>
+        <div class="chart-wrap" style="height:260px;">
+          <canvas id="hookDonutChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 3: Engagement by Intent table -->
+    <div style="margin-bottom:28px;">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Engagement by Intent</div>
+      <div id="engagement-by-intent-table"><!-- populated by JS --></div>
+    </div>
+
+    <!-- Panel 4: Caption Length Performance -->
+    <div style="margin-bottom:28px;">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Caption Length vs Performance</div>
+      <div class="caption-length-cards" id="caption-length-cards"><!-- populated by JS --></div>
+    </div>
+
+    <!-- Panel 5: High-Performing Captions (125-char highlight) -->
+    <div style="margin-bottom:28px;">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Top-Performing Captions <span style="font-weight:400;color:var(--gray-500);font-size:11px;">— first 125 chars = Google meta description</span></div>
+      <div class="caption-examples" id="caption-examples"><!-- populated by JS --></div>
+    </div>
+
+    <!-- Panel 6: Prescription Box -->
+    <div style="margin-bottom:28px;" id="prescription-box"><!-- populated by JS --></div>
+
+    <!-- Panel 7: Promo Codes + Brand Mentions -->
+    <div class="caption-lists-grid">
+      <div class="mini-list-card">
+        <div class="mini-list-title">Top Promo Codes</div>
+        <div id="promo-codes-list"><!-- populated by JS --></div>
+      </div>
+      <div class="mini-list-card">
+        <div class="mini-list-title">Top Brand Mentions</div>
+        <div id="brand-mentions-list"><!-- populated by JS --></div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Most Common Words</div>
+        <div class="chart-wrap" style="height:320px;">
+          <canvas id="captionWordsChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 8: Seasonal Performance ─────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">📅</span>
+      <span class="section-title">Seasonal Performance</span>
+      <span class="section-sub">March – May 2025</span>
+    </div>
+    <div class="toggle-group" id="seasonal-toggle">
+      <button class="toggle-btn active" data-metric="commissions" onclick="switchSeasonalMetric(this)">Commissions</button>
+      <button class="toggle-btn" data-metric="clicks" onclick="switchSeasonalMetric(this)">LTK Clicks</button>
+      <button class="toggle-btn" data-metric="story_views" onclick="switchSeasonalMetric(this)">Story Views</button>
+    </div>
+    <div class="chart-wrap" style="height:320px;">
+      <canvas id="seasonalChart"></canvas>
+    </div>
+    <div class="season-legend" id="seasonal-holiday-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#4ade80;"></div>St. Patrick's Day (Mar 17)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#fb923c;"></div>Easter (Apr 20)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f472b6;"></div>Mother's Day (May 11)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;"></div>Memorial Day (May 26)</div>
+    </div>
+  </div>
+
+  <!-- ── Section 9: IG Reels Performance ─────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">🎬</span>
+      <span class="section-title">IG Reels Performance</span>
+      <span class="section-sub">Top 10 by views</span>
+    </div>
+    <div class="table-wrap">
+      <table id="reels-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Date</th>
+            <th>Caption</th>
+            <th>👁 Views</th>
+            <th>❤️ Likes</th>
+            <th>↗️ Shares</th>
+            <th>🔖 Saves</th>
+            <th>💬 Comments</th>
+            <th>Eng. Rate</th>
+          </tr>
+        </thead>
+        <tbody id="reels-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<footer class="page-footer">
+  <span class="footer-brand">ENT Agency</span> · Content Intelligence · Powered by Claude AI
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// UTILITY FUNCTIONS
+// ═══════════════════════════════════════════════════════════
+
+function fmt$  (n) { return '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+function fmtN  (n) { return (n||0).toLocaleString('en-US'); }
+function fmtPct(n) { return Math.round((n||0)*100) + '%'; }
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function fmtDateShort(d) {
+  if (!d) return '—';
+  const dt = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+}
+
+const CHART_COLORS = [
+  '#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6',
+  '#ec4899','#14b8a6','#f97316','#84cc16','#06b6d4','#a855f7',
+  '#e11d48','#0ea5e9','#22c55e','#eab308'
+];
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 1: EXECUTIVE SUMMARY
+// ═══════════════════════════════════════════════════════════
+
+function renderHeader() {
+  const m = DATA.meta;
+  const s = DATA.summary;
+  document.getElementById('hdr-title').textContent = `Content Intelligence Report — ${m.creator || ''}`;
+  document.getElementById('hdr-sub').textContent = `${m.date_range || 'Spring 2025'} · Performance Analysis`;
+  document.getElementById('hdr-date-badge').textContent = `Spring 2025 — March 1 to May 31`;
+  const ts = m.generated_at ? new Date(m.generated_at).toLocaleString('en-US', {
+    month:'long', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'
+  }) : '';
+  document.getElementById('hdr-generated').textContent = `Generated ${ts}`;
+}
+
+function renderHeroStats() {
+  const s = DATA.summary;
+  const stats = [
+    { icon:'💰', label:'Total Commissions', value: fmt$(s.total_commissions), sub: 'Spring 2025', cls:'success' },
+    { icon:'🖱️', label:'LTK Clicks',        value: fmtN(s.total_ltk_clicks),  sub: 'Total clicks', cls:'' },
+    { icon:'🏆', label:'Top Brand',         value: s.top_brand || '—',        sub: 'By revenue', cls:'accent' },
+    { icon:'📖', label:'Story Views',       value: fmtN(s.total_story_views), sub: 'IG Stories', cls:'' },
+    { icon:'🎬', label:'Reel Views',        value: fmtN(s.total_reel_views),  sub: 'IG Reels', cls:'' },
+  ];
+  document.getElementById('hero-stats').innerHTML = stats.map(s => `
+    <div class="stat-card ${s.cls}">
+      <div class="stat-icon">${s.icon}</div>
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-value">${s.value}</div>
+      <div class="stat-sub">${s.sub}</div>
+    </div>
+  `).join('');
+}
+
+function renderInsightCards() {
+  const insights = DATA.insights || [];
+  const icons = ['💡','📈','🎯'];
+  document.getElementById('insight-cards').innerHTML = insights.slice(0,3).map((txt, i) => `
+    <div class="insight-card">
+      <div class="insight-icon">${icons[i] || '💡'}</div>
+      <div class="insight-text">${txt}</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOP PERFORMERS HERO SECTION
+// ═══════════════════════════════════════════════════════════
+
+function renderTopPerformers() {
+  const ltk   = DATA.top_ltk_post;
+  const story = DATA.top_ig_story;
+  const reel  = DATA.top_ig_reel;
+
+  if (!ltk && !story && !reel) return;
+
+  const section = document.getElementById('top-performers-section');
+  if (section) section.style.display = '';
+
+  const grid = document.getElementById('top-performers-grid');
+  if (!grid) return;
+
+  const tierClass = t => {
+    if (!t) return 'tier-average';
+    if (t === 'viral') return 'tier-viral';
+    if (t === 'hero')  return 'tier-hero';
+    if (t === 'strong') return 'tier-strong';
+    return 'tier-average';
+  };
+
+  const fmt$  = v => v != null ? '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}) : '\u2014';
+  const fmtN  = v => v != null ? Number(v).toLocaleString() : '\u2014';
+  const score = v => v != null ? Number(v).toFixed(1) : '\u2014';
+
+  let cards = '';
+
+  if (ltk) {
+    const img = ltk.hero_image
+      ? '<img class="performer-img" src="' + ltk.hero_image + '" loading="lazy" alt="Top LTK Post" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="performer-img-placeholder" style="display:none;">\uD83D\uDED2</div>'
+      : '<div class="performer-img-placeholder">\uD83D\uDED2</div>';
+    const pubDate = ltk.date_published ? new Date(ltk.date_published).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
+    const caption = ltk.caption || ltk.description || (ltk.visual_analysis && ltk.visual_analysis.description ? ltk.visual_analysis.description : '');
+    cards += '<div class="performer-card ltk-card">'
+      + '<div class="performer-header"><span style="font-size:14px;">\uD83D\uDED2</span>'
+      + '<span class="performer-label">Top LTK Post' + (pubDate ? ' \xb7 ' + pubDate : '') + '</span>'
+      + '<span class="performer-tier ' + tierClass(ltk.tier) + '">' + (ltk.tier || 'top') + '</span></div>'
+      + '<div class="performer-img-wrap">' + img + '<div class="performer-score-badge">Score ' + score(ltk.composite_score) + '</div></div>'
+      + '<div class="performer-body">'
+      + (caption ? '<div class="performer-title">' + caption + '</div>' : '')
+      + '<div class="performer-metrics">'
+      + '<div class="performer-metric"><div class="performer-metric-label">Revenue</div><div class="performer-metric-value green">' + fmt$(ltk.commissions) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Clicks</div><div class="performer-metric-value">' + fmtN(ltk.clicks) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Orders</div><div class="performer-metric-value">' + fmtN(ltk.orders) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Conv. Rate</div><div class="performer-metric-value">' + (ltk.order_conversion_rate != null ? (ltk.order_conversion_rate * 100).toFixed(1) + '%' : '\u2014') + '</div></div>'
+      + '</div></div></div>';
+  }
+
+  if (story) {
+    const pubDate = story.publish_time ? new Date(story.publish_time).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
+    const desc = story.description || story.caption || '';
+    cards += '<div class="performer-card story-card">'
+      + '<div class="performer-header"><span style="font-size:14px;">\uD83D\uDCF1</span>'
+      + '<span class="performer-label">Top IG Story' + (pubDate ? ' \xb7 ' + pubDate : '') + '</span>'
+      + '<span class="performer-tier ' + tierClass(story.tier) + '">' + (story.tier || 'top') + '</span></div>'
+      + '<div class="performer-img-wrap"><div class="performer-img-placeholder">\uD83D\uDCF8</div><div class="performer-score-badge">Score ' + score(story.composite_score) + '</div></div>'
+      + '<div class="performer-body">'
+      + (desc ? '<div class="performer-title">' + desc + '</div>' : '')
+      + '<div class="performer-metrics">'
+      + '<div class="performer-metric"><div class="performer-metric-label">Views</div><div class="performer-metric-value purple">' + fmtN(story.views) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Link Clicks</div><div class="performer-metric-value">' + fmtN(story.link_clicks) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Reach</div><div class="performer-metric-value">' + fmtN(story.reach) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Eng. Rate</div><div class="performer-metric-value">' + (story.engagement_rate != null ? (story.engagement_rate * 100).toFixed(2) + '%' : '\u2014') + '</div></div>'
+      + '</div></div></div>';
+  }
+
+  if (reel) {
+    const pubDate = reel.publish_time ? new Date(reel.publish_time).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
+    const caption = reel.caption || reel.description || '';
+    cards += '<div class="performer-card reel-card">'
+      + '<div class="performer-header"><span style="font-size:14px;">\uD83C\uDFAC</span>'
+      + '<span class="performer-label">Top IG Reel' + (pubDate ? ' \xb7 ' + pubDate : '') + '</span>'
+      + '<span class="performer-tier ' + tierClass(reel.tier) + '">' + (reel.tier || 'top') + '</span></div>'
+      + '<div class="performer-img-wrap"><div class="performer-img-placeholder">\uD83C\uDFA5</div><div class="performer-score-badge">Score ' + score(reel.composite_score) + '</div></div>'
+      + '<div class="performer-body">'
+      + (caption ? '<div class="performer-title">' + caption + '</div>' : '')
+      + '<div class="performer-metrics">'
+      + '<div class="performer-metric"><div class="performer-metric-label">Views</div><div class="performer-metric-value purple">' + fmtN(reel.views) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Saves</div><div class="performer-metric-value">' + fmtN(reel.saves) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Shares</div><div class="performer-metric-value">' + fmtN(reel.shares) + '</div></div>'
+      + '<div class="performer-metric"><div class="performer-metric-label">Eng. Rate</div><div class="performer-metric-value">' + (reel.engagement_rate != null ? (reel.engagement_rate * 100).toFixed(2) + '%' : '\u2014') + '</div></div>'
+      + '</div></div></div>';
+  }
+
+  grid.innerHTML = cards;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 2: REVENUE BY BRAND
+// ═══════════════════════════════════════════════════════════
+
+function renderBrandsChart() {
+  const brands = (DATA.brands || [])
+    .sort((a,b) => (b.commissions||0) - (a.commissions||0))
+    .slice(0, 15);
+
+  document.getElementById('brands-sub').textContent = `Top ${brands.length} brands`;
+
+  const ctx = document.getElementById('brandsChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: brands.map(b => b.name),
+      datasets: [{
+        label: 'Commissions',
+        data: brands.map(b => b.commissions),
+        backgroundColor: brands.map((_, i) => i === 0 ? '#6366f1' : (i < 3 ? '#818cf8' : '#c7d2fe')),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const b = brands[ctx.dataIndex];
+              return [` Commissions: ${fmt$(ctx.raw)}`, ` Clicks: ${fmtN(b.clicks)}`, ` Orders: ${fmtN(b.orders)}`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+        y: {
+          grid: { color: '#f3f4f6' },
+          ticks: {
+            callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(1)+'k' : v),
+            font: { size: 11 }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 3: CONTENT ATTRIBUTION MAP
+// ═══════════════════════════════════════════════════════════
+
+function renderAttribution() {
+  const attr = DATA.attribution || {};
+  const stats = attr.stats || {};
+  const matches = attr.matches || [];
+
+  // Attribution stats row
+  document.getElementById('attr-sub').textContent =
+    `${fmtPct(stats.attribution_rate || 0)} of commissions attributed to IG content`;
+
+  document.getElementById('attr-stats').innerHTML = `
+    <div class="attr-stat">
+      <div class="attr-stat-value">${fmtPct(stats.attribution_rate || 0)}</div>
+      <div class="attr-stat-label">Attribution Rate</div>
+    </div>
+    <div class="attr-stat">
+      <div class="attr-stat-value">${fmt$(stats.total_attributed_commissions || 0)}</div>
+      <div class="attr-stat-label">Attributed Commissions</div>
+    </div>
+    <div class="attr-stat">
+      <div class="attr-stat-value">${stats.matched_url || 0}</div>
+      <div class="attr-stat-label">URL-Matched</div>
+    </div>
+    <div class="attr-stat">
+      <div class="attr-stat-value">${stats.matched_date || 0}</div>
+      <div class="attr-stat-label">Date-Matched</div>
+    </div>
+  `;
+
+  // Table rows
+  const tbody = document.getElementById('attribution-tbody');
+  if (!matches.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:32px;">No attribution data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = matches.slice(0, 30).map(m => {
+    const ltk = m.ltk_post || {};
+    const ig  = m.ig_story || {};
+    const conf = m.confidence || 0;
+    const confClass = conf >= 0.8 ? '' : (conf >= 0.5 ? 'medium' : 'low');
+    const matchType = m.match_type === 'url' ? 'badge-url' : (m.match_type === 'date' ? 'badge-date' : 'badge-none');
+    const matchLabel = m.match_type === 'url' ? 'URL' : (m.match_type === 'date' ? 'Date' : 'None');
+
+    const imgHtml = ltk.hero_image
+      ? `<img class="thumb" src="${ltk.hero_image}" alt="" onerror="this.style.display='none'" />`
+      : `<div class="thumb-placeholder">📸</div>`;
+
+    return `
+      <tr>
+        <td>${imgHtml}</td>
+        <td>${fmtDateShort(ltk.date_published)}</td>
+        <td>${fmtDateShort(ig.date)}</td>
+        <td>${fmtN(ltk.clicks)}</td>
+        <td>${fmt$(ltk.commissions)}</td>
+        <td>${fmtN(ig.views)}</td>
+        <td>${fmtN(ig.link_clicks)}</td>
+        <td><span class="badge ${matchType}">${matchLabel}</span></td>
+        <td>
+          <div class="confidence-bar">
+            <div class="conf-track"><div class="conf-fill ${confClass}" style="width:${Math.round(conf*100)}%"></div></div>
+            <span class="conf-label">${Math.round(conf*100)}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 4: TOP PERFORMING LTK POSTS
+// ═══════════════════════════════════════════════════════════
+
+function renderPostCards() {
+  const posts = (DATA.ltk_posts || [])
+    .sort((a,b) => (b.commissions||0) - (a.commissions||0))
+    .slice(0, 12);
+
+  document.getElementById('posts-grid').innerHTML = posts.map((p, i) => {
+    const themes = p.visual_analysis?.themes || [];
+    const imgHtml = p.hero_image
+      ? `<img class="post-img" src="${p.hero_image}" alt="" onerror="this.parentElement.innerHTML='<div class=post-img-placeholder>👗</div>'" />`
+      : `<div class="post-img-placeholder">👗</div>`;
+    return `
+      <div class="post-card">
+        <div class="post-img-wrap">
+          ${imgHtml}
+          <div class="post-rank">${i+1}</div>
+        </div>
+        <div class="post-body">
+          <div class="post-date">${fmtDate(p.date_published)}</div>
+          <div class="post-commission">${fmt$(p.commissions)}</div>
+          <div class="post-meta">
+            <div class="post-metric"><span>${fmtN(p.clicks)}</span> clicks</div>
+            <div class="post-metric"><span>${p.orders || 0}</span> orders</div>
+          </div>
+          ${themes.length ? `<div class="post-tags">${themes.slice(0,2).map(t=>`<span class="post-tag">${t}</span>`).join('')}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 5: VISUAL THEMES
+// ═══════════════════════════════════════════════════════════
+
+function renderThemes() {
+  const themes = DATA.themes || {};
+  const entries = Object.entries(themes).sort((a,b) => b[1].count - a[1].count);
+
+  document.getElementById('themes-sub').textContent = `${entries.length} themes identified`;
+
+  // Donut chart
+  const ctx = document.getElementById('themesChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(([k]) => k),
+      datasets: [{
+        data: entries.map(([,v]) => v.count),
+        backgroundColor: CHART_COLORS.slice(0, entries.length),
+        borderWidth: 2,
+        borderColor: 'white',
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 11 }, padding: 12, usePointStyle: true }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const e = entries[ctx.dataIndex];
+              return ` ${e[0]}: ${e[1].count} posts`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Theme cards
+  document.getElementById('theme-cards').innerHTML = entries.slice(0,9).map(([name, v], i) => `
+    <div class="theme-card">
+      <div class="theme-name">
+        <span class="theme-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>
+        ${name}
+      </div>
+      <div class="theme-avg">${fmt$(v.avg_commissions)}</div>
+      <div class="theme-count">avg/post · ${v.count} posts</div>
+    </div>
+  `).join('');
+
+  // Theme detail table
+  const tbody = document.getElementById('themes-detail-tbody');
+  if (tbody) {
+    tbody.innerHTML = entries.map(([name, v], i) => `
+      <tr>
+        <td>
+          <span class="theme-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>
+          <span style="font-weight:500;text-transform:capitalize;">${name.replace(/_/g,' ')}</span>
+        </td>
+        <td>${v.count}</td>
+        <td style="font-weight:600;color:var(--success);">${fmt$(v.avg_commissions)}</td>
+        <td>${fmtN(v.avg_clicks)}</td>
+        <td style="color:var(--primary);font-weight:600;">${v.avg_composite_score != null ? v.avg_composite_score.toFixed(1) : '—'}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 6: CAPTION INTELLIGENCE
+// ═══════════════════════════════════════════════════════════
+
+function renderCaptions() {
+  // ── Engagement by Intent (horizontal bar) ──────────────────
+  const intentData = DATA.engagement_by_intent || {};
+  if (Object.keys(intentData).length) {
+    const intentEntries = Object.entries(intentData).sort((a,b) => b[1].avg_views - a[1].avg_views);
+    const ctxIntent = document.getElementById('engagementByIntentChart').getContext('2d');
+    new Chart(ctxIntent, {
+      type: 'bar',
+      data: {
+        labels: intentEntries.map(([k]) => k.replace(/_/g,' ')),
+        datasets: [
+          {
+            label: 'Avg Views',
+            data: intentEntries.map(([,v]) => v.avg_views),
+            backgroundColor: '#c7d2fe',
+            borderColor: '#6366f1',
+            borderWidth: 1.5,
+            borderRadius: 4,
+            borderSkipped: false,
+          },
+          {
+            label: 'Avg Link Clicks',
+            data: intentEntries.map(([,v]) => v.avg_link_clicks),
+            backgroundColor: '#fde68a',
+            borderColor: '#f59e0b',
+            borderWidth: 1.5,
+            borderRadius: 4,
+            borderSkipped: false,
+          }
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const entry = intentEntries[ctx.dataIndex];
+                if (ctx.datasetIndex === 0) return ` Avg Views: ${fmtN(Math.round(ctx.raw))} (${entry[1].count} posts)`;
+                return ` Avg Link Clicks: ${fmtN(Math.round(ctx.raw))}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: '#f3f4f6' }, ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v, font: { size: 10 } } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  } else {
+    const el = document.getElementById('engagementByIntentChart');
+    if (el) el.closest('.caption-charts-grid > div').style.display = 'none';
+  }
+
+  // ── Hook Type Distribution (horizontal bar) ──────────────────
+  const hookData = DATA.hook_type_distribution || {};
+  if (Object.keys(hookData).length) {
+    const hookEntries = Object.entries(hookData).sort((a,b) => b[1] - a[1]);
+    const ctxHook = document.getElementById('hookTypeChart').getContext('2d');
+    new Chart(ctxHook, {
+      type: 'bar',
+      data: {
+        labels: hookEntries.map(([k]) => k.replace(/_/g,' ')),
+        datasets: [{
+          label: 'Posts',
+          data: hookEntries.map(([,v]) => v),
+          backgroundColor: hookEntries.map((_, i) => CHART_COLORS[i % CHART_COLORS.length] + 'cc'),
+          borderColor:      hookEntries.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+          borderWidth: 1.5,
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} posts` } }
+        },
+        scales: {
+          x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  } else {
+    const el = document.getElementById('hookTypeChart');
+    if (el) el.closest('.caption-charts-grid > div').style.display = 'none';
+  }
+
+  // ── Caption Length Performance (horizontal bar) ──────────────
+  const lengthData = DATA.caption_length_performance || {};
+  if (Object.keys(lengthData).length) {
+    const buckets = ['short', 'medium', 'long'].filter(k => lengthData[k]);
+    const ctxLen = document.getElementById('captionLengthChart').getContext('2d');
+    new Chart(ctxLen, {
+      type: 'bar',
+      data: {
+        labels: buckets.map(b => `${b.charAt(0).toUpperCase() + b.slice(1)} (${lengthData[b].count} posts)`),
+        datasets: [{
+          label: 'Avg Views',
+          data: buckets.map(b => lengthData[b].avg_views),
+          backgroundColor: ['#d1fae5','#bfdbfe','#ede9fe'],
+          borderColor:      ['#10b981','#3b82f6','#8b5cf6'],
+          borderWidth: 1.5,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` Avg Views: ${fmtN(Math.round(ctx.raw))}` } }
+        },
+        scales: {
+          x: { grid: { color: '#f3f4f6' }, ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v, font: { size: 10 } } },
+          y: { grid: { display: false }, ticks: { font: { size: 12 } } }
+        }
+      }
+    });
+  } else {
+    const lenWrap = document.getElementById('captionLengthChart');
+    if (lenWrap) lenWrap.closest('div[style]').style.display = 'none';
+  }
+
+  // ── Top Promo Codes list ─────────────────────────────────────
+  const promoCodes = DATA.top_promo_codes || [];
+  const promoEl = document.getElementById('promo-codes-list');
+  if (promoEl) {
+    if (promoCodes.length) {
+      promoEl.innerHTML = promoCodes.slice(0,10).map(p => `
+        <div class="mini-list-row">
+          <span class="mini-list-label" style="font-family:monospace;font-size:12px;font-weight:700;color:var(--primary-dark);">${p.code}</span>
+          <span class="mini-list-count">${p.count}×</span>
+        </div>
+      `).join('');
+    } else {
+      promoEl.closest('.mini-list-card').style.display = 'none';
+    }
+  }
+
+  // ── Top Brand Mentions list ──────────────────────────────────
+  const brandMentions = DATA.top_brand_mentions || [];
+  const brandEl = document.getElementById('brand-mentions-list');
+  if (brandEl) {
+    if (brandMentions.length) {
+      brandEl.innerHTML = brandMentions.slice(0,10).map(b => `
+        <div class="mini-list-row">
+          <span class="mini-list-label">@${b.brand}</span>
+          <span class="mini-list-count">${b.count}×</span>
+        </div>
+      `).join('');
+    } else {
+      brandEl.closest('.mini-list-card').style.display = 'none';
+    }
+  }
+
+  // ── Most Common Words (horizontal bar) ───────────────────────
+  const words = (DATA.top_caption_words || []).slice(0, 15);
+  if (words.length) {
+    const ctxWords = document.getElementById('captionWordsChart').getContext('2d');
+    new Chart(ctxWords, {
+      type: 'bar',
+      data: {
+        labels: words.map(w => w.word),
+        datasets: [{
+          label: 'Frequency',
+          data: words.map(w => w.count),
+          backgroundColor: '#e0e7ff',
+          borderColor: '#6366f1',
+          borderWidth: 1.5,
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` Used ${ctx.raw} times` } }
+        },
+        scales: {
+          x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
+          y: { grid: { display: false }, ticks: { font: { size: 12 } } }
+        }
+      }
+    });
+  }
+
+  // ── Caption sample examples — prefer high_performing_captions ─
+  const hpCaptions = DATA.high_performing_captions || [];
+  const captionExamplesEl = document.getElementById('caption-examples');
+  if (hpCaptions.length) {
+    captionExamplesEl.innerHTML = hpCaptions.slice(0, 5).map(p => {
+      const text = p.caption || '';
+      const meta = [
+        p.platform ? p.platform.replace('_',' ') : null,
+        p.views ? fmtN(p.views) + ' views' : null,
+        p.intent ? p.intent.replace(/_/g,' ') : null,
+        p.hook_type ? 'hook: ' + p.hook_type.replace(/_/g,' ') : null,
+      ].filter(Boolean).join(' · ');
+      return `
+        <div class="caption-example">
+          <div class="caption-example-text">"${text.slice(0,220)}${text.length > 220 ? '…' : ''}"</div>
+          <div class="caption-example-meta">${meta}</div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    // Fallback to ltk_posts captions
+    const ltk = (DATA.ltk_posts || []).filter(p => p.caption && p.caption.trim().length > 5)
+      .sort((a,b) => (b.commissions||0) - (a.commissions||0)).slice(0, 4);
+    if (ltk.length) {
+      captionExamplesEl.innerHTML = ltk.map(p => `
+        <div class="caption-example">
+          <div class="caption-example-text">"${p.caption.slice(0,220)}${p.caption.length > 220 ? '…' : ''}"</div>
+          <div class="caption-example-meta">${fmtDate(p.date_published)} · ${fmt$(p.commissions)} · ${fmtN(p.clicks)} clicks</div>
+        </div>
+      `).join('');
+    } else {
+      captionExamplesEl.closest('div').style.display = 'none';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION B: CAPTION STATS CHIPS
+// ═══════════════════════════════════════════════════════════
+
+function renderCaptionStatChips() {
+  const el = document.getElementById('caption-stat-chips');
+  if (!el) return;
+
+  // Derive stats from available DATA keys
+  const lengthData  = DATA.caption_length_performance || {};
+  const intentData  = DATA.intent_distribution || {};
+  const hookData    = DATA.hook_type_distribution || {};
+  const promoCodes  = DATA.top_promo_codes || [];
+
+  // Total captions analyzed from caption_length_performance
+  const totalCaptions = Object.values(lengthData).reduce((s, v) => s + (v.count || 0), 0);
+
+  // % with promo codes: sale_promotion intent as proxy (includes discount hooks)
+  const intentTotal = Object.values(intentData).reduce((s, v) => s + v, 0);
+  const salePromoCount = intentData.sale_promotion || 0;
+  const pctPromo = intentTotal ? Math.round(salePromoCount / intentTotal * 100) : 0;
+
+  // % with CTA: call_to_action intent
+  const ctaCount = intentData.call_to_action || 0;
+  const pctCta = intentTotal ? Math.round(ctaCount / intentTotal * 100) : 0;
+
+  // Average caption length proxy from caption_length_performance:
+  // short ~30 chars, medium ~100 chars, long ~220 chars (typical buckets)
+  const AVG_BY_BUCKET = { short: 30, medium: 100, long: 220 };
+  const totalChars = Object.entries(lengthData).reduce((s, [k, v]) => s + (AVG_BY_BUCKET[k] || 0) * (v.count || 0), 0);
+  const avgLength = totalCaptions ? Math.round(totalChars / totalCaptions) : 0;
+
+  // Hook dominant type
+  const topHook = Object.entries(hookData).sort((a,b) => b[1]-a[1])[0];
+  const topHookLabel = topHook ? topHook[0].replace(/_/g,' ') : '—';
+
+  if (!totalCaptions) { el.style.display = 'none'; return; }
+
+  const chips = [
+    { value: fmtN(totalCaptions), label: 'Captions Analyzed' },
+    { value: pctPromo + '%',       label: 'Sale / Promo Intent' },
+    { value: pctCta + '%',         label: 'Call-to-Action Intent' },
+    { value: '~' + avgLength,      label: 'Avg Caption Length (chars)' },
+    { value: topHookLabel,         label: 'Top Hook Type' },
+  ];
+
+  el.innerHTML = chips.map(c => `
+    <div class="caption-stat-chip">
+      <div class="caption-stat-chip-value">${c.value}</div>
+      <div class="caption-stat-chip-label">${c.label}</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION A: WHAT GOES VIRAL
+// ═══════════════════════════════════════════════════════════
+
+function renderViralPanel() {
+  const intentData = DATA.intent_distribution || {};
+  const hookData   = DATA.hook_type_distribution || {};
+
+  // Hide entire section if both datasets are empty
+  if (!Object.keys(intentData).length && !Object.keys(hookData).length) {
+    const sec = document.getElementById('viral-section');
+    if (sec) sec.style.display = 'none';
+    return;
+  }
+
+  // ── Intent Distribution — horizontal bar ──────────────────
+  if (Object.keys(intentData).length) {
+    const intentEntries = Object.entries(intentData).sort((a,b) => b[1] - a[1]);
+    const ctxI = document.getElementById('intentDistributionChart').getContext('2d');
+    new Chart(ctxI, {
+      type: 'bar',
+      data: {
+        labels: intentEntries.map(([k]) => k.replace(/_/g,' ')),
+        datasets: [{
+          label: 'Posts',
+          data:  intentEntries.map(([,v]) => v),
+          backgroundColor: intentEntries.map((_, i) => CHART_COLORS[i % CHART_COLORS.length] + 'cc'),
+          borderColor:     intentEntries.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+          borderWidth: 1.5,
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = intentEntries.reduce((s, [,v]) => s + v, 0);
+                return ` ${ctx.raw} posts (${Math.round(ctx.raw/total*100)}%)`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  } else {
+    const el = document.getElementById('intentDistributionChart');
+    if (el) el.closest('.chart-wrap').style.display = 'none';
+  }
+
+  // ── Hook Type Mix — donut ─────────────────────────────────
+  if (Object.keys(hookData).length) {
+    const hookEntries = Object.entries(hookData).sort((a,b) => b[1] - a[1]);
+    const ctxH = document.getElementById('hookDonutChart').getContext('2d');
+    new Chart(ctxH, {
+      type: 'doughnut',
+      data: {
+        labels: hookEntries.map(([k]) => k.replace(/_/g,' ')),
+        datasets: [{
+          data: hookEntries.map(([,v]) => v),
+          backgroundColor: CHART_COLORS.slice(0, hookEntries.length),
+          borderWidth: 2,
+          borderColor: 'white',
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '58%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 }, padding: 10, usePointStyle: true }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = hookEntries.reduce((s, [,v]) => s + v, 0);
+                return ` ${hookEntries[ctx.dataIndex][0].replace(/_/g,' ')}: ${ctx.raw} posts (${Math.round(ctx.raw/total*100)}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  } else {
+    const el = document.getElementById('hookDonutChart');
+    if (el) el.closest('.chart-wrap').style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 7: SEASONAL PERFORMANCE
+// ═══════════════════════════════════════════════════════════
+
+let seasonalChart = null;
+
+const SEASONAL_HOLIDAYS = [
+  { label: "St. Patty's Day", date: '2025-03-17', color: 'rgba(74,222,128,0.85)' },
+  { label: 'Easter',          date: '2025-04-20', color: 'rgba(251,146,60,0.85)' },
+  { label: "Mother's Day",    date: '2025-05-11', color: 'rgba(244,114,182,0.85)' },
+  { label: 'Memorial Day',    date: '2025-05-26', color: 'rgba(96,165,250,0.85)' },
+];
+
+function buildSeasonalAnnotations(weeks) {
+  const annotations = {};
+  SEASONAL_HOLIDAYS.forEach((h, i) => {
+    // Find the closest week label to the holiday date
+    const hd = new Date(h.date);
+    let closest = null, closestDiff = Infinity;
+    weeks.forEach(w => {
+      const wd = new Date(w);
+      const diff = Math.abs(wd - hd);
+      if (diff < closestDiff) { closestDiff = diff; closest = w; }
+    });
+    if (closest) {
+      annotations[`holiday${i}`] = {
+        type: 'line',
+        xMin: closest,
+        xMax: closest,
+        borderColor: h.color,
+        borderWidth: 2,
+        borderDash: [5, 3],
+        label: {
+          content: h.label,
+          display: true,
+          position: 'start',
+          backgroundColor: h.color,
+          color: 'white',
+          font: { size: 10, weight: 'bold' },
+          padding: 4,
+          borderRadius: 4,
+          yAdjust: -6,
+        }
+      };
+    }
+  });
+  return annotations;
+}
+
+function switchSeasonalMetric(btn) {
+  document.querySelectorAll('#seasonal-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSeasonalChart(btn.dataset.metric);
+}
+
+function renderSeasonalChart(metric = 'commissions') {
+  const weekly = DATA.weekly_performance || [];
+  const labels = weekly.map(w => w.week);
+  const METRICS = {
+    commissions:  { key: 'commissions',  label: 'Commissions ($)', color: '#6366f1', fmt: fmt$ },
+    clicks:       { key: 'clicks',       label: 'LTK Clicks',      color: '#f59e0b', fmt: fmtN },
+    story_views:  { key: 'story_views',  label: 'Story Views',     color: '#10b981', fmt: fmtN },
+  };
+  const m = METRICS[metric] || METRICS.commissions;
+  const values = weekly.map(w => w[m.key] || 0);
+
+  if (seasonalChart) { seasonalChart.destroy(); }
+
+  const ctx = document.getElementById('seasonalChart').getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+  gradient.addColorStop(0, m.color + '33');
+  gradient.addColorStop(1, m.color + '00');
+
+  seasonalChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: m.label,
+        data: values,
+        borderColor: m.color,
+        backgroundColor: gradient,
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: m.color,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${m.label}: ${m.fmt(ctx.raw)}`,
+            title: ctx => fmtDate(ctx[0].label),
+          }
+        },
+        annotation: { annotations: buildSeasonalAnnotations(labels) }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { callback: (_, i) => fmtDateShort(labels[i]), font: { size: 11 }, maxRotation: 45 }
+        },
+        y: {
+          grid: { color: '#f3f4f6' },
+          ticks: { callback: v => metric === 'commissions' ? fmt$(v) : fmtN(v), font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 8: IG REELS PERFORMANCE
+// ═══════════════════════════════════════════════════════════
+
+function renderReels() {
+  const reels = (DATA.ig_reels || [])
+    .sort((a,b) => (b.views||0) - (a.views||0))
+    .slice(0, 10);
+
+  const tbody = document.getElementById('reels-tbody');
+  if (!reels.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:32px;">No reel data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = reels.map((r, i) => {
+    const engRate = r.views ? ((r.likes + r.comments + r.shares + r.saves) / r.views * 100).toFixed(2) : '0.00';
+    const isTop = i === 0;
+    const caption = (r.caption || '').slice(0, 60) + ((r.caption || '').length > 60 ? '…' : '');
+    return `
+      <tr class="${isTop ? 'top-reel' : ''}">
+        <td style="font-weight:700;color:${isTop ? 'var(--primary)' : 'var(--gray-500)'}">${i+1}</td>
+        <td>${fmtDateShort(r.date || r.timestamp)}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${caption || '—'}</td>
+        <td style="font-weight:${isTop?'700':'400'};color:${isTop?'var(--primary)':'inherit'}">${fmtN(r.views)}</td>
+        <td>${fmtN(r.likes)}</td>
+        <td>${fmtN(r.shares)}</td>
+        <td>${fmtN(r.saves)}</td>
+        <td>${fmtN(r.comments)}</td>
+        <td><span style="font-weight:600;color:${parseFloat(engRate)>5?'var(--success)':'var(--gray-600)'}">${engRate}%</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderTopProducts() {
+  const container = document.getElementById('top-products-table');
+  if (!container) return;
+  const products = (DATA.top_products || []);
+  if (!products || products.length === 0) {
+    container.innerHTML = '<p class="no-data" style="color:var(--gray-400);padding:24px;text-align:center;">No product data available</p>';
+    return;
+  }
+  const rows = products.map((p) => `
+    <tr>
+      <td class="rank-cell" style="font-weight:700;color:var(--primary);text-align:center;">#${p.rank}</td>
+      <td style="text-align:center;"><img src="${p.image || ''}" onerror="this.style.display='none'"
+          style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;"></td>
+      <td class="product-name" style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.product_name}</td>
+      <td style="color:var(--gray-600);">${p.brand || '—'}</td>
+      <td>${p.price != null ? '$' + p.price.toFixed(2) : '—'}</td>
+      <td class="money" style="font-weight:700;color:var(--success);">$${(p.commissions || 0).toFixed(2)}</td>
+      <td>${(p.clicks || 0).toLocaleString()}</td>
+      <td>${(p.items_sold || 0).toLocaleString()}</td>
+      <td>${((p.conversion_rate || 0) * 100).toFixed(1)}%</td>
+    </tr>
+  `).join('');
+  container.innerHTML = `
+    <table class="data-table" style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--gray-50);border-bottom:2px solid var(--gray-200);">
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Rank</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Image</th>
+          <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Product</th>
+          <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Brand</th>
+          <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Price</th>
+          <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Commissions</th>
+          <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Clicks</th>
+          <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Sold</th>
+          <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Conv %</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// ── Panel 1: SEO KPIs ─────────────────────────────────────────
+function renderSeoKpis() {
+  const avgScore  = DATA.avg_seo_score || 0;
+  const stories   = (DATA.ig_stories || []);
+  const reels     = (DATA.ig_reels || []);
+  const allIG     = stories.concat(reels);
+  const strongHooks = allIG.filter(p => p.hook_quality_label === 'strong').length;
+  const strongPct   = allIG.length ? Math.round(strongHooks / allIG.length * 100) : 0;
+  const optHash     = allIG.filter(p => p.hashtag_quality === 'optimal').length;
+  const optHashPct  = allIG.length ? Math.round(optHash / allIG.length * 100) : 0;
+
+  document.getElementById('seo-kpi-grid').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-value">${avgScore}</div>
+      <div class="kpi-label">Avg SEO Score</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">${strongPct}%</div>
+      <div class="kpi-label">Posts with Strong Hook</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">${optHashPct}%</div>
+      <div class="kpi-label">Optimal Hashtag Count</div>
+    </div>`;
+
+  const dist = DATA.seo_score_distribution || {};
+  const labels = ['0–25','26–50','51–75','76–100'];
+  const vals   = [dist['0-25']||0, dist['26-50']||0, dist['51-75']||0, dist['76-100']||0];
+  new Chart(document.getElementById('seoDistributionChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data: vals,
+        backgroundColor: ['#ef4444','#f59e0b','#6366f1','#22c55e'],
+        borderRadius: 6, borderSkipped: false }]
+    },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#9ca3af'}},
+              y:{grid:{display:false},ticks:{color:'#9ca3af'}}} }
+  });
+}
+
+// ── Panel 3: Engagement by Intent table ──────────────────────
+function renderEngagementByIntentTable() {
+  const data = DATA.engagement_by_intent || {};
+  if (!Object.keys(data).length) return;
+  const rows = Object.entries(data)
+    .sort((a,b) => (b[1].avg_views||0) - (a[1].avg_views||0))
+    .map(([intent, d]) => `
+      <tr>
+        <td>${intent.replace(/_/g,' ')}</td>
+        <td>${(d.avg_views||0).toLocaleString()}</td>
+        <td>${(d.avg_link_clicks||0).toFixed(1)}</td>
+        <td>${d.count||0}</td>
+      </tr>`).join('');
+  document.getElementById('engagement-by-intent-table').innerHTML = `
+    <table class="intent-table">
+      <thead><tr><th>Intent</th><th>Avg Views</th><th>Avg Link Clicks</th><th>Posts</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Panel 4: Caption Length cards ────────────────────────────
+function renderCaptionLengthCards() {
+  const perf = DATA.caption_length_performance || {};
+  const buckets = [
+    { key:'short',      label:'Short',       sub:'< 50 chars' },
+    { key:'medium',     label:'Medium',      sub:'50–150 chars' },
+    { key:'long',       label:'Long',        sub:'150–300 chars' },
+    { key:'extra_long', label:'Extra Long',  sub:'> 300 chars' },
+  ];
+  const best = buckets.reduce((b,c) =>
+    ((perf[c.key]||{}).avg_views||0) > ((perf[b.key]||{}).avg_views||0) ? c : b,
+    buckets[0]
+  );
+  const html = buckets.map(b => {
+    const d = perf[b.key] || {};
+    const isBest = b.key === best.key;
+    return `<div class="length-card${isBest?' best':''}">
+      <div class="length-card-label">${b.label} ${isBest?'★':''}</div>
+      <div class="length-card-value">${(d.avg_views||0).toLocaleString()}</div>
+      <div class="length-card-sub">${b.sub} · ${d.count||0} posts</div>
+    </div>`;
+  }).join('');
+  document.getElementById('caption-length-cards').innerHTML = html;
+}
+
+// ── Panel 5: High-performing captions with 125-char highlight ─
+function renderCaptionExamples() {
+  const captions = DATA.high_performing_captions || [];
+  if (!captions.length) { document.getElementById('caption-examples').innerHTML = '<p style="color:#6b7280">No caption data available.</p>'; return; }
+
+  const html = captions.slice(0,5).map((c,i) => {
+    const full    = c.caption || '';
+    const hook    = full.slice(0,125);
+    const rest    = full.slice(125);
+    const seoLabel = c.hook_quality_label || 'weak';
+    const badgeCls = `seo-badge seo-badge-${seoLabel}`;
+    const seoScore = c.seo_score != null ? ` · ${c.seo_score}/100` : '';
+    return `<div class="caption-example-card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:600;color:#9ca3af;">#${i+1} · ${c.platform||''} · ${(c.views||0).toLocaleString()} views</span>
+        <span class="${badgeCls}">${seoLabel}${seoScore}</span>
+      </div>
+      <div style="font-size:13px;line-height:1.6;color:#d1d5db;">
+        <span class="caption-hook-highlight">${escHtml(hook)}</span>${escHtml(rest)}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('caption-examples').innerHTML = html;
+}
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Panel 6: Prescription box ─────────────────────────────────
+function renderPrescriptions() {
+  const prescriptions = DATA.seo_prescriptions || [];
+  const issues        = DATA.seo_top_issues    || [];
+  if (!prescriptions.length) return;
+  const colors = ['dot-high','dot-medium','dot-low'];
+  const items = prescriptions.map((p,i) =>
+    `<div class="prescription-item">
+      <div class="prescription-dot ${colors[i % colors.length]}"></div>
+      <div>${p}</div>
+    </div>`
+  ).join('');
+  const issueText = issues.length
+    ? `<div style="margin-top:12px;font-size:12px;color:#6b7280;">Top weak dimensions: ${issues.map(d=>d.replace(/_/g,' ')).join(' · ')}</div>`
+    : '';
+  document.getElementById('prescription-box').innerHTML = `
+    <div class="prescription-box">
+      <div class="prescription-title">💊 Caption Prescriptions</div>
+      ${items}${issueText}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT — render all sections
+// ═══════════════════════════════════════════════════════════
+(function init() {
+  try { renderHeader(); } catch(e) { console.error('Header error:', e); }
+  try { renderHeroStats(); } catch(e) { console.error('Hero stats error:', e); }
+  try { renderInsightCards(); } catch(e) { console.error('Insights error:', e); }
+  try { renderTopPerformers(); } catch(e) { console.error('Top performers error:', e); }
+  try { renderBrandsChart(); } catch(e) { console.error('Brands chart error:', e); }
+  try { renderAttribution(); } catch(e) { console.error('Attribution error:', e); }
+  try { renderPostCards(); } catch(e) { console.error('Post cards error:', e); }
+  try { renderTopProducts(); } catch(e) { console.error('Top products error:', e); }
+  try { renderThemes(); } catch(e) { console.error('Themes error:', e); }
+  try { renderCaptionStatChips(); } catch(e) { console.error('Caption stat chips error:', e); }
+  try { renderCaptions(); } catch(e) { console.error('Captions error:', e); }
+  try { renderSeoKpis(); } catch(e) { console.error('SEO KPIs error:', e); }
+  try { renderEngagementByIntentTable(); } catch(e) { console.error('Engagement by intent error:', e); }
+  try { renderCaptionLengthCards(); } catch(e) { console.error('Caption length cards error:', e); }
+  try { renderCaptionExamples(); } catch(e) { console.error('Caption examples error:', e); }
+  try { renderPrescriptions(); } catch(e) { console.error('Prescriptions error:', e); }
+  try { renderViralPanel(); } catch(e) { console.error('Viral panel error:', e); }
+  try { renderSeasonalChart(); } catch(e) { console.error('Seasonal chart error:', e); }
+  try { renderReels(); } catch(e) { console.error('Reels error:', e); }
+})();
+</script>
+
+</body>
+</html>
