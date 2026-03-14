@@ -1,0 +1,123 @@
+2026-03-09 07:00:11,937 INFO === Syncing nicki_entenmann (setup=False) ===
+2026-03-09 07:00:11,937 INFO No saved state found — fresh browser session
+2026-03-09 07:00:12,932 INFO Navigating to Associates Central (headless)...
+2026-03-09 07:00:15,653 INFO URL after navigation: https://www.amazon.com/ap/signin?openid.pape.max_auth_age=3600&openid.return_to=
+2026-03-09 07:00:15,654 INFO Session expired, doing full login...
+2026-03-09 07:17:21,075 ERROR Login step failed: Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("#signInSubmit")
+    - locator resolved to <input type="submit" id="signInSubmit" class="a-button-input" aria-labelledby="auth-signin-button-announce"/>
+  - attempting click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - performing click action
+    - click action done
+    - waiting for scheduled navigations to finish
+
+2026-03-09 07:17:21,076 ERROR Login failed for nicki_entenmann
+2026-03-09 07:17:21,121 WARNING No results to push
+2026-03-10 07:00:22,499 INFO === Syncing nicki_entenmann (setup=False) ===
+2026-03-10 07:00:22,499 INFO No saved state found — fresh browser session
+2026-03-10 07:00:23,256 INFO Navigating to Associates Central (headless)...
+2026-03-10 07:00:26,024 INFO URL after navigation: https://www.amazon.com/ap/signin?openid.pape.max_auth_age=3600&openid.return_to=
+2026-03-10 07:00:26,024 INFO Session expired, doing full login...
+2026-03-10 07:00:28,489 INFO After password: https://www.amazon.com/ap/mfa?ie=UTF8&arb=48c8eb98-b7f2-4164-8b0e-b82c9b99ad9f&m
+2026-03-10 07:00:28,495 INFO 2FA page text: Two-Step Verification
+
+For added security, please enter the code that has been sent to a phone number ending in 946
+
+Enter code:
+Don't require code on this browser
+Sign in
+Didn't receive the code?
+or
+Send code to WhatsApp
+Conditions of Use  Privacy Notice  Help 
+© 1996-2026, Amazon.com, Inc. or its affiliates
+2026-03-10 07:00:38,533 INFO Submitting TOTP: 755448
+2026-03-10 07:00:39,742 INFO After TOTP: https://www.amazon.com/ap/mfa?ie=UTF8&arb=43fc8512-c125-422a-bca2-017329f400ce&m
+2026-03-10 07:00:39,743 ERROR Login failed after all steps. url=https://www.amazon.com/ap/mfa?ie=UTF8&arb=43fc8512-c125-422a-bca2-017329f400ce&m
+2026-03-10 07:00:39,743 ERROR Login failed for nicki_entenmann
+2026-03-10 07:00:39,798 WARNING No results to push
+2026-03-11 07:00:10,622 INFO === Syncing nicki_entenmann (setup=False) ===
+2026-03-11 07:00:10,623 INFO No saved state found — fresh browser session
+2026-03-11 07:00:12,467 INFO Navigating to Associates Central (headless)...
+2026-03-11 07:00:15,225 INFO URL after navigation: https://www.amazon.com/ap/signin?openid.pape.max_auth_age=3600&openid.return_to=
+2026-03-11 07:00:15,226 INFO Session expired, doing full login...
+2026-03-11 07:00:17,714 INFO After password: https://www.amazon.com/ap/mfa?ie=UTF8&arb=5405ca25-be70-4175-bb11-105319b00c01&m
+2026-03-11 07:00:17,719 INFO 2FA page text: Two-Step Verification
+
+For added security, please enter the code that has been sent to a phone number ending in 946
+
+Enter code:
+Don't require code on this browser
+Sign in
+Didn't receive the code?
+or
+Send code to WhatsApp
+Conditions of Use  Privacy Notice  Help 
+© 1996-2026, Amazon.com, Inc. or its affiliates
+2026-03-11 07:00:27,749 INFO Submitting TOTP: 594119
+2026-03-11 07:00:29,002 INFO After TOTP: https://www.amazon.com/ap/mfa?ie=UTF8&arb=4ec5c96a-469f-49eb-8a47-11e1260200de&m
+2026-03-11 07:00:29,003 ERROR Login failed after all steps. url=https://www.amazon.com/ap/mfa?ie=UTF8&arb=4ec5c96a-469f-49eb-8a47-11e1260200de&m
+2026-03-11 07:00:29,003 ERROR Login failed for nicki_entenmann
+2026-03-11 07:00:29,061 WARNING No results to push
+2026-03-12 07:00:18,021 INFO === Syncing nicki_entenmann (setup=False) ===
+2026-03-12 07:00:18,021 INFO No saved state found — fresh browser session
+2026-03-12 07:00:18,655 INFO Navigating to Associates Central (headless)...
+2026-03-12 07:00:21,251 INFO URL after navigation: https://www.amazon.com/ap/signin?openid.pape.max_auth_age=3600&openid.return_to=
+2026-03-12 07:00:21,251 INFO Session expired, doing full login...
+2026-03-12 07:00:23,643 INFO After password: https://www.amazon.com/ap/mfa?ie=UTF8&arb=b6951646-5635-4196-9701-2b1de65d10ba&m
+2026-03-12 07:00:23,647 INFO 2FA page text: Two-Step Verification
+
+For added security, please enter the code that has been sent to a phone number ending in 946
+
+Enter code:
+Don't require code on this browser
+Sign in
+Didn't receive the code?
+or
+Send code to WhatsApp
+Conditions of Use  Privacy Notice  Help 
+© 1996-2026, Amazon.com, Inc. or its affiliates
+2026-03-12 07:00:33,680 INFO Submitting TOTP: 058844
+2026-03-12 07:00:34,960 INFO After TOTP: https://www.amazon.com/ap/mfa?ie=UTF8&arb=1a35db44-c282-48fe-bf34-2078e1697f5b&m
+2026-03-12 07:00:34,960 ERROR Login failed after all steps. url=https://www.amazon.com/ap/mfa?ie=UTF8&arb=1a35db44-c282-48fe-bf34-2078e1697f5b&m
+2026-03-12 07:00:34,960 ERROR Login failed for nicki_entenmann
+2026-03-12 07:00:35,010 WARNING No results to push
+2026-03-13 07:00:09,269 INFO === Syncing nicki_entenmann (setup=False) ===
+2026-03-13 07:00:09,270 INFO No saved state found — fresh browser session
+2026-03-13 07:00:09,907 INFO Navigating to Associates Central (headless)...
+2026-03-13 07:00:12,825 INFO URL after navigation: https://www.amazon.com/ap/signin?openid.pape.max_auth_age=3600&openid.return_to=
+2026-03-13 07:00:12,826 INFO Session expired, doing full login...
+2026-03-13 07:00:28,128 ERROR Login step failed: Page.wait_for_selector: Timeout 15000ms exceeded.
+Call log:
+  - waiting for locator("#ap_email") to be visible
+
+2026-03-13 07:00:28,129 ERROR Login failed for nicki_entenmann
+2026-03-13 07:00:28,187 WARNING No results to push
+2026-03-14 07:00:18,836 INFO === Syncing nicki_entenmann (setup=False) ===
+2026-03-14 07:00:18,837 INFO No saved state found — fresh browser session
+2026-03-14 07:00:19,551 INFO Navigating to Associates Central (headless)...
+2026-03-14 07:00:22,297 INFO URL after navigation: https://www.amazon.com/ap/signin?openid.pape.max_auth_age=3600&openid.return_to=
+2026-03-14 07:00:22,298 INFO Session expired, doing full login...
+2026-03-14 07:00:33,684 INFO After password: https://www.amazon.com/ap/mfa?ie=UTF8&arb=4801dca4-8754-4736-8f23-d0eed54417e1&m
+2026-03-14 07:00:33,690 INFO 2FA page text: Two-Step Verification
+
+For added security, please enter the code that has been sent to a phone number ending in 946
+
+Enter code:
+Don't require code on this browser
+Sign in
+Didn't receive the code?
+or
+Send code to WhatsApp
+Conditions of Use  Privacy Notice  Help 
+© 1996-2026, Amazon.com, Inc. or its affiliates
+2026-03-14 07:00:58,526 INFO Submitting TOTP: 673593
+2026-03-14 07:00:59,747 INFO After TOTP: https://www.amazon.com/ap/mfa?ie=UTF8&arb=42180829-c50e-4ea6-9f6f-4eb04deab3e8&m
+2026-03-14 07:00:59,747 ERROR Login failed after all steps. url=https://www.amazon.com/ap/mfa?ie=UTF8&arb=42180829-c50e-4ea6-9f6f-4eb04deab3e8&m
+2026-03-14 07:00:59,748 ERROR Login failed for nicki_entenmann
+2026-03-14 07:00:59,857 WARNING No results to push

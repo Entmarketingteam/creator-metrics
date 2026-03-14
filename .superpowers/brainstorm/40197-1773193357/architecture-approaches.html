@@ -1,0 +1,58 @@
+<h2>How should global filters (creator + date) be wired?</h2>
+<p class="subtitle">All 3 options produce the same UX — the difference is how the state lives and flows through the app.</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>URL Params as Source of Truth <span style="background:#dcfce7;color:#166534;font-size:11px;padding:2px 8px;border-radius:999px;margin-left:8px;font-weight:600">RECOMMENDED</span></h3>
+      <p style="margin-bottom:10px">Filters live in the URL: <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:12px">?creator=nicki&start=2026-02-10&end=2026-03-12</code></p>
+      <p style="margin-bottom:10px">A <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:12px">useFilters()</code> hook reads <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:12px">useSearchParams()</code> and pushes updates to the router. Server components receive params directly as page props — no client state needed.</p>
+      <div style="background:#f8faff;border:1px solid #c7d2fe;border-radius:8px;padding:12px;font-size:12px;color:#374151;margin-top:8px">
+        <strong>Data flow:</strong><br>
+        URL params → <code>useFilters()</code> hook → components + API calls<br>
+        Filter change → <code>router.push()</code> → URL updates → page re-renders
+      </div>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Survives page refresh</li><li>Shareable/bookmarkable</li><li>No extra state management</li><li>Next.js App Router native pattern</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Slightly more routing boilerplate</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>React Context (in-memory)</h3>
+      <p style="margin-bottom:10px">A <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:12px">FilterProvider</code> wraps the app and holds creator + date range in React state. All pages and components read from <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:12px">useFilterContext()</code>.</p>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;font-size:12px;color:#374151;margin-top:8px">
+        <strong>Data flow:</strong><br>
+        FilterProvider → context → components + API calls<br>
+        Filter change → setState → re-render (URL stays the same)
+      </div>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Simple to implement</li><li>No routing complexity</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Lost on page refresh</li><li>Not shareable</li><li>Context re-renders can cascade</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>URL + Context Hybrid</h3>
+      <p style="margin-bottom:10px">URL is source of truth AND a context layer mirrors it for ergonomics. On mount, context hydrates from URL. On change, both URL and context update together.</p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;font-size:12px;color:#374151;margin-top:8px">
+        <strong>Data flow:</strong><br>
+        URL → hydrate context on mount<br>
+        Filter change → update URL + context simultaneously
+      </div>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Shareable URLs</li><li>Convenient context access</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Two sources of truth to keep in sync</li><li>More complex, more bugs</li><li>Overkill for internal tool</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

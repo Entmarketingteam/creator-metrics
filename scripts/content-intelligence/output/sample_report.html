@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Content Intelligence Report — Nicki Entenmann</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-light: #e0e7ff;
+      --primary-dark: #4338ca;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #d1fae5;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ─── Page Header ─── */
+    .page-header {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #818cf8 100%);
+      color: white;
+      padding: 48px 40px 40px;
+    }
+    .page-header .inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    .header-title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+    .header-subtitle { font-size: 15px; opacity: 0.8; margin-top: 4px; }
+    .date-badge {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 24px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+    }
+    .generated-at {
+      font-size: 12px;
+      opacity: 0.6;
+      margin-top: 16px;
+    }
+
+    /* ─── Layout ─── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ─── Hero Stats ─── */
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 900px) { .hero-stats { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .hero-stats { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border-top: 3px solid var(--primary);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .stat-card.accent { border-top-color: var(--accent); }
+    .stat-card.success { border-top-color: var(--success); }
+    .stat-icon { font-size: 22px; margin-bottom: 8px; }
+    .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--gray-500); margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 800; color: var(--gray-900); line-height: 1.1; }
+    .stat-sub { font-size: 12px; color: var(--gray-500); margin-top: 4px; }
+
+    /* ─── Insight Cards ─── */
+    .insight-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    @media (max-width: 768px) { .insight-cards { grid-template-columns: 1fr; } }
+
+    .insight-card {
+      background: linear-gradient(135deg, var(--primary-light), white);
+      border: 1px solid var(--primary-light);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .insight-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
+    .insight-text { font-size: 14px; color: var(--gray-700); line-height: 1.5; font-weight: 500; }
+
+    /* ─── Section ─── */
+    .section {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .section-icon { font-size: 20px; }
+    .section-title { font-size: 18px; font-weight: 700; color: var(--gray-900); }
+    .section-sub { font-size: 13px; color: var(--gray-500); margin-left: auto; }
+
+    /* ─── Chart containers ─── */
+    .chart-wrap { position: relative; }
+    .chart-wrap canvas { max-width: 100%; }
+
+    /* ─── Toggle buttons ─── */
+    .toggle-group {
+      display: flex;
+      gap: 4px;
+      background: var(--gray-100);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+      width: fit-content;
+    }
+    .toggle-btn {
+      padding: 6px 16px;
+      border: none;
+      background: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--gray-600);
+      transition: all 0.15s;
+    }
+    .toggle-btn.active {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      font-weight: 600;
+    }
+
+    /* ─── Attribution Table ─── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      background: var(--gray-50);
+      color: var(--gray-600);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      white-space: nowrap;
+    }
+    tbody td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+    tbody tr:hover { background: var(--gray-50); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--gray-200);
+      display: block;
+    }
+    .thumb-placeholder {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--primary-light), var(--accent-light));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .badge-url { background: var(--success-light); color: #065f46; }
+    .badge-date { background: var(--accent-light); color: #92400e; }
+    .badge-none { background: var(--gray-100); color: var(--gray-500); }
+
+    .confidence-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .conf-track {
+      width: 60px;
+      height: 6px;
+      background: var(--gray-200);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .conf-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--success);
+    }
+    .conf-fill.medium { background: var(--accent); }
+    .conf-fill.low { background: var(--gray-400); }
+    .conf-label { font-size: 11px; color: var(--gray-500); }
+
+    /* ─── Attribution stats bar ─── */
+    .attr-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 640px) { .attr-stats { grid-template-columns: repeat(2, 1fr); } }
+
+    .attr-stat { text-align: center; }
+    .attr-stat-value { font-size: 28px; font-weight: 800; color: var(--primary); }
+    .attr-stat-label { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+
+    /* ─── Post Cards Grid ─── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 900px) { .cards-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .post-card {
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .post-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+
+    .post-img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent-light) 100%);
+      display: block;
+    }
+    .post-img-placeholder {
+      width: 100%;
+      aspect-ratio: 1;
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent-light) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+    .post-body { padding: 12px; }
+    .post-commission { font-size: 18px; font-weight: 800; color: var(--success); }
+    .post-date { font-size: 11px; color: var(--gray-500); margin-bottom: 6px; }
+    .post-meta { display: flex; gap: 10px; margin-top: 8px; }
+    .post-metric { font-size: 12px; color: var(--gray-600); }
+    .post-metric span { font-weight: 600; color: var(--gray-800); }
+    .post-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .post-tag {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+    .post-rank {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: var(--accent);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .post-img-wrap { position: relative; }
+
+    /* ─── Theme donut + cards ─── */
+    .themes-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 32px;
+      align-items: flex-start;
+    }
+    @media (max-width: 768px) { .themes-layout { grid-template-columns: 1fr; } }
+
+    .theme-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 500px) { .theme-cards-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .theme-card {
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      transition: border-color 0.15s;
+    }
+    .theme-card:hover { border-color: var(--primary); }
+    .theme-name { font-size: 13px; font-weight: 600; text-transform: capitalize; margin-bottom: 4px; }
+    .theme-avg { font-size: 16px; font-weight: 700; color: var(--success); }
+    .theme-count { font-size: 11px; color: var(--gray-500); }
+    .theme-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+    /* ─── Caption / NLP ─── */
+    .captions-layout {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 32px;
+    }
+    @media (max-width: 768px) { .captions-layout { grid-template-columns: 1fr; } }
+
+    .caption-examples { display: flex; flex-direction: column; gap: 14px; }
+    .caption-example {
+      background: var(--gray-50);
+      border-left: 3px solid var(--primary);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 12px 14px;
+    }
+    .caption-example-text { font-size: 13px; color: var(--gray-700); line-height: 1.6; font-style: italic; }
+    .caption-example-meta { font-size: 11px; color: var(--gray-500); margin-top: 6px; }
+
+    /* ─── Reels Table ─── */
+    .reel-metric { display: flex; align-items: center; gap: 4px; }
+    .reel-metric-icon { font-size: 13px; }
+    .top-reel { background: linear-gradient(90deg, rgba(99,102,241,0.06) 0%, transparent 100%); }
+
+    /* ─── Seasonal annotation labels ─── */
+    .season-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-600); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ─── Footer ─── */
+    .page-footer {
+      text-align: center;
+      padding: 32px;
+      color: var(--gray-400);
+      font-size: 12px;
+    }
+    .footer-brand { font-weight: 700; color: var(--primary); }
+  </style>
+</head>
+<body>
+
+<script>
+// ─── DATA INJECTION ───────────────────────────────────────────────────────────
+const DATA = {"meta": {"creator": "Nicki Entenmann", "date_range": "March 1 – May 31, 2025", "generated_at": "2026-03-13T18:06:25.376910Z"}, "summary": {"total_commissions": 40682.65, "total_ltk_clicks": 422015, "top_brand": "Abercrombie", "total_story_views": 1878485, "total_reel_views": 2353454}, "brands": [{"name": "Abercrombie", "commissions": 3180, "clicks": 5200, "orders": 127}, {"name": "Lululemon", "commissions": 2450, "clicks": 3800, "orders": 98}, {"name": "Free People", "commissions": 1820, "clicks": 2900, "orders": 72}, {"name": "ASOS", "commissions": 1210, "clicks": 4100, "orders": 85}, {"name": "Revolve", "commissions": 1180, "clicks": 2100, "orders": 53}, {"name": "Nordstrom", "commissions": 980, "clicks": 1800, "orders": 44}, {"name": "H&M", "commissions": 750, "clicks": 3200, "orders": 90}, {"name": "Mango", "commissions": 620, "clicks": 1500, "orders": 38}, {"name": "Zara", "commissions": 590, "clicks": 1300, "orders": 32}, {"name": "Urban Outfitters", "commissions": 480, "clicks": 1100, "orders": 27}, {"name": "Anthropologie", "commissions": 420, "clicks": 900, "orders": 21}, {"name": "SHEIN", "commissions": 310, "clicks": 2800, "orders": 68}, {"name": "J.Crew", "commissions": 280, "clicks": 600, "orders": 14}, {"name": "Gap", "commissions": 210, "clicks": 900, "orders": 22}, {"name": "Express", "commissions": 170, "clicks": 500, "orders": 12}], "ltk_posts": [{"id": "ltk_0000", "hero_image": null, "date_published": "2025-05-21", "clicks": 920, "commissions": 123.54, "orders": 13, "items_sold": 52, "share_url": "https://liketk.it/0000", "brands": ["Urban Outfitters"], "caption": "Obsessed with this new accessories look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["accessories"], "dominant_colors": ["white", "pink"], "content_type": "flat_lay", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0001", "hero_image": null, "date_published": "2025-03-30", "clicks": 3424, "commissions": 489.98, "orders": 33, "items_sold": 66, "share_url": "https://liketk.it/0001", "brands": ["Revolve", "J.Crew", "Abercrombie"], "caption": "My go-to for going_out this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["going_out", "matching_sets"], "dominant_colors": ["black", "pink"], "content_type": "flat_lay", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0002", "hero_image": null, "date_published": "2025-03-28", "clicks": 5395, "commissions": 910.21, "orders": 101, "items_sold": 404, "share_url": "https://liketk.it/0002", "brands": ["Mango", "Zara", "Lululemon"], "caption": "Obsessed with this new resort_wear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["resort_wear", "swimwear"], "dominant_colors": ["green", "black"], "content_type": "try_on_haul", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0003", "hero_image": null, "date_published": "2025-05-13", "clicks": 2308, "commissions": 198.83, "orders": 12, "items_sold": 36, "share_url": "https://liketk.it/0003", "brands": ["H&M"], "caption": "My go-to for going_out this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["going_out"], "dominant_colors": ["pink", "black"], "content_type": "flat_lay", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0004", "hero_image": null, "date_published": "2025-04-17", "clicks": 4211, "commissions": 350.4, "orders": 23, "items_sold": 92, "share_url": "https://liketk.it/0004", "brands": ["SHEIN", "ASOS", "Free People"], "caption": "My go-to for casual this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["casual"], "dominant_colors": ["black", "green"], "content_type": "flat_lay", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0005", "hero_image": null, "date_published": "2025-05-27", "clicks": 1787, "commissions": 321.58, "orders": 19, "items_sold": 57, "share_url": "https://liketk.it/0005", "brands": ["ASOS"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["denim", "resort_wear"], "dominant_colors": ["pink", "blue"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0006", "hero_image": null, "date_published": "2025-05-22", "clicks": 3335, "commissions": 446.73, "orders": 32, "items_sold": 128, "share_url": "https://liketk.it/0006", "brands": ["ASOS", "Free People"], "caption": "Obsessed with this new denim look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["denim", "accessories"], "dominant_colors": ["white", "pink"], "content_type": "flat_lay", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0007", "hero_image": null, "date_published": "2025-05-20", "clicks": 1850, "commissions": 168.78, "orders": 14, "items_sold": 14, "share_url": "https://liketk.it/0007", "brands": ["Gap", "Abercrombie", "Anthropologie"], "caption": "This accessories set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["accessories", "resort_wear"], "dominant_colors": ["pink", "black"], "content_type": "outfit_photo", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0008", "hero_image": null, "date_published": "2025-04-07", "clicks": 6168, "commissions": 424.33, "orders": 25, "items_sold": 75, "share_url": "https://liketk.it/0008", "brands": ["Express", "Lululemon", "Anthropologie"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "casual"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0009", "hero_image": null, "date_published": "2025-05-09", "clicks": 25724, "commissions": 1813.51, "orders": 129, "items_sold": 387, "share_url": "https://liketk.it/0009", "brands": ["Express", "Gap"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["swimwear", "athleisure"], "dominant_colors": ["white", "beige"], "content_type": "outfit_photo", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0010", "hero_image": null, "date_published": "2025-03-11", "clicks": 10355, "commissions": 700.67, "orders": 52, "items_sold": 156, "share_url": "https://liketk.it/000a", "brands": ["Mango", "Zara", "Free People"], "caption": "My go-to for casual this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["casual"], "dominant_colors": ["beige", "green"], "content_type": "flat_lay", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0011", "hero_image": null, "date_published": "2025-05-31", "clicks": 7126, "commissions": 619.79, "orders": 50, "items_sold": 150, "share_url": "https://liketk.it/000b", "brands": ["Lululemon"], "caption": "Obsessed with this new athleisure look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["athleisure", "going_out"], "dominant_colors": ["green", "pink"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0012", "hero_image": null, "date_published": "2025-05-15", "clicks": 2542, "commissions": 224.8, "orders": 21, "items_sold": 42, "share_url": "https://liketk.it/000c", "brands": ["Zara"], "caption": "This outerwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["outerwear"], "dominant_colors": ["pink", "blue"], "content_type": "flat_lay", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0013", "hero_image": null, "date_published": "2025-05-09", "clicks": 3064, "commissions": 286.1, "orders": 22, "items_sold": 88, "share_url": "https://liketk.it/000d", "brands": ["Lululemon"], "caption": "This denim set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["denim", "going_out"], "dominant_colors": ["blue", "pink"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0014", "hero_image": null, "date_published": "2025-03-07", "clicks": 7734, "commissions": 1292.46, "orders": 107, "items_sold": 428, "share_url": "https://liketk.it/000e", "brands": ["ASOS"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["athleisure", "going_out"], "dominant_colors": ["blue", "beige"], "content_type": "try_on_haul", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0015", "hero_image": null, "date_published": "2025-04-29", "clicks": 4759, "commissions": 504.64, "orders": 30, "items_sold": 30, "share_url": "https://liketk.it/000f", "brands": ["Zara", "Gap", "Abercrombie"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["swimwear"], "dominant_colors": ["beige", "blue"], "content_type": "lifestyle", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0016", "hero_image": null, "date_published": "2025-05-01", "clicks": 1222, "commissions": 218.78, "orders": 18, "items_sold": 72, "share_url": "https://liketk.it/0010", "brands": ["H&M", "SHEIN"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["resort_wear", "matching_sets"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0017", "hero_image": null, "date_published": "2025-03-08", "clicks": 6971, "commissions": 558.64, "orders": 65, "items_sold": 65, "share_url": "https://liketk.it/0011", "brands": ["Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "casual"], "dominant_colors": ["white", "green"], "content_type": "outfit_photo", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0018", "hero_image": null, "date_published": "2025-05-26", "clicks": 11842, "commissions": 821.49, "orders": 59, "items_sold": 177, "share_url": "https://liketk.it/0012", "brands": ["Anthropologie", "Urban Outfitters"], "caption": "This athleisure set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0019", "hero_image": null, "date_published": "2025-04-03", "clicks": 3104, "commissions": 388.08, "orders": 34, "items_sold": 34, "share_url": "https://liketk.it/0013", "brands": ["Urban Outfitters", "Express"], "caption": "Obsessed with this new swimwear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["swimwear"], "dominant_colors": ["green", "beige"], "content_type": "try_on_haul", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0020", "hero_image": null, "date_published": "2025-03-17", "clicks": 24493, "commissions": 1775.86, "orders": 151, "items_sold": 151, "share_url": "https://liketk.it/0014", "brands": ["SHEIN", "Revolve", "Urban Outfitters"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets"], "dominant_colors": ["pink", "white"], "content_type": "flat_lay", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0021", "hero_image": null, "date_published": "2025-04-03", "clicks": 1341, "commissions": 127.35, "orders": 11, "items_sold": 33, "share_url": "https://liketk.it/0015", "brands": ["Anthropologie"], "caption": "My go-to for outerwear this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["outerwear"], "dominant_colors": ["black", "white"], "content_type": "outfit_photo", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0022", "hero_image": null, "date_published": "2025-05-21", "clicks": 2084, "commissions": 413.93, "orders": 26, "items_sold": 26, "share_url": "https://liketk.it/0016", "brands": ["SHEIN", "H&M", "Zara"], "caption": "Obsessed with this new casual look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["casual", "matching_sets"], "dominant_colors": ["white", "beige"], "content_type": "outfit_photo", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0023", "hero_image": null, "date_published": "2025-04-17", "clicks": 3524, "commissions": 561.73, "orders": 50, "items_sold": 100, "share_url": "https://liketk.it/0017", "brands": ["Anthropologie"], "caption": "Obsessed with this new outerwear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["outerwear"], "dominant_colors": ["black", "green"], "content_type": "lifestyle", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0024", "hero_image": null, "date_published": "2025-05-19", "clicks": 10565, "commissions": 1434.03, "orders": 148, "items_sold": 444, "share_url": "https://liketk.it/0018", "brands": ["Free People"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["pink", "beige"], "content_type": "try_on_haul", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0025", "hero_image": null, "date_published": "2025-03-21", "clicks": 10322, "commissions": 752.26, "orders": 45, "items_sold": 90, "share_url": "https://liketk.it/0019", "brands": ["Nordstrom", "Revolve"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["going_out"], "dominant_colors": ["white", "beige"], "content_type": "lifestyle", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0026", "hero_image": null, "date_published": "2025-04-12", "clicks": 3553, "commissions": 279.1, "orders": 24, "items_sold": 72, "share_url": "https://liketk.it/001a", "brands": ["Lululemon"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "outerwear"], "dominant_colors": ["green", "black"], "content_type": "outfit_photo", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0027", "hero_image": null, "date_published": "2025-03-14", "clicks": 7394, "commissions": 574.81, "orders": 46, "items_sold": 184, "share_url": "https://liketk.it/001b", "brands": ["ASOS", "Revolve", "Abercrombie"], "caption": "Obsessed with this new denim look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["green", "pink"], "content_type": "flat_lay", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0028", "hero_image": null, "date_published": "2025-04-16", "clicks": 11965, "commissions": 842.21, "orders": 59, "items_sold": 177, "share_url": "https://liketk.it/001c", "brands": ["Revolve", "Anthropologie", "H&M"], "caption": "My go-to for resort_wear this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["resort_wear"], "dominant_colors": ["pink", "black"], "content_type": "flat_lay", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0029", "hero_image": null, "date_published": "2025-03-25", "clicks": 9677, "commissions": 822.03, "orders": 48, "items_sold": 192, "share_url": "https://liketk.it/001d", "brands": ["Revolve", "ASOS"], "caption": "This denim set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["denim", "swimwear"], "dominant_colors": ["blue", "pink"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0030", "hero_image": null, "date_published": "2025-05-26", "clicks": 3064, "commissions": 218.74, "orders": 13, "items_sold": 39, "share_url": "https://liketk.it/001e", "brands": ["Zara", "Anthropologie"], "caption": "Obsessed with this new athleisure look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0031", "hero_image": null, "date_published": "2025-03-26", "clicks": 2330, "commissions": 157.04, "orders": 11, "items_sold": 22, "share_url": "https://liketk.it/001f", "brands": ["Express", "Anthropologie"], "caption": "My go-to for matching_sets this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["matching_sets"], "dominant_colors": ["blue", "pink"], "content_type": "flat_lay", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0032", "hero_image": null, "date_published": "2025-03-19", "clicks": 7882, "commissions": 630.13, "orders": 40, "items_sold": 160, "share_url": "https://liketk.it/0020", "brands": ["Free People"], "caption": "Obsessed with this new denim look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["green", "beige"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0033", "hero_image": null, "date_published": "2025-04-28", "clicks": 1484, "commissions": 144.01, "orders": 10, "items_sold": 40, "share_url": "https://liketk.it/0021", "brands": ["Mango", "Free People", "SHEIN"], "caption": "My go-to for matching_sets this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["matching_sets", "denim"], "dominant_colors": ["black", "beige"], "content_type": "try_on_haul", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0034", "hero_image": null, "date_published": "2025-05-06", "clicks": 4423, "commissions": 470.68, "orders": 31, "items_sold": 31, "share_url": "https://liketk.it/0022", "brands": ["Nordstrom", "Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["resort_wear"], "dominant_colors": ["beige", "pink"], "content_type": "lifestyle", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0035", "hero_image": null, "date_published": "2025-05-28", "clicks": 1483, "commissions": 162.11, "orders": 14, "items_sold": 56, "share_url": "https://liketk.it/0023", "brands": ["Gap"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim", "swimwear"], "dominant_colors": ["green", "white"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0036", "hero_image": null, "date_published": "2025-05-01", "clicks": 319, "commissions": 25.48, "orders": 1, "items_sold": 4, "share_url": "https://liketk.it/0024", "brands": ["ASOS", "Revolve"], "caption": "My go-to for accessories this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["accessories", "going_out"], "dominant_colors": ["white", "blue"], "content_type": "try_on_haul", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0037", "hero_image": null, "date_published": "2025-05-25", "clicks": 4333, "commissions": 651.6, "orders": 51, "items_sold": 204, "share_url": "https://liketk.it/0025", "brands": ["Express"], "caption": "Obsessed with this new accessories look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["accessories"], "dominant_colors": ["white", "blue"], "content_type": "flat_lay", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0038", "hero_image": null, "date_published": "2025-04-29", "clicks": 1563, "commissions": 189.01, "orders": 15, "items_sold": 15, "share_url": "https://liketk.it/0026", "brands": ["Revolve", "Gap"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim", "resort_wear"], "dominant_colors": ["white", "green"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0039", "hero_image": null, "date_published": "2025-04-14", "clicks": 3330, "commissions": 228.53, "orders": 27, "items_sold": 27, "share_url": "https://liketk.it/0027", "brands": ["Gap"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["going_out"], "dominant_colors": ["beige", "pink"], "content_type": "lifestyle", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0040", "hero_image": null, "date_published": "2025-05-25", "clicks": 2439, "commissions": 252.76, "orders": 23, "items_sold": 23, "share_url": "https://liketk.it/0028", "brands": ["Revolve"], "caption": "Obsessed with this new casual look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["casual", "athleisure"], "dominant_colors": ["black", "green"], "content_type": "lifestyle", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0041", "hero_image": null, "date_published": "2025-04-20", "clicks": 9780, "commissions": 895.57, "orders": 54, "items_sold": 54, "share_url": "https://liketk.it/0029", "brands": ["J.Crew", "Revolve", "Anthropologie"], "caption": "Obsessed with this new athleisure look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["black", "green"], "content_type": "lifestyle", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0042", "hero_image": null, "date_published": "2025-05-24", "clicks": 3067, "commissions": 364.63, "orders": 22, "items_sold": 88, "share_url": "https://liketk.it/002a", "brands": ["Anthropologie", "Gap"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["athleisure", "denim"], "dominant_colors": ["blue", "beige"], "content_type": "try_on_haul", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0043", "hero_image": null, "date_published": "2025-05-18", "clicks": 7588, "commissions": 771.63, "orders": 62, "items_sold": 248, "share_url": "https://liketk.it/002b", "brands": ["Revolve"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["outerwear", "going_out"], "dominant_colors": ["blue", "green"], "content_type": "lifestyle", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0044", "hero_image": null, "date_published": "2025-04-13", "clicks": 636, "commissions": 93.38, "orders": 9, "items_sold": 9, "share_url": "https://liketk.it/002c", "brands": ["SHEIN", "Revolve", "Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["outerwear", "resort_wear"], "dominant_colors": ["white", "beige"], "content_type": "lifestyle", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0045", "hero_image": null, "date_published": "2025-05-02", "clicks": 5234, "commissions": 536.31, "orders": 35, "items_sold": 70, "share_url": "https://liketk.it/002d", "brands": ["ASOS", "H&M"], "caption": "This swimwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["swimwear", "athleisure"], "dominant_colors": ["pink", "green"], "content_type": "try_on_haul", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0046", "hero_image": null, "date_published": "2025-04-30", "clicks": 8002, "commissions": 534.73, "orders": 39, "items_sold": 39, "share_url": "https://liketk.it/002e", "brands": ["Revolve", "ASOS"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["matching_sets", "resort_wear"], "dominant_colors": ["black", "white"], "content_type": "flat_lay", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0047", "hero_image": null, "date_published": "2025-03-25", "clicks": 2709, "commissions": 221.24, "orders": 12, "items_sold": 24, "share_url": "https://liketk.it/002f", "brands": ["ASOS", "Nordstrom"], "caption": "This athleisure set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["athleisure", "going_out"], "dominant_colors": ["white", "green"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0048", "hero_image": null, "date_published": "2025-04-05", "clicks": 493, "commissions": 62.33, "orders": 3, "items_sold": 12, "share_url": "https://liketk.it/0030", "brands": ["Revolve", "Mango", "Gap"], "caption": "This athleisure set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["athleisure", "swimwear"], "dominant_colors": ["beige", "white"], "content_type": "try_on_haul", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0049", "hero_image": null, "date_published": "2025-05-01", "clicks": 1250, "commissions": 126.1, "orders": 9, "items_sold": 27, "share_url": "https://liketk.it/0031", "brands": ["J.Crew"], "caption": "Obsessed with this new casual look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["casual"], "dominant_colors": ["beige", "white"], "content_type": "lifestyle", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0050", "hero_image": null, "date_published": "2025-05-17", "clicks": 7327, "commissions": 574.4, "orders": 48, "items_sold": 48, "share_url": "https://liketk.it/0032", "brands": ["Urban Outfitters", "Express"], "caption": "Obsessed with this new resort_wear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["resort_wear", "denim"], "dominant_colors": ["beige", "pink"], "content_type": "try_on_haul", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0051", "hero_image": null, "date_published": "2025-05-24", "clicks": 1004, "commissions": 95.5, "orders": 9, "items_sold": 27, "share_url": "https://liketk.it/0033", "brands": ["Abercrombie", "ASOS"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets", "accessories"], "dominant_colors": ["pink", "blue"], "content_type": "outfit_photo", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0052", "hero_image": null, "date_published": "2025-05-27", "clicks": 3061, "commissions": 237.08, "orders": 17, "items_sold": 34, "share_url": "https://liketk.it/0034", "brands": ["Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["black", "beige"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0053", "hero_image": null, "date_published": "2025-03-08", "clicks": 2177, "commissions": 174.31, "orders": 12, "items_sold": 48, "share_url": "https://liketk.it/0035", "brands": ["SHEIN", "Revolve"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets", "athleisure"], "dominant_colors": ["green", "pink"], "content_type": "lifestyle", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0054", "hero_image": null, "date_published": "2025-04-26", "clicks": 883, "commissions": 94.81, "orders": 8, "items_sold": 8, "share_url": "https://liketk.it/0036", "brands": ["Anthropologie"], "caption": "This swimwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["swimwear", "athleisure"], "dominant_colors": ["green", "white"], "content_type": "flat_lay", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0055", "hero_image": null, "date_published": "2025-04-30", "clicks": 3911, "commissions": 502.64, "orders": 27, "items_sold": 81, "share_url": "https://liketk.it/0037", "brands": ["Nordstrom", "H&M"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets", "athleisure"], "dominant_colors": ["pink", "white"], "content_type": "flat_lay", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0056", "hero_image": null, "date_published": "2025-04-12", "clicks": 4683, "commissions": 402.83, "orders": 33, "items_sold": 99, "share_url": "https://liketk.it/0038", "brands": ["Nordstrom"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets"], "dominant_colors": ["white", "blue"], "content_type": "outfit_photo", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0057", "hero_image": null, "date_published": "2025-05-24", "clicks": 4591, "commissions": 828.51, "orders": 62, "items_sold": 124, "share_url": "https://liketk.it/0039", "brands": ["Revolve"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets", "swimwear"], "dominant_colors": ["blue", "pink"], "content_type": "outfit_photo", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0058", "hero_image": null, "date_published": "2025-03-04", "clicks": 6838, "commissions": 925.03, "orders": 96, "items_sold": 96, "share_url": "https://liketk.it/003a", "brands": ["Lululemon", "ASOS"], "caption": "My go-to for accessories this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["accessories"], "dominant_colors": ["white", "beige"], "content_type": "lifestyle", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0059", "hero_image": null, "date_published": "2025-05-31", "clicks": 2668, "commissions": 291.43, "orders": 22, "items_sold": 44, "share_url": "https://liketk.it/003b", "brands": ["Free People", "H&M", "ASOS"], "caption": "Obsessed with this new going_out look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["going_out", "matching_sets"], "dominant_colors": ["black", "blue"], "content_type": "try_on_haul", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0060", "hero_image": null, "date_published": "2025-05-04", "clicks": 3291, "commissions": 268.47, "orders": 16, "items_sold": 64, "share_url": "https://liketk.it/003c", "brands": ["Mango", "Nordstrom", "Gap"], "caption": "My go-to for casual this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["casual", "matching_sets"], "dominant_colors": ["black", "beige"], "content_type": "flat_lay", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0061", "hero_image": null, "date_published": "2025-05-13", "clicks": 6852, "commissions": 752.33, "orders": 67, "items_sold": 134, "share_url": "https://liketk.it/003d", "brands": ["J.Crew", "Gap", "Anthropologie"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim", "accessories"], "dominant_colors": ["white", "beige"], "content_type": "try_on_haul", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0062", "hero_image": null, "date_published": "2025-03-13", "clicks": 8546, "commissions": 833.0, "orders": 66, "items_sold": 198, "share_url": "https://liketk.it/003e", "brands": ["Free People", "Lululemon", "Mango"], "caption": "This denim set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["green", "blue"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0063", "hero_image": null, "date_published": "2025-04-12", "clicks": 14303, "commissions": 1625.35, "orders": 145, "items_sold": 435, "share_url": "https://liketk.it/003f", "brands": ["Lululemon", "ASOS", "Anthropologie"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "swimwear"], "dominant_colors": ["pink", "white"], "content_type": "lifestyle", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0064", "hero_image": null, "date_published": "2025-03-13", "clicks": 4366, "commissions": 727.14, "orders": 75, "items_sold": 225, "share_url": "https://liketk.it/0040", "brands": ["J.Crew", "Abercrombie"], "caption": "This swimwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["swimwear", "accessories"], "dominant_colors": ["black", "blue"], "content_type": "flat_lay", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0065", "hero_image": null, "date_published": "2025-04-01", "clicks": 6643, "commissions": 513.98, "orders": 52, "items_sold": 104, "share_url": "https://liketk.it/0041", "brands": ["Anthropologie", "ASOS", "Mango"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["blue", "black"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0066", "hero_image": null, "date_published": "2025-04-02", "clicks": 12358, "commissions": 1280.32, "orders": 117, "items_sold": 351, "share_url": "https://liketk.it/0042", "brands": ["Nordstrom", "Urban Outfitters"], "caption": "My go-to for athleisure this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["pink", "black"], "content_type": "lifestyle", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0067", "hero_image": null, "date_published": "2025-04-08", "clicks": 2018, "commissions": 205.27, "orders": 19, "items_sold": 76, "share_url": "https://liketk.it/0043", "brands": ["Gap"], "caption": "This resort_wear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["resort_wear", "accessories"], "dominant_colors": ["white", "green"], "content_type": "outfit_photo", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0068", "hero_image": null, "date_published": "2025-05-17", "clicks": 10003, "commissions": 713.01, "orders": 45, "items_sold": 90, "share_url": "https://liketk.it/0044", "brands": ["Anthropologie"], "caption": "This outerwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["outerwear"], "dominant_colors": ["pink", "beige"], "content_type": "outfit_photo", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0069", "hero_image": null, "date_published": "2025-05-20", "clicks": 5843, "commissions": 621.1, "orders": 45, "items_sold": 180, "share_url": "https://liketk.it/0045", "brands": ["Nordstrom", "SHEIN"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["beige", "pink"], "content_type": "try_on_haul", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0070", "hero_image": null, "date_published": "2025-05-07", "clicks": 3234, "commissions": 486.67, "orders": 28, "items_sold": 28, "share_url": "https://liketk.it/0046", "brands": ["Mango"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["resort_wear", "outerwear"], "dominant_colors": ["beige", "blue"], "content_type": "try_on_haul", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0071", "hero_image": null, "date_published": "2025-03-12", "clicks": 7829, "commissions": 755.33, "orders": 60, "items_sold": 120, "share_url": "https://liketk.it/0047", "brands": ["Anthropologie"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim", "outerwear"], "dominant_colors": ["white", "green"], "content_type": "try_on_haul", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0072", "hero_image": null, "date_published": "2025-05-18", "clicks": 2990, "commissions": 225.87, "orders": 13, "items_sold": 13, "share_url": "https://liketk.it/0048", "brands": ["Abercrombie"], "caption": "This denim set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["denim", "athleisure"], "dominant_colors": ["blue", "white"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0073", "hero_image": null, "date_published": "2025-03-31", "clicks": 8059, "commissions": 845.15, "orders": 57, "items_sold": 228, "share_url": "https://liketk.it/0049", "brands": ["Lululemon", "Gap", "Mango"], "caption": "This casual set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["casual", "denim"], "dominant_colors": ["white", "black"], "content_type": "flat_lay", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0074", "hero_image": null, "date_published": "2025-04-26", "clicks": 3740, "commissions": 433.57, "orders": 24, "items_sold": 72, "share_url": "https://liketk.it/004a", "brands": ["H&M"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "outerwear"], "dominant_colors": ["white", "blue"], "content_type": "outfit_photo", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0075", "hero_image": null, "date_published": "2025-05-24", "clicks": 3196, "commissions": 217.26, "orders": 25, "items_sold": 50, "share_url": "https://liketk.it/004b", "brands": ["ASOS", "Lululemon", "J.Crew"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["going_out", "casual"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0076", "hero_image": null, "date_published": "2025-05-16", "clicks": 291, "commissions": 45.27, "orders": 4, "items_sold": 4, "share_url": "https://liketk.it/004c", "brands": ["Gap", "Abercrombie", "Free People"], "caption": "This casual set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["casual", "athleisure"], "dominant_colors": ["beige", "green"], "content_type": "try_on_haul", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0077", "hero_image": null, "date_published": "2025-03-03", "clicks": 2260, "commissions": 182.05, "orders": 13, "items_sold": 13, "share_url": "https://liketk.it/004d", "brands": ["J.Crew", "Nordstrom"], "caption": "My go-to for matching_sets this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["matching_sets"], "dominant_colors": ["green", "beige"], "content_type": "outfit_photo", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0078", "hero_image": null, "date_published": "2025-05-24", "clicks": 7392, "commissions": 504.95, "orders": 58, "items_sold": 232, "share_url": "https://liketk.it/004e", "brands": ["Lululemon", "Mango", "SHEIN"], "caption": "Obsessed with this new denim look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["denim", "accessories"], "dominant_colors": ["white", "black"], "content_type": "flat_lay", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, {"id": "ltk_0079", "hero_image": null, "date_published": "2025-03-09", "clicks": 1490, "commissions": 137.36, "orders": 9, "items_sold": 36, "share_url": "https://liketk.it/004f", "brands": ["Zara", "Urban Outfitters"], "caption": "Obsessed with this new accessories look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["accessories", "resort_wear"], "dominant_colors": ["pink", "white"], "content_type": "flat_lay", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}], "ig_stories": [{"id": "story_0000", "date": "2025-04-25", "views": 18796, "link_clicks": 283, "reach": 16559}, {"id": "story_0001", "date": "2025-04-13", "views": 18860, "link_clicks": 458, "reach": 16631}, {"id": "story_0002", "date": "2025-03-13", "views": 14241, "link_clicks": 487, "reach": 13240}, {"id": "story_0003", "date": "2025-05-25", "views": 12352, "link_clicks": 433, "reach": 8001}, {"id": "story_0004", "date": "2025-05-27", "views": 19540, "link_clicks": 118, "reach": 5989}, {"id": "story_0005", "date": "2025-03-11", "views": 7054, "link_clicks": 492, "reach": 6164}, {"id": "story_0006", "date": "2025-04-17", "views": 8263, "link_clicks": 619, "reach": 4965}, {"id": "story_0007", "date": "2025-05-15", "views": 22402, "link_clicks": 625, "reach": 13801}, {"id": "story_0008", "date": "2025-05-25", "views": 8005, "link_clicks": 470, "reach": 14586}, {"id": "story_0009", "date": "2025-05-25", "views": 17858, "link_clicks": 788, "reach": 4685}, {"id": "story_0010", "date": "2025-04-06", "views": 23674, "link_clicks": 369, "reach": 14522}, {"id": "story_0011", "date": "2025-03-14", "views": 22937, "link_clicks": 569, "reach": 9971}, {"id": "story_0012", "date": "2025-03-20", "views": 19800, "link_clicks": 279, "reach": 6546}, {"id": "story_0013", "date": "2025-04-14", "views": 22227, "link_clicks": 426, "reach": 6764}, {"id": "story_0014", "date": "2025-04-05", "views": 22812, "link_clicks": 281, "reach": 17061}, {"id": "story_0015", "date": "2025-05-11", "views": 24372, "link_clicks": 678, "reach": 3860}, {"id": "story_0016", "date": "2025-05-17", "views": 12763, "link_clicks": 79, "reach": 8911}, {"id": "story_0017", "date": "2025-04-04", "views": 14124, "link_clicks": 397, "reach": 14502}, {"id": "story_0018", "date": "2025-03-01", "views": 9944, "link_clicks": 196, "reach": 16132}, {"id": "story_0019", "date": "2025-03-09", "views": 8648, "link_clicks": 698, "reach": 4004}, {"id": "story_0020", "date": "2025-03-12", "views": 21382, "link_clicks": 270, "reach": 15327}, {"id": "story_0021", "date": "2025-04-23", "views": 18865, "link_clicks": 399, "reach": 8157}, {"id": "story_0022", "date": "2025-04-17", "views": 14211, "link_clicks": 788, "reach": 13629}, {"id": "story_0023", "date": "2025-05-12", "views": 23537, "link_clicks": 136, "reach": 4723}, {"id": "story_0024", "date": "2025-03-20", "views": 9158, "link_clicks": 682, "reach": 4630}, {"id": "story_0025", "date": "2025-05-26", "views": 6673, "link_clicks": 328, "reach": 17519}, {"id": "story_0026", "date": "2025-05-24", "views": 17894, "link_clicks": 547, "reach": 17484}, {"id": "story_0027", "date": "2025-04-23", "views": 12951, "link_clicks": 270, "reach": 19788}, {"id": "story_0028", "date": "2025-03-15", "views": 15310, "link_clicks": 490, "reach": 6633}, {"id": "story_0029", "date": "2025-04-06", "views": 23435, "link_clicks": 548, "reach": 13106}, {"id": "story_0030", "date": "2025-03-06", "views": 11225, "link_clicks": 454, "reach": 4795}, {"id": "story_0031", "date": "2025-03-01", "views": 10698, "link_clicks": 358, "reach": 9921}, {"id": "story_0032", "date": "2025-03-18", "views": 12372, "link_clicks": 346, "reach": 13751}, {"id": "story_0033", "date": "2025-03-16", "views": 4253, "link_clicks": 559, "reach": 17111}, {"id": "story_0034", "date": "2025-03-23", "views": 8233, "link_clicks": 439, "reach": 10540}, {"id": "story_0035", "date": "2025-05-04", "views": 22308, "link_clicks": 734, "reach": 14605}, {"id": "story_0036", "date": "2025-03-10", "views": 17011, "link_clicks": 93, "reach": 17294}, {"id": "story_0037", "date": "2025-03-03", "views": 19065, "link_clicks": 129, "reach": 13258}, {"id": "story_0038", "date": "2025-05-13", "views": 18066, "link_clicks": 637, "reach": 16252}, {"id": "story_0039", "date": "2025-05-30", "views": 24976, "link_clicks": 477, "reach": 12486}, {"id": "story_0040", "date": "2025-03-15", "views": 17272, "link_clicks": 71, "reach": 13642}, {"id": "story_0041", "date": "2025-03-22", "views": 24254, "link_clicks": 521, "reach": 14857}, {"id": "story_0042", "date": "2025-03-12", "views": 18310, "link_clicks": 158, "reach": 10972}, {"id": "story_0043", "date": "2025-04-25", "views": 23296, "link_clicks": 460, "reach": 5577}, {"id": "story_0044", "date": "2025-04-20", "views": 14167, "link_clicks": 397, "reach": 10260}, {"id": "story_0045", "date": "2025-04-12", "views": 9509, "link_clicks": 128, "reach": 19727}, {"id": "story_0046", "date": "2025-05-21", "views": 7736, "link_clicks": 593, "reach": 19710}, {"id": "story_0047", "date": "2025-03-25", "views": 15448, "link_clicks": 409, "reach": 7839}, {"id": "story_0048", "date": "2025-03-31", "views": 7368, "link_clicks": 199, "reach": 11387}, {"id": "story_0049", "date": "2025-03-26", "views": 9685, "link_clicks": 666, "reach": 8009}, {"id": "story_0050", "date": "2025-05-23", "views": 6469, "link_clicks": 231, "reach": 19191}, {"id": "story_0051", "date": "2025-04-29", "views": 22472, "link_clicks": 643, "reach": 17709}, {"id": "story_0052", "date": "2025-05-27", "views": 22497, "link_clicks": 708, "reach": 13590}, {"id": "story_0053", "date": "2025-05-20", "views": 14359, "link_clicks": 204, "reach": 17410}, {"id": "story_0054", "date": "2025-03-09", "views": 19365, "link_clicks": 502, "reach": 12922}, {"id": "story_0055", "date": "2025-04-05", "views": 23379, "link_clicks": 107, "reach": 14532}, {"id": "story_0056", "date": "2025-05-04", "views": 6431, "link_clicks": 367, "reach": 18130}, {"id": "story_0057", "date": "2025-04-27", "views": 5232, "link_clicks": 108, "reach": 15082}, {"id": "story_0058", "date": "2025-04-06", "views": 6514, "link_clicks": 710, "reach": 5958}, {"id": "story_0059", "date": "2025-05-18", "views": 23466, "link_clicks": 569, "reach": 15598}, {"id": "story_0060", "date": "2025-04-29", "views": 23016, "link_clicks": 617, "reach": 4344}, {"id": "story_0061", "date": "2025-04-27", "views": 22732, "link_clicks": 717, "reach": 9168}, {"id": "story_0062", "date": "2025-04-11", "views": 23824, "link_clicks": 537, "reach": 19428}, {"id": "story_0063", "date": "2025-03-20", "views": 6027, "link_clicks": 511, "reach": 6391}, {"id": "story_0064", "date": "2025-04-13", "views": 6763, "link_clicks": 566, "reach": 8654}, {"id": "story_0065", "date": "2025-03-06", "views": 12118, "link_clicks": 774, "reach": 17344}, {"id": "story_0066", "date": "2025-04-26", "views": 21172, "link_clicks": 585, "reach": 8201}, {"id": "story_0067", "date": "2025-04-16", "views": 16217, "link_clicks": 339, "reach": 15694}, {"id": "story_0068", "date": "2025-04-22", "views": 15087, "link_clicks": 745, "reach": 4715}, {"id": "story_0069", "date": "2025-05-20", "views": 14965, "link_clicks": 117, "reach": 13803}, {"id": "story_0070", "date": "2025-03-13", "views": 22283, "link_clicks": 744, "reach": 15666}, {"id": "story_0071", "date": "2025-04-06", "views": 12257, "link_clicks": 791, "reach": 7927}, {"id": "story_0072", "date": "2025-04-12", "views": 6670, "link_clicks": 646, "reach": 7634}, {"id": "story_0073", "date": "2025-04-14", "views": 14165, "link_clicks": 721, "reach": 15843}, {"id": "story_0074", "date": "2025-03-17", "views": 23498, "link_clicks": 775, "reach": 5776}, {"id": "story_0075", "date": "2025-04-09", "views": 22314, "link_clicks": 435, "reach": 13763}, {"id": "story_0076", "date": "2025-03-17", "views": 21248, "link_clicks": 145, "reach": 16874}, {"id": "story_0077", "date": "2025-05-05", "views": 15856, "link_clicks": 68, "reach": 14881}, {"id": "story_0078", "date": "2025-04-09", "views": 9906, "link_clicks": 269, "reach": 14197}, {"id": "story_0079", "date": "2025-05-02", "views": 10291, "link_clicks": 281, "reach": 7507}, {"id": "story_0080", "date": "2025-03-20", "views": 6528, "link_clicks": 352, "reach": 6314}, {"id": "story_0081", "date": "2025-05-04", "views": 21687, "link_clicks": 589, "reach": 4236}, {"id": "story_0082", "date": "2025-05-24", "views": 15035, "link_clicks": 682, "reach": 7294}, {"id": "story_0083", "date": "2025-05-16", "views": 16344, "link_clicks": 207, "reach": 8316}, {"id": "story_0084", "date": "2025-03-24", "views": 24471, "link_clicks": 219, "reach": 17341}, {"id": "story_0085", "date": "2025-03-06", "views": 17463, "link_clicks": 423, "reach": 10783}, {"id": "story_0086", "date": "2025-04-26", "views": 24007, "link_clicks": 341, "reach": 17710}, {"id": "story_0087", "date": "2025-03-30", "views": 21498, "link_clicks": 294, "reach": 13140}, {"id": "story_0088", "date": "2025-04-30", "views": 10357, "link_clicks": 426, "reach": 17437}, {"id": "story_0089", "date": "2025-04-29", "views": 13233, "link_clicks": 441, "reach": 19479}, {"id": "story_0090", "date": "2025-05-07", "views": 17718, "link_clicks": 215, "reach": 9543}, {"id": "story_0091", "date": "2025-05-17", "views": 8535, "link_clicks": 306, "reach": 4709}, {"id": "story_0092", "date": "2025-05-22", "views": 19747, "link_clicks": 430, "reach": 6361}, {"id": "story_0093", "date": "2025-05-31", "views": 20905, "link_clicks": 177, "reach": 12340}, {"id": "story_0094", "date": "2025-03-11", "views": 9253, "link_clicks": 329, "reach": 17723}, {"id": "story_0095", "date": "2025-05-05", "views": 8828, "link_clicks": 497, "reach": 6005}, {"id": "story_0096", "date": "2025-03-29", "views": 18782, "link_clicks": 407, "reach": 3873}, {"id": "story_0097", "date": "2025-04-23", "views": 5745, "link_clicks": 455, "reach": 19449}, {"id": "story_0098", "date": "2025-04-17", "views": 11725, "link_clicks": 445, "reach": 5674}, {"id": "story_0099", "date": "2025-04-17", "views": 11357, "link_clicks": 78, "reach": 13442}, {"id": "story_0100", "date": "2025-03-13", "views": 14986, "link_clicks": 199, "reach": 7508}, {"id": "story_0101", "date": "2025-03-05", "views": 13400, "link_clicks": 533, "reach": 7547}, {"id": "story_0102", "date": "2025-05-30", "views": 19371, "link_clicks": 509, "reach": 3172}, {"id": "story_0103", "date": "2025-03-11", "views": 4622, "link_clicks": 312, "reach": 10066}, {"id": "story_0104", "date": "2025-03-20", "views": 21983, "link_clicks": 794, "reach": 16869}, {"id": "story_0105", "date": "2025-03-15", "views": 13440, "link_clicks": 293, "reach": 12868}, {"id": "story_0106", "date": "2025-03-16", "views": 5564, "link_clicks": 294, "reach": 16756}, {"id": "story_0107", "date": "2025-05-21", "views": 24408, "link_clicks": 518, "reach": 5058}, {"id": "story_0108", "date": "2025-03-15", "views": 20378, "link_clicks": 661, "reach": 3538}, {"id": "story_0109", "date": "2025-05-20", "views": 20887, "link_clicks": 638, "reach": 10927}, {"id": "story_0110", "date": "2025-05-31", "views": 8704, "link_clicks": 348, "reach": 17065}, {"id": "story_0111", "date": "2025-03-01", "views": 24146, "link_clicks": 411, "reach": 10882}, {"id": "story_0112", "date": "2025-05-13", "views": 17650, "link_clicks": 241, "reach": 5805}, {"id": "story_0113", "date": "2025-05-07", "views": 15816, "link_clicks": 119, "reach": 19624}, {"id": "story_0114", "date": "2025-05-04", "views": 22158, "link_clicks": 70, "reach": 15794}, {"id": "story_0115", "date": "2025-04-30", "views": 5426, "link_clicks": 700, "reach": 15677}, {"id": "story_0116", "date": "2025-04-17", "views": 12311, "link_clicks": 66, "reach": 14701}, {"id": "story_0117", "date": "2025-03-09", "views": 15298, "link_clicks": 296, "reach": 6396}, {"id": "story_0118", "date": "2025-05-14", "views": 14895, "link_clicks": 186, "reach": 4452}, {"id": "story_0119", "date": "2025-04-15", "views": 21891, "link_clicks": 396, "reach": 8737}], "ig_reels": [{"id": "reel_0000", "date": "2025-05-27", "caption": "Get ready with me — spring haul from Abercrombie 🌸", "views": 273596, "likes": 32359, "shares": 4641, "saves": 4730, "comments": 842}, {"id": "reel_0001", "date": "2025-05-31", "caption": "5 outfits under $50 — linked everything!", "views": 269955, "likes": 8997, "shares": 2710, "saves": 11242, "comments": 2452}, {"id": "reel_0002", "date": "2025-04-10", "caption": "My honest review of Lululemon's new collection", "views": 192569, "likes": 14709, "shares": 5724, "saves": 6108, "comments": 775}, {"id": "reel_0003", "date": "2025-05-22", "caption": "Spring break swimwear try-on haul 👙", "views": 130193, "likes": 7258, "shares": 3457, "saves": 1550, "comments": 943}, {"id": "reel_0004", "date": "2025-04-04", "caption": "GRWM for Easter brunch — pastel vibes only", "views": 95260, "likes": 9710, "shares": 1516, "saves": 2476, "comments": 525}, {"id": "reel_0005", "date": "2025-04-19", "caption": "Workout fits I'm loving this season", "views": 207752, "likes": 24438, "shares": 3615, "saves": 6211, "comments": 1951}, {"id": "reel_0006", "date": "2025-05-06", "caption": "Day in my life + what I wore", "views": 169838, "likes": 17341, "shares": 3936, "saves": 2234, "comments": 1158}, {"id": "reel_0007", "date": "2025-03-24", "caption": "Unboxing my Free People order!", "views": 315985, "likes": 17833, "shares": 2390, "saves": 7304, "comments": 1379}, {"id": "reel_0008", "date": "2025-04-27", "caption": "Styling the same dress 4 ways", "views": 345947, "likes": 32723, "shares": 3170, "saves": 9602, "comments": 1929}, {"id": "reel_0009", "date": "2025-04-15", "caption": "What I'm wearing to the music festival", "views": 352359, "likes": 42224, "shares": 4180, "saves": 17336, "comments": 3376}], "attribution": {"matches": [{"ltk_post": {"id": "ltk_0000", "hero_image": null, "date_published": "2025-05-21", "clicks": 920, "commissions": 123.54, "orders": 13, "items_sold": 52, "share_url": "https://liketk.it/0000", "brands": ["Urban Outfitters"], "caption": "Obsessed with this new accessories look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["accessories"], "dominant_colors": ["white", "pink"], "content_type": "flat_lay", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0000", "date": "2025-04-25", "views": 18796, "link_clicks": 283, "reach": 16559}, "match_type": "url", "confidence": 0.63}, {"ltk_post": {"id": "ltk_0001", "hero_image": null, "date_published": "2025-03-30", "clicks": 3424, "commissions": 489.98, "orders": 33, "items_sold": 66, "share_url": "https://liketk.it/0001", "brands": ["Revolve", "J.Crew", "Abercrombie"], "caption": "My go-to for going_out this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["going_out", "matching_sets"], "dominant_colors": ["black", "pink"], "content_type": "flat_lay", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0001", "date": "2025-04-13", "views": 18860, "link_clicks": 458, "reach": 16631}, "match_type": "url", "confidence": 0.84}, {"ltk_post": {"id": "ltk_0002", "hero_image": null, "date_published": "2025-03-28", "clicks": 5395, "commissions": 910.21, "orders": 101, "items_sold": 404, "share_url": "https://liketk.it/0002", "brands": ["Mango", "Zara", "Lululemon"], "caption": "Obsessed with this new resort_wear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["resort_wear", "swimwear"], "dominant_colors": ["green", "black"], "content_type": "try_on_haul", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0002", "date": "2025-03-13", "views": 14241, "link_clicks": 487, "reach": 13240}, "match_type": "url", "confidence": 0.74}, {"ltk_post": {"id": "ltk_0003", "hero_image": null, "date_published": "2025-05-13", "clicks": 2308, "commissions": 198.83, "orders": 12, "items_sold": 36, "share_url": "https://liketk.it/0003", "brands": ["H&M"], "caption": "My go-to for going_out this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["going_out"], "dominant_colors": ["pink", "black"], "content_type": "flat_lay", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0003", "date": "2025-05-25", "views": 12352, "link_clicks": 433, "reach": 8001}, "match_type": "url", "confidence": 0.9}, {"ltk_post": {"id": "ltk_0004", "hero_image": null, "date_published": "2025-04-17", "clicks": 4211, "commissions": 350.4, "orders": 23, "items_sold": 92, "share_url": "https://liketk.it/0004", "brands": ["SHEIN", "ASOS", "Free People"], "caption": "My go-to for casual this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["casual"], "dominant_colors": ["black", "green"], "content_type": "flat_lay", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0004", "date": "2025-05-27", "views": 19540, "link_clicks": 118, "reach": 5989}, "match_type": "url", "confidence": 0.86}, {"ltk_post": {"id": "ltk_0005", "hero_image": null, "date_published": "2025-05-27", "clicks": 1787, "commissions": 321.58, "orders": 19, "items_sold": 57, "share_url": "https://liketk.it/0005", "brands": ["ASOS"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["denim", "resort_wear"], "dominant_colors": ["pink", "blue"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0005", "date": "2025-03-11", "views": 7054, "link_clicks": 492, "reach": 6164}, "match_type": "url", "confidence": 0.96}, {"ltk_post": {"id": "ltk_0006", "hero_image": null, "date_published": "2025-05-22", "clicks": 3335, "commissions": 446.73, "orders": 32, "items_sold": 128, "share_url": "https://liketk.it/0006", "brands": ["ASOS", "Free People"], "caption": "Obsessed with this new denim look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["denim", "accessories"], "dominant_colors": ["white", "pink"], "content_type": "flat_lay", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0006", "date": "2025-04-17", "views": 8263, "link_clicks": 619, "reach": 4965}, "match_type": "url", "confidence": 0.65}, {"ltk_post": {"id": "ltk_0007", "hero_image": null, "date_published": "2025-05-20", "clicks": 1850, "commissions": 168.78, "orders": 14, "items_sold": 14, "share_url": "https://liketk.it/0007", "brands": ["Gap", "Abercrombie", "Anthropologie"], "caption": "This accessories set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["accessories", "resort_wear"], "dominant_colors": ["pink", "black"], "content_type": "outfit_photo", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0007", "date": "2025-05-15", "views": 22402, "link_clicks": 625, "reach": 13801}, "match_type": "url", "confidence": 0.83}, {"ltk_post": {"id": "ltk_0008", "hero_image": null, "date_published": "2025-04-07", "clicks": 6168, "commissions": 424.33, "orders": 25, "items_sold": 75, "share_url": "https://liketk.it/0008", "brands": ["Express", "Lululemon", "Anthropologie"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "casual"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0008", "date": "2025-05-25", "views": 8005, "link_clicks": 470, "reach": 14586}, "match_type": "url", "confidence": 0.9}, {"ltk_post": {"id": "ltk_0009", "hero_image": null, "date_published": "2025-05-09", "clicks": 25724, "commissions": 1813.51, "orders": 129, "items_sold": 387, "share_url": "https://liketk.it/0009", "brands": ["Express", "Gap"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["swimwear", "athleisure"], "dominant_colors": ["white", "beige"], "content_type": "outfit_photo", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0009", "date": "2025-05-25", "views": 17858, "link_clicks": 788, "reach": 4685}, "match_type": "url", "confidence": 0.61}, {"ltk_post": {"id": "ltk_0010", "hero_image": null, "date_published": "2025-03-11", "clicks": 10355, "commissions": 700.67, "orders": 52, "items_sold": 156, "share_url": "https://liketk.it/000a", "brands": ["Mango", "Zara", "Free People"], "caption": "My go-to for casual this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["casual"], "dominant_colors": ["beige", "green"], "content_type": "flat_lay", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0010", "date": "2025-04-06", "views": 23674, "link_clicks": 369, "reach": 14522}, "match_type": "url", "confidence": 0.63}, {"ltk_post": {"id": "ltk_0011", "hero_image": null, "date_published": "2025-05-31", "clicks": 7126, "commissions": 619.79, "orders": 50, "items_sold": 150, "share_url": "https://liketk.it/000b", "brands": ["Lululemon"], "caption": "Obsessed with this new athleisure look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["athleisure", "going_out"], "dominant_colors": ["green", "pink"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0011", "date": "2025-03-14", "views": 22937, "link_clicks": 569, "reach": 9971}, "match_type": "url", "confidence": 0.9}, {"ltk_post": {"id": "ltk_0012", "hero_image": null, "date_published": "2025-05-15", "clicks": 2542, "commissions": 224.8, "orders": 21, "items_sold": 42, "share_url": "https://liketk.it/000c", "brands": ["Zara"], "caption": "This outerwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["outerwear"], "dominant_colors": ["pink", "blue"], "content_type": "flat_lay", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0012", "date": "2025-03-20", "views": 19800, "link_clicks": 279, "reach": 6546}, "match_type": "url", "confidence": 0.74}, {"ltk_post": {"id": "ltk_0013", "hero_image": null, "date_published": "2025-05-09", "clicks": 3064, "commissions": 286.1, "orders": 22, "items_sold": 88, "share_url": "https://liketk.it/000d", "brands": ["Lululemon"], "caption": "This denim set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["denim", "going_out"], "dominant_colors": ["blue", "pink"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0013", "date": "2025-04-14", "views": 22227, "link_clicks": 426, "reach": 6764}, "match_type": "url", "confidence": 0.75}, {"ltk_post": {"id": "ltk_0014", "hero_image": null, "date_published": "2025-03-07", "clicks": 7734, "commissions": 1292.46, "orders": 107, "items_sold": 428, "share_url": "https://liketk.it/000e", "brands": ["ASOS"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["athleisure", "going_out"], "dominant_colors": ["blue", "beige"], "content_type": "try_on_haul", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0014", "date": "2025-04-05", "views": 22812, "link_clicks": 281, "reach": 17061}, "match_type": "url", "confidence": 0.82}, {"ltk_post": {"id": "ltk_0015", "hero_image": null, "date_published": "2025-04-29", "clicks": 4759, "commissions": 504.64, "orders": 30, "items_sold": 30, "share_url": "https://liketk.it/000f", "brands": ["Zara", "Gap", "Abercrombie"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["swimwear"], "dominant_colors": ["beige", "blue"], "content_type": "lifestyle", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0015", "date": "2025-05-11", "views": 24372, "link_clicks": 678, "reach": 3860}, "match_type": "date", "confidence": 0.61}, {"ltk_post": {"id": "ltk_0016", "hero_image": null, "date_published": "2025-05-01", "clicks": 1222, "commissions": 218.78, "orders": 18, "items_sold": 72, "share_url": "https://liketk.it/0010", "brands": ["H&M", "SHEIN"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["resort_wear", "matching_sets"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0016", "date": "2025-05-17", "views": 12763, "link_clicks": 79, "reach": 8911}, "match_type": "date", "confidence": 0.64}, {"ltk_post": {"id": "ltk_0017", "hero_image": null, "date_published": "2025-03-08", "clicks": 6971, "commissions": 558.64, "orders": 65, "items_sold": 65, "share_url": "https://liketk.it/0011", "brands": ["Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "casual"], "dominant_colors": ["white", "green"], "content_type": "outfit_photo", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0017", "date": "2025-04-04", "views": 14124, "link_clicks": 397, "reach": 14502}, "match_type": "date", "confidence": 0.73}, {"ltk_post": {"id": "ltk_0018", "hero_image": null, "date_published": "2025-05-26", "clicks": 11842, "commissions": 821.49, "orders": 59, "items_sold": 177, "share_url": "https://liketk.it/0012", "brands": ["Anthropologie", "Urban Outfitters"], "caption": "This athleisure set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0018", "date": "2025-03-01", "views": 9944, "link_clicks": 196, "reach": 16132}, "match_type": "date", "confidence": 0.53}, {"ltk_post": {"id": "ltk_0019", "hero_image": null, "date_published": "2025-04-03", "clicks": 3104, "commissions": 388.08, "orders": 34, "items_sold": 34, "share_url": "https://liketk.it/0013", "brands": ["Urban Outfitters", "Express"], "caption": "Obsessed with this new swimwear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["swimwear"], "dominant_colors": ["green", "beige"], "content_type": "try_on_haul", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0019", "date": "2025-03-09", "views": 8648, "link_clicks": 698, "reach": 4004}, "match_type": "date", "confidence": 0.67}, {"ltk_post": {"id": "ltk_0020", "hero_image": null, "date_published": "2025-03-17", "clicks": 24493, "commissions": 1775.86, "orders": 151, "items_sold": 151, "share_url": "https://liketk.it/0014", "brands": ["SHEIN", "Revolve", "Urban Outfitters"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets"], "dominant_colors": ["pink", "white"], "content_type": "flat_lay", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0020", "date": "2025-03-12", "views": 21382, "link_clicks": 270, "reach": 15327}, "match_type": "date", "confidence": 0.6}, {"ltk_post": {"id": "ltk_0021", "hero_image": null, "date_published": "2025-04-03", "clicks": 1341, "commissions": 127.35, "orders": 11, "items_sold": 33, "share_url": "https://liketk.it/0015", "brands": ["Anthropologie"], "caption": "My go-to for outerwear this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["outerwear"], "dominant_colors": ["black", "white"], "content_type": "outfit_photo", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0021", "date": "2025-04-23", "views": 18865, "link_clicks": 399, "reach": 8157}, "match_type": "date", "confidence": 0.59}, {"ltk_post": {"id": "ltk_0022", "hero_image": null, "date_published": "2025-05-21", "clicks": 2084, "commissions": 413.93, "orders": 26, "items_sold": 26, "share_url": "https://liketk.it/0016", "brands": ["SHEIN", "H&M", "Zara"], "caption": "Obsessed with this new casual look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["casual", "matching_sets"], "dominant_colors": ["white", "beige"], "content_type": "outfit_photo", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0022", "date": "2025-04-17", "views": 14211, "link_clicks": 788, "reach": 13629}, "match_type": "date", "confidence": 0.54}, {"ltk_post": {"id": "ltk_0023", "hero_image": null, "date_published": "2025-04-17", "clicks": 3524, "commissions": 561.73, "orders": 50, "items_sold": 100, "share_url": "https://liketk.it/0017", "brands": ["Anthropologie"], "caption": "Obsessed with this new outerwear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["outerwear"], "dominant_colors": ["black", "green"], "content_type": "lifestyle", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0023", "date": "2025-05-12", "views": 23537, "link_clicks": 136, "reach": 4723}, "match_type": "date", "confidence": 0.63}, {"ltk_post": {"id": "ltk_0024", "hero_image": null, "date_published": "2025-05-19", "clicks": 10565, "commissions": 1434.03, "orders": 148, "items_sold": 444, "share_url": "https://liketk.it/0018", "brands": ["Free People"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["pink", "beige"], "content_type": "try_on_haul", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0024", "date": "2025-03-20", "views": 9158, "link_clicks": 682, "reach": 4630}, "match_type": "date", "confidence": 0.49}, {"ltk_post": {"id": "ltk_0025", "hero_image": null, "date_published": "2025-03-21", "clicks": 10322, "commissions": 752.26, "orders": 45, "items_sold": 90, "share_url": "https://liketk.it/0019", "brands": ["Nordstrom", "Revolve"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["going_out"], "dominant_colors": ["white", "beige"], "content_type": "lifestyle", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0025", "date": "2025-05-26", "views": 6673, "link_clicks": 328, "reach": 17519}, "match_type": "date", "confidence": 0.44}, {"ltk_post": {"id": "ltk_0026", "hero_image": null, "date_published": "2025-04-12", "clicks": 3553, "commissions": 279.1, "orders": 24, "items_sold": 72, "share_url": "https://liketk.it/001a", "brands": ["Lululemon"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["accessories", "outerwear"], "dominant_colors": ["green", "black"], "content_type": "outfit_photo", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0026", "date": "2025-05-24", "views": 17894, "link_clicks": 547, "reach": 17484}, "match_type": "date", "confidence": 0.66}, {"ltk_post": {"id": "ltk_0027", "hero_image": null, "date_published": "2025-03-14", "clicks": 7394, "commissions": 574.81, "orders": 46, "items_sold": 184, "share_url": "https://liketk.it/001b", "brands": ["ASOS", "Revolve", "Abercrombie"], "caption": "Obsessed with this new denim look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["green", "pink"], "content_type": "flat_lay", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0027", "date": "2025-04-23", "views": 12951, "link_clicks": 270, "reach": 19788}, "match_type": "date", "confidence": 0.57}, {"ltk_post": {"id": "ltk_0028", "hero_image": null, "date_published": "2025-04-16", "clicks": 11965, "commissions": 842.21, "orders": 59, "items_sold": 177, "share_url": "https://liketk.it/001c", "brands": ["Revolve", "Anthropologie", "H&M"], "caption": "My go-to for resort_wear this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["resort_wear"], "dominant_colors": ["pink", "black"], "content_type": "flat_lay", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0028", "date": "2025-03-15", "views": 15310, "link_clicks": 490, "reach": 6633}, "match_type": "date", "confidence": 0.54}, {"ltk_post": {"id": "ltk_0029", "hero_image": null, "date_published": "2025-03-25", "clicks": 9677, "commissions": 822.03, "orders": 48, "items_sold": 192, "share_url": "https://liketk.it/001d", "brands": ["Revolve", "ASOS"], "caption": "This denim set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["denim", "swimwear"], "dominant_colors": ["blue", "pink"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0029", "date": "2025-04-06", "views": 23435, "link_clicks": 548, "reach": 13106}, "match_type": "date", "confidence": 0.6}, {"ltk_post": {"id": "ltk_0030", "hero_image": null, "date_published": "2025-05-26", "clicks": 3064, "commissions": 218.74, "orders": 13, "items_sold": 39, "share_url": "https://liketk.it/001e", "brands": ["Zara", "Anthropologie"], "caption": "Obsessed with this new athleisure look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["beige", "black"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0030", "date": "2025-03-06", "views": 11225, "link_clicks": 454, "reach": 4795}, "match_type": "date", "confidence": 0.49}, {"ltk_post": {"id": "ltk_0031", "hero_image": null, "date_published": "2025-03-26", "clicks": 2330, "commissions": 157.04, "orders": 11, "items_sold": 22, "share_url": "https://liketk.it/001f", "brands": ["Express", "Anthropologie"], "caption": "My go-to for matching_sets this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["matching_sets"], "dominant_colors": ["blue", "pink"], "content_type": "flat_lay", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0031", "date": "2025-03-01", "views": 10698, "link_clicks": 358, "reach": 9921}, "match_type": "date", "confidence": 0.49}, {"ltk_post": {"id": "ltk_0032", "hero_image": null, "date_published": "2025-03-19", "clicks": 7882, "commissions": 630.13, "orders": 40, "items_sold": 160, "share_url": "https://liketk.it/0020", "brands": ["Free People"], "caption": "Obsessed with this new denim look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["green", "beige"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0032", "date": "2025-03-18", "views": 12372, "link_clicks": 346, "reach": 13751}, "match_type": "date", "confidence": 0.56}, {"ltk_post": {"id": "ltk_0033", "hero_image": null, "date_published": "2025-04-28", "clicks": 1484, "commissions": 144.01, "orders": 10, "items_sold": 40, "share_url": "https://liketk.it/0021", "brands": ["Mango", "Free People", "SHEIN"], "caption": "My go-to for matching_sets this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["matching_sets", "denim"], "dominant_colors": ["black", "beige"], "content_type": "try_on_haul", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0033", "date": "2025-03-16", "views": 4253, "link_clicks": 559, "reach": 17111}, "match_type": "date", "confidence": 0.75}, {"ltk_post": {"id": "ltk_0034", "hero_image": null, "date_published": "2025-05-06", "clicks": 4423, "commissions": 470.68, "orders": 31, "items_sold": 31, "share_url": "https://liketk.it/0022", "brands": ["Nordstrom", "Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["resort_wear"], "dominant_colors": ["beige", "pink"], "content_type": "lifestyle", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0034", "date": "2025-03-23", "views": 8233, "link_clicks": 439, "reach": 10540}, "match_type": "date", "confidence": 0.5}, {"ltk_post": {"id": "ltk_0035", "hero_image": null, "date_published": "2025-05-28", "clicks": 1483, "commissions": 162.11, "orders": 14, "items_sold": 56, "share_url": "https://liketk.it/0023", "brands": ["Gap"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim", "swimwear"], "dominant_colors": ["green", "white"], "content_type": "lifestyle", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0035", "date": "2025-05-04", "views": 22308, "link_clicks": 734, "reach": 14605}, "match_type": "date", "confidence": 0.72}, {"ltk_post": {"id": "ltk_0036", "hero_image": null, "date_published": "2025-05-01", "clicks": 319, "commissions": 25.48, "orders": 1, "items_sold": 4, "share_url": "https://liketk.it/0024", "brands": ["ASOS", "Revolve"], "caption": "My go-to for accessories this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["accessories", "going_out"], "dominant_colors": ["white", "blue"], "content_type": "try_on_haul", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0036", "date": "2025-03-10", "views": 17011, "link_clicks": 93, "reach": 17294}, "match_type": "date", "confidence": 0.57}, {"ltk_post": {"id": "ltk_0037", "hero_image": null, "date_published": "2025-05-25", "clicks": 4333, "commissions": 651.6, "orders": 51, "items_sold": 204, "share_url": "https://liketk.it/0025", "brands": ["Express"], "caption": "Obsessed with this new accessories look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["accessories"], "dominant_colors": ["white", "blue"], "content_type": "flat_lay", "description": "Creator wearing accessories in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0037", "date": "2025-03-03", "views": 19065, "link_clicks": 129, "reach": 13258}, "match_type": "date", "confidence": 0.44}, {"ltk_post": {"id": "ltk_0038", "hero_image": null, "date_published": "2025-04-29", "clicks": 1563, "commissions": 189.01, "orders": 15, "items_sold": 15, "share_url": "https://liketk.it/0026", "brands": ["Revolve", "Gap"], "caption": "My go-to for denim this season. Sale ends tonight — use my code for extra off!", "visual_analysis": {"themes": ["denim", "resort_wear"], "dominant_colors": ["white", "green"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0038", "date": "2025-05-13", "views": 18066, "link_clicks": 637, "reach": 16252}, "match_type": "date", "confidence": 0.7}, {"ltk_post": {"id": "ltk_0039", "hero_image": null, "date_published": "2025-04-14", "clicks": 3330, "commissions": 228.53, "orders": 27, "items_sold": 27, "share_url": "https://liketk.it/0027", "brands": ["Gap"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["going_out"], "dominant_colors": ["beige", "pink"], "content_type": "lifestyle", "description": "Creator wearing going_out in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0039", "date": "2025-05-30", "views": 24976, "link_clicks": 477, "reach": 12486}, "match_type": "date", "confidence": 0.56}, {"ltk_post": {"id": "ltk_0040", "hero_image": null, "date_published": "2025-05-25", "clicks": 2439, "commissions": 252.76, "orders": 23, "items_sold": 23, "share_url": "https://liketk.it/0028", "brands": ["Revolve"], "caption": "Obsessed with this new casual look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["casual", "athleisure"], "dominant_colors": ["black", "green"], "content_type": "lifestyle", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0040", "date": "2025-03-15", "views": 17272, "link_clicks": 71, "reach": 13642}, "match_type": "date", "confidence": 0.71}, {"ltk_post": {"id": "ltk_0041", "hero_image": null, "date_published": "2025-04-20", "clicks": 9780, "commissions": 895.57, "orders": 54, "items_sold": 54, "share_url": "https://liketk.it/0029", "brands": ["J.Crew", "Revolve", "Anthropologie"], "caption": "Obsessed with this new athleisure look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["athleisure"], "dominant_colors": ["black", "green"], "content_type": "lifestyle", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0041", "date": "2025-03-22", "views": 24254, "link_clicks": 521, "reach": 14857}, "match_type": "date", "confidence": 0.56}, {"ltk_post": {"id": "ltk_0042", "hero_image": null, "date_published": "2025-05-24", "clicks": 3067, "commissions": 364.63, "orders": 22, "items_sold": 88, "share_url": "https://liketk.it/002a", "brands": ["Anthropologie", "Gap"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["athleisure", "denim"], "dominant_colors": ["blue", "beige"], "content_type": "try_on_haul", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0042", "date": "2025-03-12", "views": 18310, "link_clicks": 158, "reach": 10972}, "match_type": "date", "confidence": 0.43}, {"ltk_post": {"id": "ltk_0043", "hero_image": null, "date_published": "2025-05-18", "clicks": 7588, "commissions": 771.63, "orders": 62, "items_sold": 248, "share_url": "https://liketk.it/002b", "brands": ["Revolve"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["outerwear", "going_out"], "dominant_colors": ["blue", "green"], "content_type": "lifestyle", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0043", "date": "2025-04-25", "views": 23296, "link_clicks": 460, "reach": 5577}, "match_type": "date", "confidence": 0.64}, {"ltk_post": {"id": "ltk_0044", "hero_image": null, "date_published": "2025-04-13", "clicks": 636, "commissions": 93.38, "orders": 9, "items_sold": 9, "share_url": "https://liketk.it/002c", "brands": ["SHEIN", "Revolve", "Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["outerwear", "resort_wear"], "dominant_colors": ["white", "beige"], "content_type": "lifestyle", "description": "Creator wearing outerwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0044", "date": "2025-04-20", "views": 14167, "link_clicks": 397, "reach": 10260}, "match_type": "date", "confidence": 0.7}, {"ltk_post": {"id": "ltk_0045", "hero_image": null, "date_published": "2025-05-02", "clicks": 5234, "commissions": 536.31, "orders": 35, "items_sold": 70, "share_url": "https://liketk.it/002d", "brands": ["ASOS", "H&M"], "caption": "This swimwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["swimwear", "athleisure"], "dominant_colors": ["pink", "green"], "content_type": "try_on_haul", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0045", "date": "2025-04-12", "views": 9509, "link_clicks": 128, "reach": 19727}, "match_type": "date", "confidence": 0.51}, {"ltk_post": {"id": "ltk_0046", "hero_image": null, "date_published": "2025-04-30", "clicks": 8002, "commissions": 534.73, "orders": 39, "items_sold": 39, "share_url": "https://liketk.it/002e", "brands": ["Revolve", "ASOS"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["matching_sets", "resort_wear"], "dominant_colors": ["black", "white"], "content_type": "flat_lay", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0046", "date": "2025-05-21", "views": 7736, "link_clicks": 593, "reach": 19710}, "match_type": "date", "confidence": 0.52}, {"ltk_post": {"id": "ltk_0047", "hero_image": null, "date_published": "2025-03-25", "clicks": 2709, "commissions": 221.24, "orders": 12, "items_sold": 24, "share_url": "https://liketk.it/002f", "brands": ["ASOS", "Nordstrom"], "caption": "This athleisure set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["athleisure", "going_out"], "dominant_colors": ["white", "green"], "content_type": "flat_lay", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0047", "date": "2025-03-25", "views": 15448, "link_clicks": 409, "reach": 7839}, "match_type": "date", "confidence": 0.42}, {"ltk_post": {"id": "ltk_0048", "hero_image": null, "date_published": "2025-04-05", "clicks": 493, "commissions": 62.33, "orders": 3, "items_sold": 12, "share_url": "https://liketk.it/0030", "brands": ["Revolve", "Mango", "Gap"], "caption": "This athleisure set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["athleisure", "swimwear"], "dominant_colors": ["beige", "white"], "content_type": "try_on_haul", "description": "Creator wearing athleisure in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0048", "date": "2025-03-31", "views": 7368, "link_clicks": 199, "reach": 11387}, "match_type": "date", "confidence": 0.59}, {"ltk_post": {"id": "ltk_0049", "hero_image": null, "date_published": "2025-05-01", "clicks": 1250, "commissions": 126.1, "orders": 9, "items_sold": 27, "share_url": "https://liketk.it/0031", "brands": ["J.Crew"], "caption": "Obsessed with this new casual look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["casual"], "dominant_colors": ["beige", "white"], "content_type": "lifestyle", "description": "Creator wearing casual in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0049", "date": "2025-03-26", "views": 9685, "link_clicks": 666, "reach": 8009}, "match_type": "date", "confidence": 0.71}, {"ltk_post": {"id": "ltk_0050", "hero_image": null, "date_published": "2025-05-17", "clicks": 7327, "commissions": 574.4, "orders": 48, "items_sold": 48, "share_url": "https://liketk.it/0032", "brands": ["Urban Outfitters", "Express"], "caption": "Obsessed with this new resort_wear look! Use code NICKI for 20% off — linked in bio 🛍️", "visual_analysis": {"themes": ["resort_wear", "denim"], "dominant_colors": ["beige", "pink"], "content_type": "try_on_haul", "description": "Creator wearing resort_wear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0050", "date": "2025-05-23", "views": 6469, "link_clicks": 231, "reach": 19191}, "match_type": "date", "confidence": 0.7}, {"ltk_post": {"id": "ltk_0051", "hero_image": null, "date_published": "2025-05-24", "clicks": 1004, "commissions": 95.5, "orders": 9, "items_sold": 27, "share_url": "https://liketk.it/0033", "brands": ["Abercrombie", "ASOS"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets", "accessories"], "dominant_colors": ["pink", "blue"], "content_type": "outfit_photo", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0051", "date": "2025-04-29", "views": 22472, "link_clicks": 643, "reach": 17709}, "match_type": "date", "confidence": 0.65}, {"ltk_post": {"id": "ltk_0052", "hero_image": null, "date_published": "2025-05-27", "clicks": 3061, "commissions": 237.08, "orders": 17, "items_sold": 34, "share_url": "https://liketk.it/0034", "brands": ["Zara"], "caption": "Spring sale alert! Just linked everything I'm wearing today. Shop via my LTK ✨", "visual_analysis": {"themes": ["denim"], "dominant_colors": ["black", "beige"], "content_type": "outfit_photo", "description": "Creator wearing denim in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0052", "date": "2025-05-27", "views": 22497, "link_clicks": 708, "reach": 13590}, "match_type": "date", "confidence": 0.72}, {"ltk_post": {"id": "ltk_0053", "hero_image": null, "date_published": "2025-03-08", "clicks": 2177, "commissions": 174.31, "orders": 12, "items_sold": 48, "share_url": "https://liketk.it/0035", "brands": ["SHEIN", "Revolve"], "caption": "This matching_sets set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["matching_sets", "athleisure"], "dominant_colors": ["green", "pink"], "content_type": "lifestyle", "description": "Creator wearing matching_sets in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0053", "date": "2025-05-20", "views": 14359, "link_clicks": 204, "reach": 17410}, "match_type": "date", "confidence": 0.62}, {"ltk_post": {"id": "ltk_0054", "hero_image": null, "date_published": "2025-04-26", "clicks": 883, "commissions": 94.81, "orders": 8, "items_sold": 8, "share_url": "https://liketk.it/0036", "brands": ["Anthropologie"], "caption": "This swimwear set is giving everything. Sizes run small, size up! Linked 💛", "visual_analysis": {"themes": ["swimwear", "athleisure"], "dominant_colors": ["green", "white"], "content_type": "flat_lay", "description": "Creator wearing swimwear in a bright, airy setting."}, "attributed_ig_post": null}, "ig_story": {"id": "story_0054", "date": "2025-03-09", "views": 19365, "link_clicks": 502, "reach": 12922}, "match_type": "date", "confidence": 0.68}], "stats": {"total_attributed_commissions": 26358.76, "attribution_rate": 0.648, "matched_url": 15, "matched_date": 40}}, "themes": {"swimwear": {"count": 48, "avg_commissions": 312}, "athleisure": {"count": 35, "avg_commissions": 195}, "casual": {"count": 62, "avg_commissions": 148}, "going_out": {"count": 29, "avg_commissions": 220}, "resort_wear": {"count": 22, "avg_commissions": 280}, "outerwear": {"count": 18, "avg_commissions": 175}, "denim": {"count": 41, "avg_commissions": 165}, "matching_sets": {"count": 25, "avg_commissions": 240}, "accessories": {"count": 15, "avg_commissions": 120}}, "weekly_performance": [{"week": "2025-02-24", "commissions": 0.0, "clicks": 0, "story_views": 44788}, {"week": "2025-03-03", "commissions": 3269.85, "clicks": 27470, "story_views": 116582}, {"week": "2025-03-10", "commissions": 3590.95, "clicks": 38490, "story_views": 228296}, {"week": "2025-03-17", "commissions": 3158.25, "clicks": 42697, "story_views": 153101}, {"week": "2025-03-24", "commissions": 2600.5, "clicks": 23535, "story_views": 89884}, {"week": "2025-03-31", "commissions": 3217.21, "clicks": 31998, "story_views": 133563}, {"week": "2025-04-07", "commissions": 3030.26, "clicks": 31361, "story_views": 97846}, {"week": "2025-04-14", "commissions": 2878.44, "clicks": 32810, "story_views": 146534}, {"week": "2025-04-21", "commissions": 528.38, "clicks": 4623, "story_views": 167883}, {"week": "2025-04-28", "commissions": 3050.17, "clicks": 31035, "story_views": 157379}, {"week": "2025-05-05", "commissions": 3056.96, "clicks": 36445, "story_views": 82590}, {"week": "2025-05-12", "commissions": 3506.14, "clicks": 39901, "story_views": 157658}, {"week": "2025-05-19", "commissions": 6123.32, "clicks": 50619, "story_views": 179715}, {"week": "2025-05-26", "commissions": 2672.22, "clicks": 31031, "story_views": 122666}], "top_caption_words": [{"word": "sale", "count": 85}, {"word": "code", "count": 78}, {"word": "linked", "count": 74}, {"word": "obsessed", "count": 67}, {"word": "wearing", "count": 63}, {"word": "shop", "count": 60}, {"word": "spring", "count": 55}, {"word": "new", "count": 52}, {"word": "favorites", "count": 48}, {"word": "off", "count": 45}, {"word": "discount", "count": 41}, {"word": "use", "count": 39}, {"word": "swimsuit", "count": 36}, {"word": "linking", "count": 34}, {"word": "love", "count": 31}], "insights": ["Swimwear posts generated 1.6x more revenue than average ($312/post vs $195 avg) — prioritize swimwear content in June.", "65% of commissions ($26,358) were directly attributed to Instagram story promotions — stories are the primary revenue driver.", "The word 'sale' appeared 85x in top-performing captions — urgency and discount language consistently drives higher click-through rates."]};
+// ─────────────────────────────────────────────────────────────────────────────
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     PAGE HEADER
+════════════════════════════════════════════════════════════ -->
+<header class="page-header">
+  <div class="inner">
+    <div class="header-top">
+      <div>
+        <div class="header-title" id="hdr-title">Content Intelligence Report</div>
+        <div class="header-subtitle" id="hdr-sub">Spring 2025 — Performance Analysis</div>
+      </div>
+      <div class="date-badge" id="hdr-date-badge">Spring 2025 — March 1 to May 31</div>
+    </div>
+    <div class="generated-at" id="hdr-generated">Generated —</div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN CONTENT
+════════════════════════════════════════════════════════════ -->
+<main class="container">
+
+  <!-- ── Section 1: Executive Summary ────────────────────── -->
+  <div class="hero-stats" id="hero-stats">
+    <!-- populated by JS -->
+  </div>
+
+  <div class="insight-cards" id="insight-cards">
+    <!-- populated by JS -->
+  </div>
+
+  <!-- ── Section 2: Revenue by Brand ─────────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">📊</span>
+      <span class="section-title">Revenue by Brand</span>
+      <span class="section-sub" id="brands-sub"></span>
+    </div>
+    <div class="chart-wrap" style="height:380px;">
+      <canvas id="brandsChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Section 3: Content Attribution Map ───────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">🔗</span>
+      <span class="section-title">Content Attribution Map</span>
+      <span class="section-sub" id="attr-sub"></span>
+    </div>
+    <div class="attr-stats" id="attr-stats"><!-- populated by JS --></div>
+    <div class="table-wrap">
+      <table id="attribution-table">
+        <thead>
+          <tr>
+            <th>Post</th>
+            <th>Published</th>
+            <th>IG Story</th>
+            <th>LTK Clicks</th>
+            <th>Commissions</th>
+            <th>Story Views</th>
+            <th>Link Clicks</th>
+            <th>Match Type</th>
+            <th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="attribution-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Section 4: Top Performing LTK Posts ──────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">⭐</span>
+      <span class="section-title">Top Performing LTK Posts</span>
+      <span class="section-sub">By commissions — Top 12</span>
+    </div>
+    <div class="cards-grid" id="posts-grid"><!-- populated by JS --></div>
+  </div>
+
+  <!-- ── Section 5: Visual Themes Analysis ────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">🎨</span>
+      <span class="section-title">Visual Themes Analysis</span>
+      <span class="section-sub" id="themes-sub"></span>
+    </div>
+    <div class="themes-layout">
+      <div>
+        <div class="chart-wrap" style="height:280px;">
+          <canvas id="themesChart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.6px;">Avg Commission per Theme</div>
+        <div class="theme-cards-grid" id="theme-cards"><!-- populated by JS --></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 6: Caption Intelligence ─────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">✍️</span>
+      <span class="section-title">Caption Intelligence</span>
+      <span class="section-sub">Top word patterns in high-performing posts</span>
+    </div>
+    <div class="captions-layout">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Most Common Words (high-performers)</div>
+        <div class="chart-wrap" style="height:320px;">
+          <canvas id="captionWordsChart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Top-Performing Caption Samples</div>
+        <div class="caption-examples" id="caption-examples"><!-- populated by JS --></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 7: Seasonal Performance ─────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">📅</span>
+      <span class="section-title">Seasonal Performance</span>
+      <span class="section-sub">March – May 2025</span>
+    </div>
+    <div class="toggle-group" id="seasonal-toggle">
+      <button class="toggle-btn active" data-metric="commissions" onclick="switchSeasonalMetric(this)">Commissions</button>
+      <button class="toggle-btn" data-metric="clicks" onclick="switchSeasonalMetric(this)">LTK Clicks</button>
+      <button class="toggle-btn" data-metric="story_views" onclick="switchSeasonalMetric(this)">Story Views</button>
+    </div>
+    <div class="chart-wrap" style="height:320px;">
+      <canvas id="seasonalChart"></canvas>
+    </div>
+    <div class="season-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#4ade80;"></div>St. Patrick's Day (Mar 17)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#fb923c;"></div>Easter (Apr 20)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;"></div>Memorial Day (May 26)</div>
+    </div>
+  </div>
+
+  <!-- ── Section 8: IG Reels Performance ─────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">🎬</span>
+      <span class="section-title">IG Reels Performance</span>
+      <span class="section-sub">Top 10 by views</span>
+    </div>
+    <div class="table-wrap">
+      <table id="reels-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Date</th>
+            <th>Caption</th>
+            <th>👁 Views</th>
+            <th>❤️ Likes</th>
+            <th>↗️ Shares</th>
+            <th>🔖 Saves</th>
+            <th>💬 Comments</th>
+            <th>Eng. Rate</th>
+          </tr>
+        </thead>
+        <tbody id="reels-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<footer class="page-footer">
+  <span class="footer-brand">ENT Agency</span> · Content Intelligence · Powered by Claude AI
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// UTILITY FUNCTIONS
+// ═══════════════════════════════════════════════════════════
+
+function fmt$  (n) { return '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+function fmtN  (n) { return (n||0).toLocaleString('en-US'); }
+function fmtPct(n) { return Math.round((n||0)*100) + '%'; }
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function fmtDateShort(d) {
+  if (!d) return '—';
+  const dt = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+}
+
+const CHART_COLORS = [
+  '#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6',
+  '#ec4899','#14b8a6','#f97316','#84cc16','#06b6d4','#a855f7',
+  '#e11d48','#0ea5e9','#22c55e','#eab308'
+];
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 1: EXECUTIVE SUMMARY
+// ═══════════════════════════════════════════════════════════
+
+function renderHeader() {
+  const m = DATA.meta;
+  const s = DATA.summary;
+  document.getElementById('hdr-title').textContent = `Content Intelligence Report — ${m.creator || ''}`;
+  document.getElementById('hdr-sub').textContent = `${m.date_range || 'Spring 2025'} · Performance Analysis`;
+  document.getElementById('hdr-date-badge').textContent = `Spring 2025 — March 1 to May 31`;
+  const ts = m.generated_at ? new Date(m.generated_at).toLocaleString('en-US', {
+    month:'long', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'
+  }) : '';
+  document.getElementById('hdr-generated').textContent = `Generated ${ts}`;
+}
+
+function renderHeroStats() {
+  const s = DATA.summary;
+  const stats = [
+    { icon:'💰', label:'Total Commissions', value: fmt$(s.total_commissions), sub: 'Spring 2025', cls:'success' },
+    { icon:'🖱️', label:'LTK Clicks',        value: fmtN(s.total_ltk_clicks),  sub: 'Total clicks', cls:'' },
+    { icon:'🏆', label:'Top Brand',         value: s.top_brand || '—',        sub: 'By revenue', cls:'accent' },
+    { icon:'📖', label:'Story Views',       value: fmtN(s.total_story_views), sub: 'IG Stories', cls:'' },
+    { icon:'🎬', label:'Reel Views',        value: fmtN(s.total_reel_views),  sub: 'IG Reels', cls:'' },
+  ];
+  document.getElementById('hero-stats').innerHTML = stats.map(s => `
+    <div class="stat-card ${s.cls}">
+      <div class="stat-icon">${s.icon}</div>
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-value">${s.value}</div>
+      <div class="stat-sub">${s.sub}</div>
+    </div>
+  `).join('');
+}
+
+function renderInsightCards() {
+  const insights = DATA.insights || [];
+  const icons = ['💡','📈','🎯'];
+  document.getElementById('insight-cards').innerHTML = insights.slice(0,3).map((txt, i) => `
+    <div class="insight-card">
+      <div class="insight-icon">${icons[i] || '💡'}</div>
+      <div class="insight-text">${txt}</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 2: REVENUE BY BRAND
+// ═══════════════════════════════════════════════════════════
+
+function renderBrandsChart() {
+  const brands = (DATA.brands || [])
+    .sort((a,b) => (b.commissions||0) - (a.commissions||0))
+    .slice(0, 15);
+
+  document.getElementById('brands-sub').textContent = `Top ${brands.length} brands`;
+
+  const ctx = document.getElementById('brandsChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: brands.map(b => b.name),
+      datasets: [{
+        label: 'Commissions',
+        data: brands.map(b => b.commissions),
+        backgroundColor: brands.map((_, i) => i === 0 ? '#6366f1' : (i < 3 ? '#818cf8' : '#c7d2fe')),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const b = brands[ctx.dataIndex];
+              return [` Commissions: ${fmt$(ctx.raw)}`, ` Clicks: ${fmtN(b.clicks)}`, ` Orders: ${fmtN(b.orders)}`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+        y: {
+          grid: { color: '#f3f4f6' },
+          ticks: {
+            callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(1)+'k' : v),
+            font: { size: 11 }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 3: CONTENT ATTRIBUTION MAP
+// ═══════════════════════════════════════════════════════════
+
+function renderAttribution() {
+  const attr = DATA.attribution || {};
+  const stats = attr.stats || {};
+  const matches = attr.matches || [];
+
+  // Attribution stats row
+  document.getElementById('attr-sub').textContent =
+    `${fmtPct(stats.attribution_rate || 0)} of commissions attributed to IG content`;
+
+  document.getElementById('attr-stats').innerHTML = `
+    <div class="attr-stat">
+      <div class="attr-stat-value">${fmtPct(stats.attribution_rate || 0)}</div>
+      <div class="attr-stat-label">Attribution Rate</div>
+    </div>
+    <div class="attr-stat">
+      <div class="attr-stat-value">${fmt$(stats.total_attributed_commissions || 0)}</div>
+      <div class="attr-stat-label">Attributed Commissions</div>
+    </div>
+    <div class="attr-stat">
+      <div class="attr-stat-value">${stats.matched_url || 0}</div>
+      <div class="attr-stat-label">URL-Matched</div>
+    </div>
+    <div class="attr-stat">
+      <div class="attr-stat-value">${stats.matched_date || 0}</div>
+      <div class="attr-stat-label">Date-Matched</div>
+    </div>
+  `;
+
+  // Table rows
+  const tbody = document.getElementById('attribution-tbody');
+  if (!matches.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:32px;">No attribution data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = matches.slice(0, 30).map(m => {
+    const ltk = m.ltk_post || {};
+    const ig  = m.ig_story || {};
+    const conf = m.confidence || 0;
+    const confClass = conf >= 0.8 ? '' : (conf >= 0.5 ? 'medium' : 'low');
+    const matchType = m.match_type === 'url' ? 'badge-url' : (m.match_type === 'date' ? 'badge-date' : 'badge-none');
+    const matchLabel = m.match_type === 'url' ? 'URL' : (m.match_type === 'date' ? 'Date' : 'None');
+
+    const imgHtml = ltk.hero_image
+      ? `<img class="thumb" src="${ltk.hero_image}" alt="" onerror="this.style.display='none'" />`
+      : `<div class="thumb-placeholder">📸</div>`;
+
+    return `
+      <tr>
+        <td>${imgHtml}</td>
+        <td>${fmtDateShort(ltk.date_published)}</td>
+        <td>${fmtDateShort(ig.date)}</td>
+        <td>${fmtN(ltk.clicks)}</td>
+        <td>${fmt$(ltk.commissions)}</td>
+        <td>${fmtN(ig.views)}</td>
+        <td>${fmtN(ig.link_clicks)}</td>
+        <td><span class="badge ${matchType}">${matchLabel}</span></td>
+        <td>
+          <div class="confidence-bar">
+            <div class="conf-track"><div class="conf-fill ${confClass}" style="width:${Math.round(conf*100)}%"></div></div>
+            <span class="conf-label">${Math.round(conf*100)}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 4: TOP PERFORMING LTK POSTS
+// ═══════════════════════════════════════════════════════════
+
+function renderPostCards() {
+  const posts = (DATA.ltk_posts || [])
+    .sort((a,b) => (b.commissions||0) - (a.commissions||0))
+    .slice(0, 12);
+
+  document.getElementById('posts-grid').innerHTML = posts.map((p, i) => {
+    const themes = p.visual_analysis?.themes || [];
+    const imgHtml = p.hero_image
+      ? `<img class="post-img" src="${p.hero_image}" alt="" onerror="this.parentElement.innerHTML='<div class=post-img-placeholder>👗</div>'" />`
+      : `<div class="post-img-placeholder">👗</div>`;
+    return `
+      <div class="post-card">
+        <div class="post-img-wrap">
+          ${imgHtml}
+          <div class="post-rank">${i+1}</div>
+        </div>
+        <div class="post-body">
+          <div class="post-date">${fmtDate(p.date_published)}</div>
+          <div class="post-commission">${fmt$(p.commissions)}</div>
+          <div class="post-meta">
+            <div class="post-metric"><span>${fmtN(p.clicks)}</span> clicks</div>
+            <div class="post-metric"><span>${p.orders || 0}</span> orders</div>
+          </div>
+          ${themes.length ? `<div class="post-tags">${themes.slice(0,2).map(t=>`<span class="post-tag">${t}</span>`).join('')}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 5: VISUAL THEMES
+// ═══════════════════════════════════════════════════════════
+
+function renderThemes() {
+  const themes = DATA.themes || {};
+  const entries = Object.entries(themes).sort((a,b) => b[1].count - a[1].count);
+
+  document.getElementById('themes-sub').textContent = `${entries.length} themes identified`;
+
+  // Donut chart
+  const ctx = document.getElementById('themesChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(([k]) => k),
+      datasets: [{
+        data: entries.map(([,v]) => v.count),
+        backgroundColor: CHART_COLORS.slice(0, entries.length),
+        borderWidth: 2,
+        borderColor: 'white',
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 11 }, padding: 12, usePointStyle: true }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const e = entries[ctx.dataIndex];
+              return ` ${e[0]}: ${e[1].count} posts`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Theme cards
+  document.getElementById('theme-cards').innerHTML = entries.slice(0,9).map(([name, v], i) => `
+    <div class="theme-card">
+      <div class="theme-name">
+        <span class="theme-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>
+        ${name}
+      </div>
+      <div class="theme-avg">${fmt$(v.avg_commissions)}</div>
+      <div class="theme-count">avg/post · ${v.count} posts</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 6: CAPTION INTELLIGENCE
+// ═══════════════════════════════════════════════════════════
+
+function renderCaptions() {
+  const words = (DATA.top_caption_words || []).slice(0, 15);
+
+  const ctx = document.getElementById('captionWordsChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: words.map(w => w.word),
+      datasets: [{
+        label: 'Frequency',
+        data: words.map(w => w.count),
+        backgroundColor: '#e0e7ff',
+        borderColor: '#6366f1',
+        borderWidth: 1.5,
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` Used ${ctx.raw} times` } }
+      },
+      scales: {
+        x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 12 } } }
+      }
+    }
+  });
+
+  // Sample captions
+  const captions = DATA.ltk_posts
+    ? DATA.ltk_posts
+        .filter(p => p.caption && p.commissions > 0)
+        .sort((a,b) => (b.commissions||0) - (a.commissions||0))
+        .slice(0, 4)
+    : [];
+
+  document.getElementById('caption-examples').innerHTML = captions.map(p => `
+    <div class="caption-example">
+      <div class="caption-example-text">"${p.caption.slice(0,220)}${p.caption.length > 220 ? '…' : ''}"</div>
+      <div class="caption-example-meta">${fmtDate(p.date_published)} · ${fmt$(p.commissions)} · ${fmtN(p.clicks)} clicks</div>
+    </div>
+  `).join('') || '<div style="color:var(--gray-400);font-size:13px;">No caption data available</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 7: SEASONAL PERFORMANCE
+// ═══════════════════════════════════════════════════════════
+
+let seasonalChart = null;
+
+const SEASONAL_HOLIDAYS = [
+  { label: "St. Patty's Day", date: '2025-03-17', color: 'rgba(74,222,128,0.85)' },
+  { label: 'Easter',          date: '2025-04-20', color: 'rgba(251,146,60,0.85)' },
+  { label: 'Memorial Day',    date: '2025-05-26', color: 'rgba(96,165,250,0.85)' },
+];
+
+function buildSeasonalAnnotations(weeks) {
+  const annotations = {};
+  SEASONAL_HOLIDAYS.forEach((h, i) => {
+    // Find the closest week label to the holiday date
+    const hd = new Date(h.date);
+    let closest = null, closestDiff = Infinity;
+    weeks.forEach(w => {
+      const wd = new Date(w);
+      const diff = Math.abs(wd - hd);
+      if (diff < closestDiff) { closestDiff = diff; closest = w; }
+    });
+    if (closest) {
+      annotations[`holiday${i}`] = {
+        type: 'line',
+        xMin: closest,
+        xMax: closest,
+        borderColor: h.color,
+        borderWidth: 2,
+        borderDash: [5, 3],
+        label: {
+          content: h.label,
+          display: true,
+          position: 'start',
+          backgroundColor: h.color,
+          color: 'white',
+          font: { size: 10, weight: 'bold' },
+          padding: 4,
+          borderRadius: 4,
+          yAdjust: -6,
+        }
+      };
+    }
+  });
+  return annotations;
+}
+
+function switchSeasonalMetric(btn) {
+  document.querySelectorAll('#seasonal-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSeasonalChart(btn.dataset.metric);
+}
+
+function renderSeasonalChart(metric = 'commissions') {
+  const weekly = DATA.weekly_performance || [];
+  const labels = weekly.map(w => w.week);
+  const METRICS = {
+    commissions:  { key: 'commissions',  label: 'Commissions ($)', color: '#6366f1', fmt: fmt$ },
+    clicks:       { key: 'clicks',       label: 'LTK Clicks',      color: '#f59e0b', fmt: fmtN },
+    story_views:  { key: 'story_views',  label: 'Story Views',     color: '#10b981', fmt: fmtN },
+  };
+  const m = METRICS[metric] || METRICS.commissions;
+  const values = weekly.map(w => w[m.key] || 0);
+
+  if (seasonalChart) { seasonalChart.destroy(); }
+
+  const ctx = document.getElementById('seasonalChart').getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+  gradient.addColorStop(0, m.color + '33');
+  gradient.addColorStop(1, m.color + '00');
+
+  seasonalChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: m.label,
+        data: values,
+        borderColor: m.color,
+        backgroundColor: gradient,
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: m.color,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${m.label}: ${m.fmt(ctx.raw)}`,
+            title: ctx => fmtDate(ctx[0].label),
+          }
+        },
+        annotation: { annotations: buildSeasonalAnnotations(labels) }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { callback: (_, i) => fmtDateShort(labels[i]), font: { size: 11 }, maxRotation: 45 }
+        },
+        y: {
+          grid: { color: '#f3f4f6' },
+          ticks: { callback: v => metric === 'commissions' ? fmt$(v) : fmtN(v), font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 8: IG REELS PERFORMANCE
+// ═══════════════════════════════════════════════════════════
+
+function renderReels() {
+  const reels = (DATA.ig_reels || [])
+    .sort((a,b) => (b.views||0) - (a.views||0))
+    .slice(0, 10);
+
+  const tbody = document.getElementById('reels-tbody');
+  if (!reels.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:32px;">No reel data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = reels.map((r, i) => {
+    const engRate = r.views ? ((r.likes + r.comments + r.shares + r.saves) / r.views * 100).toFixed(2) : '0.00';
+    const isTop = i === 0;
+    const caption = (r.caption || '').slice(0, 60) + ((r.caption || '').length > 60 ? '…' : '');
+    return `
+      <tr class="${isTop ? 'top-reel' : ''}">
+        <td style="font-weight:700;color:${isTop ? 'var(--primary)' : 'var(--gray-500)'}">${i+1}</td>
+        <td>${fmtDateShort(r.date || r.timestamp)}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${caption || '—'}</td>
+        <td style="font-weight:${isTop?'700':'400'};color:${isTop?'var(--primary)':'inherit'}">${fmtN(r.views)}</td>
+        <td>${fmtN(r.likes)}</td>
+        <td>${fmtN(r.shares)}</td>
+        <td>${fmtN(r.saves)}</td>
+        <td>${fmtN(r.comments)}</td>
+        <td><span style="font-weight:600;color:${parseFloat(engRate)>5?'var(--success)':'var(--gray-600)'}">${engRate}%</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT — render all sections
+// ═══════════════════════════════════════════════════════════
+(function init() {
+  try { renderHeader(); } catch(e) { console.error('Header error:', e); }
+  try { renderHeroStats(); } catch(e) { console.error('Hero stats error:', e); }
+  try { renderInsightCards(); } catch(e) { console.error('Insights error:', e); }
+  try { renderBrandsChart(); } catch(e) { console.error('Brands chart error:', e); }
+  try { renderAttribution(); } catch(e) { console.error('Attribution error:', e); }
+  try { renderPostCards(); } catch(e) { console.error('Post cards error:', e); }
+  try { renderThemes(); } catch(e) { console.error('Themes error:', e); }
+  try { renderCaptions(); } catch(e) { console.error('Captions error:', e); }
+  try { renderSeasonalChart(); } catch(e) { console.error('Seasonal chart error:', e); }
+  try { renderReels(); } catch(e) { console.error('Reels error:', e); }
+})();
+</script>
+
+</body>
+</html>

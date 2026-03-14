@@ -67,9 +67,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "creator_id required" }, { status: 400 });
   }
 
-  const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
-  if (!slackWebhookUrl) {
-    return NextResponse.json({ error: "SLACK_WEBHOOK_URL not configured" }, { status: 500 });
+  const slackBotToken = process.env.SLACK_BOT_TOKEN;
+  const slackChannelId = process.env.SLACK_CHANNEL_ID;
+  if (!slackBotToken || !slackChannelId) {
+    return NextResponse.json({ error: "SLACK_BOT_TOKEN or SLACK_CHANNEL_ID not configured" }, { status: 500 });
   }
 
   // Resolve display name from CREATORS config
@@ -248,17 +249,20 @@ export async function POST(req: NextRequest) {
     },
   ];
 
-  // ── POST to Slack ─────────────────────────────────────────────────────────────
-  const slackRes = await fetch(slackWebhookUrl, {
+  // ── POST to Slack via chat.postMessage ────────────────────────────────────────
+  const slackRes = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ blocks }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${slackBotToken}`,
+    },
+    body: JSON.stringify({ channel: slackChannelId, blocks }),
   });
 
-  if (!slackRes.ok) {
-    const errText = await slackRes.text();
+  const slackData = await slackRes.json() as { ok: boolean; error?: string };
+  if (!slackData.ok) {
     return NextResponse.json(
-      { error: "Slack post failed", detail: errText },
+      { error: "Slack post failed", detail: slackData.error },
       { status: 502 }
     );
   }

@@ -1,0 +1,63 @@
+<h2>How should the date range control work?</h2>
+<p class="subtitle">This controls what data all platforms show. Pick the model that fits how you actually use the dashboard.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Preset Chips — Quick &amp; Simple</h3>
+      <p style="margin-bottom:12px">Fixed buttons: <strong>7D · 30D · 90D · This Month · Last Month · YTD</strong>. One click, done. No custom ranges.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <span style="background:#6366f1;color:#fff;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">7D</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">30D</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">90D</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">This Month</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">Last Month</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">YTD</span>
+      </div>
+      <div class="pros-cons" style="margin-top:16px">
+        <div class="pros"><h4>Pros</h4><ul><li>Fastest to use</li><li>Easiest to build</li><li>No edge cases</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Can't do custom ranges</li><li>Less flexible</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Presets + Custom Date Range</h3>
+      <p style="margin-bottom:12px">Same chips as A, but with a calendar picker for custom start/end dates when you need them.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <span style="background:#6366f1;color:#fff;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">30D</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">90D</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">YTD</span>
+        <span style="background:#e5e7eb;color:#374151;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600">Custom...</span>
+      </div>
+      <div style="margin-top:10px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;color:#6b7280;display:inline-block">
+        📅 Jan 1, 2026 → Feb 28, 2026
+      </div>
+      <div class="pros-cons" style="margin-top:16px">
+        <div class="pros"><h4>Pros</h4><ul><li>Handles 95% of use cases fast</li><li>Escape hatch for edge cases</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Slightly more to build</li><li>Monthly-only platforms need clear labeling</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Month Selector — Simple &amp; Honest</h3>
+      <p style="margin-bottom:12px">Since most platforms are month-granular anyway, just pick a month. Clean, no false precision.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <span style="font-size:20px;cursor:pointer">‹</span>
+        <span style="background:#6366f1;color:#fff;padding:6px 20px;border-radius:8px;font-size:15px;font-weight:600">February 2026</span>
+        <span style="font-size:20px;cursor:pointer">›</span>
+      </div>
+      <div style="margin-top:12px;font-size:13px;color:#6b7280">Shows all data for the selected month. Compare to previous month with one click.</div>
+      <div class="pros-cons" style="margin-top:16px">
+        <div class="pros"><h4>Pros</h4><ul><li>Matches how platforms report</li><li>No false precision on daily data</li><li>Simplest to build correctly</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Can't see "last 30 days" across month boundary</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

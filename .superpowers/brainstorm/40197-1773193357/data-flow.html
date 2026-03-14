@@ -1,0 +1,149 @@
+<h2>Section 3: Data Flow + Error Handling + Testing</h2>
+<p class="subtitle">How everything moves — from sync to DB to UI — and what happens when it breaks</p>
+
+<!-- Data Flow -->
+<div class="section">
+  <h3>Data Flow</h3>
+
+  <div style="background:#1e1b4b;border-radius:12px;padding:20px;font-size:12px;color:#e0e7ff;margin-top:12px">
+
+    <!-- Row 1: Syncs -->
+    <div style="text-align:center;margin-bottom:6px;color:#a5b4fc;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px">DAILY SYNCS (background, no user interaction)</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px">
+      <div style="background:#312e81;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:10px;color:#a5b4fc;margin-bottom:4px">5am UTC</div>
+        <div style="font-weight:700;color:#fff">Instagram</div>
+        <div style="font-size:10px;color:#a5b4fc;margin-top:4px">media_snapshots<br>creator_snapshots</div>
+      </div>
+      <div style="background:#312e81;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:10px;color:#a5b4fc;margin-bottom:4px">6:30am UTC</div>
+        <div style="font-weight:700;color:#f59e0b">LTK</div>
+        <div style="font-size:10px;color:#a5b4fc;margin-top:4px">platform_earnings<br>ltk_posts (paginated)</div>
+      </div>
+      <div style="background:#312e81;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:10px;color:#a5b4fc;margin-bottom:4px">7am UTC</div>
+        <div style="font-weight:700;color:#ec4899">ShopMy</div>
+        <div style="font-size:10px;color:#a5b4fc;margin-top:4px">sales<br>shopmy_payments</div>
+      </div>
+      <div style="background:#312e81;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:10px;color:#a5b4fc;margin-bottom:4px">8am UTC</div>
+        <div style="font-weight:700;color:#8b5cf6">Mavely</div>
+        <div style="font-size:10px;color:#a5b4fc;margin-top:4px">mavely_transactions<br>mavely_links</div>
+      </div>
+      <div style="background:#312e81;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:10px;color:#a5b4fc;margin-bottom:4px">Mac cron</div>
+        <div style="font-weight:700;color:#fff">Amazon</div>
+        <div style="font-size:10px;color:#a5b4fc;margin-top:4px">platform_earnings<br>(exact date range)</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;color:#6366f1;font-size:20px;margin-bottom:12px">↓</div>
+
+    <!-- Row 2: DB -->
+    <div style="background:#4f46e5;border-radius:8px;padding:12px;text-align:center;margin-bottom:16px">
+      <div style="font-weight:700;font-size:14px">Supabase PostgreSQL</div>
+      <div style="font-size:11px;color:#c7d2fe;margin-top:4px">Single source of truth — all platforms stored, all filtering happens here</div>
+    </div>
+
+    <div style="text-align:center;color:#6366f1;font-size:20px;margin-bottom:12px">↓ user picks creator + date range ↓</div>
+
+    <!-- Row 3: API Routes -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div style="background:#312e81;border-radius:8px;padding:12px">
+        <div style="font-weight:700;color:#fff;margin-bottom:6px">GET /api/creators/[id]/earnings</div>
+        <div style="font-size:11px;color:#a5b4fc">?startDate=&endDate=<br><br>
+        • Mavely/ShopMy: <code style="color:#34d399">WHERE sale_date BETWEEN $start AND $end</code><br>
+        • LTK: call API with exact dates + paginate cursor<br>
+        • Amazon: query platform_earnings with exact range<br>
+        • Impact: query overlapping month buckets</div>
+      </div>
+      <div style="background:#312e81;border-radius:8px;padding:12px">
+        <div style="font-weight:700;color:#fff;margin-bottom:6px">GET /api/creators/[id]/content</div>
+        <div style="font-size:11px;color:#a5b4fc">?startDate=&endDate=<br><br>
+        • Query media_snapshots for date range<br>
+        • For each post: match linkUrl → affiliate platform<br>
+        • Mavely: link_url LIKE 'go.mvly.co%' → join mavely_links<br>
+        • LTK: link_url LIKE 'liketk.it%' → join ltk_posts<br>
+        • ShopMy: link_url LIKE 'shopmy.co%' → match by date window<br>
+        • Amazon: link_url LIKE 'amzn.to%' or 'amazon.com/shop%'<br>
+        • Returns: posts + engagement + attributed revenue per post</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;color:#6366f1;font-size:20px;margin-bottom:12px">↓</div>
+
+    <!-- Row 4: UI -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:#312e81;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-weight:700;color:#fff">Earnings Page</div>
+        <div style="font-size:11px;color:#a5b4fc;margin-top:4px">Platform cards with exact revenue for selected range</div>
+      </div>
+      <div style="background:#312e81;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-weight:700;color:#fff">Content Page</div>
+        <div style="font-size:11px;color:#a5b4fc;margin-top:4px">Motion-style post cards with attribution tags + revenue</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Error Handling -->
+<div class="section">
+  <h3>Error Handling</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">Sync failure</div>
+      <div style="font-size:12px;color:#374151">UI shows "Last synced X ago" badge. Goes amber after 1 day, red after 2. Doesn't break the page — shows last good data with a staleness timestamp. Slack alert fires via existing n8n hook.</div>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">Bad URL params</div>
+      <div style="font-size:12px;color:#374151">Invalid creator ID or malformed dates → fall back to defaults (30D, first creator). Never throws a 500 to the UI.</div>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">No data for range</div>
+      <div style="font-size:12px;color:#374151">Platform card shows empty state ("No data for this period") — not an error, not a spinner. Clean empty state per platform.</div>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">LTK token expired</div>
+      <div style="font-size:12px;color:#374151">LTK API returns 401 → catch in sync job, fire Slack alert with instructions to re-auth. Token rotation runs every 3h via Railway scheduler to prevent this.</div>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">Missing post thumbnail</div>
+      <div style="font-size:12px;color:#374151">Content card falls back to a gradient placeholder (by content type) — same as the mockup. Never a broken image.</div>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">Attribution match fails</div>
+      <div style="font-size:12px;color:#374151">Post shows "No link" state — still visible in the grid with engagement metrics. Not hidden, not errored. Revenue shown as "—".</div>
+    </div>
+  </div>
+</div>
+
+<!-- Testing -->
+<div class="section">
+  <h3>Testing</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:12px">
+    <div style="background:#f8faff;border:1px solid #c7d2fe;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px">Unit: useFilters() hook</div>
+      <div style="font-size:11px;color:#374151">• Preset → correct start/end dates<br>• Custom range parses correctly<br>• Bad params fall back to defaults<br>• setCreator() updates URL</div>
+    </div>
+    <div style="background:#f8faff;border:1px solid #c7d2fe;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px">Unit: Attribution matching</div>
+      <div style="font-size:11px;color:#374151">• Mavely URL patterns detected<br>• LTK liketk.it links matched<br>• Amazon amzn.to detected<br>• Multi-platform posts handled</div>
+    </div>
+    <div style="background:#f8faff;border:1px solid #c7d2fe;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px">Unit: DB query builders</div>
+      <div style="font-size:11px;color:#374151">• Transaction WHERE clause correct<br>• LTK pagination loop terminates<br>• Date range passed correctly to LTK API</div>
+    </div>
+    <div style="background:#f8faff;border:1px solid #c7d2fe;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px">Integration: API routes</div>
+      <div style="font-size:11px;color:#374151">• Each platform returns data for known date range<br>• Empty range returns [] not error<br>• creatorId scoping verified</div>
+    </div>
+    <div style="background:#f8faff;border:1px solid #c7d2fe;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px">Smoke: End-to-end</div>
+      <div style="font-size:11px;color:#374151">• Select Nicki + 30D → all platform cards populated<br>• Switch to different creator → data changes<br>• Custom range → correct dates reflected</div>
+    </div>
+    <div style="background:#f8faff;border:1px solid #c7d2fe;border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px">Manual: Sync accuracy</div>
+      <div style="font-size:11px;color:#374151">• LTK dashboard totals vs. our totals for same range<br>• Mavely dashboard vs. our totals<br>• Verify pagination captures all records</div>
+    </div>
+  </div>
+</div>

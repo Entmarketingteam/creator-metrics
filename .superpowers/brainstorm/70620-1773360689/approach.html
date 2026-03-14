@@ -1,0 +1,40 @@
+<h2>Content Intelligence — Where should this live?</h2>
+<p class="subtitle">We're building a deep analysis engine for Nicki's Spring 2025 content. Pick the best fit for how you'd use it.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>New Page in creator-metrics Dashboard</h3>
+      <p>A <strong>"Content Intelligence"</strong> tab added to the existing app at <code>creator-metrics.vercel.app</code>. Imports the exported data once, stores it in Supabase, and lives alongside the earnings dashboard permanently. Can be referenced anytime — this year and beyond.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Lives with all the other creator data</li><li>Reusable for future content cycles</li><li>Can cross-reference with live LTK earnings automatically</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More build time</li><li>Requires Supabase schema work</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Standalone Analysis Report</h3>
+      <p>A self-contained <strong>interactive HTML report</strong> (or Python notebook) that runs the analysis locally from the exported files and outputs a rich visual report — no Supabase, no deployment needed. One-time deep dive you can open in any browser.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Fast to build and run</li><li>No infra changes</li><li>Can email/share as a file</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Not live/ongoing</li><li>Can't auto-update with new data</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Both — Report Now, Dashboard Later</h3>
+      <p>Start with the <strong>standalone report</strong> immediately using what you've uploaded — fast insights this week. Then, once the Amazon files arrive, promote it into the <strong>creator-metrics dashboard</strong> as a permanent "Content Lab" section.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Get insights now while data is fresh</li><li>Build the right thing for the permanent dashboard</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Some duplicated work</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
