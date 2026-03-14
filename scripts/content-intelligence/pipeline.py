@@ -35,8 +35,59 @@ def _empty_visual_results():
     }
 
 
+def _upload_report_to_dashboard(report_data: dict, season: str = "spring", year: int = 2025):
+    """Upload report data to creator-metrics dashboard via API."""
+    import requests
+
+    cron_secret = os.environ.get('CRON_SECRET', '')
+    api_url = "https://creator-metrics.vercel.app/api/content-lab/upload-report"
+
+    # Build uploadable payload — strip large base64/embedding data to keep size manageable
+    payload = {
+        "creator_id": "nicki",  # TODO: make configurable
+        "season": season,
+        "year": year,
+        "report_data": {
+            "summary": report_data.get("summary", {}),
+            "brands": report_data.get("brands", [])[:20],
+            "themes": report_data.get("themes", {}),
+            "insights": report_data.get("insights", []),
+            "top_ltk_post": report_data.get("top_ltk_post"),
+            "top_ig_story": report_data.get("top_ig_story"),
+            "top_ig_reel": report_data.get("top_ig_reel"),
+            "top_products": report_data.get("top_products", [])[:20],
+            "intent_distribution": report_data.get("intent_distribution", {}),
+            "hook_type_distribution": report_data.get("hook_type_distribution", {}),
+            "engagement_by_intent": report_data.get("engagement_by_intent", {}),
+            "top_promo_codes": report_data.get("top_promo_codes", [])[:10],
+            "top_brand_mentions": report_data.get("top_brand_mentions", [])[:10],
+            "caption_length_performance": report_data.get("caption_length_performance", {}),
+            "weekly_performance": report_data.get("weekly_performance", []),
+            "ltk_posts": [
+                {k: v for k, v in p.items() if k not in ('visual_analysis', 'caption_features')}
+                for p in (report_data.get("ltk_posts") or [])[:50]
+            ],
+        }
+    }
+
+    try:
+        resp = requests.post(
+            api_url,
+            json=payload,
+            headers={"x-cron-secret": cron_secret},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            print(f"  ✓ Report uploaded to dashboard (report_id: {resp.json().get('report_id')})")
+        else:
+            print(f"  ⚠ Upload failed: {resp.status_code} — {resp.text[:200]}")
+    except Exception as e:
+        print(f"  ⚠ Upload skipped: {e}")
+
+
 def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
-                 visual_sample: int = None, use_caption_cache: bool = False):
+                 visual_sample: int = None, use_caption_cache: bool = False,
+                 skip_upload: bool = False, season: str = "spring", year: int = 2025):
     """
     Full pipeline:
     1. Load all data
@@ -45,6 +96,7 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     4. Caption NLP (Claude CLI)
     5. Performance scoring
     6. Generate report
+    7. Upload report data to dashboard (skip with skip_upload=True)
     """
 
     print(f"\n{'='*60}")
@@ -53,21 +105,21 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     print(f"{'='*60}\n")
 
     # ── Step 1: Load ──────────────────────────────────────────────────────────
-    print("Step 1/6: Loading data...")
+    print("Step 1/7: Loading data...")
     data = load_all_data(data_dir)
     print(f"  ✓ {len(data['ltk_posts'])} LTK posts, "
           f"{len(data['ig_stories'])} story rows, "
           f"{len(data['ig_reels'])} reel rows")
 
     # ── Step 2: Attribution ────────────────────────────────────────────────────
-    print("\nStep 2/6: Building attribution map...")
+    print("\nStep 2/7: Building attribution map...")
     attribution = build_attribution_map(data)
     stats = attribution['stats']
     print(f"  ✓ {stats['matched_url']} URL matches, {stats['matched_date']} date matches")
     print(f"  ✓ ${stats['total_attributed_commissions']:.2f} attributed to IG content")
 
     # ── Step 3: Visual analysis ────────────────────────────────────────────────
-    print("\nStep 3/6: Running Gemini visual analysis...")
+    print("\nStep 3/7: Running Gemini visual analysis...")
     if fast_mode:
         print("  → Fast mode: skipping visual analysis")
         visual_results = _empty_visual_results()
@@ -106,12 +158,12 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     # ── Step 4: Caption NLP ────────────────────────────────────────────────────
     cache_path = os.path.join(os.path.dirname(__file__), 'output', 'caption_cache.json')
     if use_caption_cache and os.path.exists(cache_path):
-        print("\nStep 4/6: Loading caption results from cache...")
+        print("\nStep 4/7: Loading caption results from cache...")
         with open(cache_path, 'r') as f:
             caption_results = json.load(f)
         print(f"  ✓ Loaded from {cache_path}")
     else:
-        print("\nStep 4/6: Running caption analysis...")
+        print("\nStep 4/7: Running caption analysis...")
         caption_results = run_caption_analysis(data)
         # Save cache
         def _make_serializable(obj):
@@ -130,7 +182,7 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     print(f"  ✓ Top intent: {top_intent}")
 
     # ── Step 5: Scoring ────────────────────────────────────────────────────────
-    print("\nStep 5/6: Computing performance scores...")
+    print("\nStep 5/7: Computing performance scores...")
     scoring_results = run_scoring(data, attribution, visual_results, caption_results)
     summary = scoring_results['summary']
     print(f"  ✓ ${summary['total_commissions']:.2f} total commissions")
@@ -141,7 +193,7 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
         print(f"  • {insight}")
 
     # ── Step 6: Generate report ────────────────────────────────────────────────
-    print("\nStep 6/6: Generating HTML report...")
+    print("\nStep 6/7: Generating HTML report...")
 
     # Build base report_data structure from report_generator
     # It expects caption_results to have 'top_words' key — caption_nlp returns 'word_frequency'
@@ -275,6 +327,11 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     report_data['engagement_by_intent'] = caption_results.get('engagement_by_intent', {})
     report_data['caption_length_performance'] = caption_results.get('caption_length_performance', {})
 
+    # New analytical insights from scoring module
+    report_data['hook_revenue_correlation'] = scoring_results.get('hook_revenue_correlation', [])
+    report_data['best_posting_days']        = scoring_results.get('best_posting_days', [])
+    report_data['revenue_spikes']           = scoring_results.get('revenue_spikes', [])
+
     # SEO aggregate fields for Section 7
     report_data['avg_seo_score']          = caption_results.get('avg_seo_score', 0)
     report_data['seo_score_distribution'] = caption_results.get('seo_score_distribution', {})
@@ -290,6 +347,13 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     print(f"   Size: {file_size:.0f}KB")
     print(f"   Open in browser: open '{output_path}'")
     print(f"{'='*60}\n")
+
+    # ── Step 7: Upload to dashboard ────────────────────────────────────────────
+    if not skip_upload:
+        print("Step 7/7: Uploading report to dashboard...")
+        _upload_report_to_dashboard(report_data, season=season, year=year)
+    else:
+        print("Step 7/7: Skipping dashboard upload (--skip-upload)")
 
     return output_path
 
@@ -308,6 +372,12 @@ if __name__ == '__main__':
                         help='Analyze only N posts visually (default: all Spring posts)')
     parser.add_argument('--use-caption-cache', action='store_true',
                         help='Load caption results from cache instead of re-running Claude NLP')
+    parser.add_argument('--season', default='spring',
+                        help='Season label (spring/summer/fall/winter)')
+    parser.add_argument('--year', type=int, default=2025,
+                        help='Year of the content')
+    parser.add_argument('--skip-upload', action='store_true',
+                        help='Skip uploading report data to dashboard')
     args = parser.parse_args()
 
     output = args.output
@@ -316,4 +386,7 @@ if __name__ == '__main__':
 
     run_pipeline(args.data_dir, output, fast_mode=args.fast,
                  visual_sample=args.visual_sample,
-                 use_caption_cache=args.use_caption_cache)
+                 use_caption_cache=args.use_caption_cache,
+                 skip_upload=args.skip_upload,
+                 season=args.season,
+                 year=args.year)

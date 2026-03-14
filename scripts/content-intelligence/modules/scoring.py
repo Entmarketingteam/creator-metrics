@@ -749,6 +749,155 @@ def _build_summary(
 
 
 # ---------------------------------------------------------------------------
+# Hook type → revenue correlation
+# ---------------------------------------------------------------------------
+
+def _compute_hook_revenue_correlation(ltk_posts_scored: list) -> list:
+    """
+    Group LTK posts by caption hook_type and compute avg commissions + avg clicks.
+
+    Requires caption_features.hook_type on each post (populated when caption NLP has run).
+    Posts without hook_type are skipped.
+
+    Returns list of {hook_type, avg_commissions, avg_clicks, count}
+    sorted by avg_commissions descending.
+    """
+    buckets: dict = {}
+
+    for post in ltk_posts_scored:
+        features = post.get("caption_features")
+        if not features or not isinstance(features, dict):
+            continue
+        hook_type = features.get("hook_type")
+        if not hook_type:
+            continue
+        if hook_type not in buckets:
+            buckets[hook_type] = {"commissions": [], "clicks": []}
+        buckets[hook_type]["commissions"].append(post.get("commissions") or 0.0)
+        buckets[hook_type]["clicks"].append(post.get("clicks") or 0)
+
+    result = []
+    for hook_type, vals in buckets.items():
+        n = len(vals["commissions"])
+        avg_comm  = round(sum(vals["commissions"]) / n, 2) if n > 0 else 0.0
+        avg_clicks = round(sum(vals["clicks"]) / n) if n > 0 else 0
+        result.append({
+            "hook_type":        hook_type,
+            "avg_commissions":  avg_comm,
+            "avg_clicks":       avg_clicks,
+            "count":            n,
+        })
+
+    result.sort(key=lambda x: x["avg_commissions"], reverse=True)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Best posting day/time analysis
+# ---------------------------------------------------------------------------
+
+_DOW_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def _compute_best_posting_days(ig_stories: list) -> list:
+    """
+    From IG stories (already filtered to lifetime rows), extract day-of-week from
+    publish_time and compute avg views per day.
+
+    Returns list of {day, avg_views, post_count} sorted by avg_views descending.
+    Only includes stories that have a valid publish_time.
+    """
+    buckets: dict = {label: [] for label in _DOW_LABELS}
+
+    for story in ig_stories:
+        pt = story.get("publish_time")
+        if pt is None:
+            continue
+        naive = _naive_dt(pt)
+        if naive is None:
+            continue
+        dow = naive.weekday()   # 0=Monday, 6=Sunday
+        day_label = _DOW_LABELS[dow]
+        views = story.get("views") or 0
+        buckets[day_label].append(views)
+
+    result = []
+    for day, views_list in buckets.items():
+        if not views_list:
+            continue
+        avg_views = round(sum(views_list) / len(views_list))
+        result.append({
+            "day":        day,
+            "avg_views":  avg_views,
+            "post_count": len(views_list),
+        })
+
+    result.sort(key=lambda x: x["avg_views"], reverse=True)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Seasonal revenue spikes
+# ---------------------------------------------------------------------------
+
+_HOLIDAY_PROXIMITY: list = [
+    (date(2025, 3, 17), "St. Patrick's Day"),
+    (date(2025, 4, 20), "Easter"),
+    (date(2025, 5, 11), "Mother's Day"),
+    (date(2025, 5, 26), "Memorial Day"),
+]
+
+
+def _nearest_holiday(week_start_str: str) -> str:
+    """Return the name of the holiday closest to the given week_start (YYYY-MM-DD)."""
+    try:
+        ws = date.fromisoformat(week_start_str)
+    except (ValueError, TypeError):
+        return "—"
+    best_name = "—"
+    best_diff = 999
+    for hdate, hname in _HOLIDAY_PROXIMITY:
+        diff = abs((hdate - ws).days)
+        if diff < best_diff:
+            best_diff = diff
+            best_name = hname
+    return best_name
+
+
+def _compute_revenue_spikes(weekly_performance: list) -> list:
+    """
+    Identify weeks where LTK commissions were >1.5x the mean.
+
+    Returns list of {week_start, commissions, spike_factor, nearest_holiday}
+    sorted by commissions descending.
+    """
+    comm_values = [w.get("ltk_commissions", 0.0) for w in weekly_performance]
+    total = sum(comm_values)
+    n = len([v for v in comm_values if v > 0])
+    if n == 0:
+        return []
+
+    mean_comm = total / len(comm_values) if comm_values else 0.0
+    if mean_comm <= 0:
+        return []
+
+    spikes = []
+    for week in weekly_performance:
+        comm = week.get("ltk_commissions", 0.0)
+        if comm > mean_comm * 1.5:
+            spike_factor = round(comm / mean_comm, 2)
+            spikes.append({
+                "week_start":      week.get("week_start", ""),
+                "commissions":     round(comm, 2),
+                "spike_factor":    spike_factor,
+                "nearest_holiday": _nearest_holiday(week.get("week_start", "")),
+            })
+
+    spikes.sort(key=lambda x: x["commissions"], reverse=True)
+    return spikes
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -814,13 +963,25 @@ def run_scoring(data: dict, attribution: dict, visual_results: dict, caption_res
     ltk_brands = data.get("ltk_brands", [])
     summary = _build_summary(ltk_posts_scored, ig_stories_scored, ig_reels_scored, ltk_brands)
 
+    # --- Hook type → revenue correlation ---
+    hook_revenue_correlation = _compute_hook_revenue_correlation(ltk_posts_scored)
+
+    # --- Best posting day/time analysis ---
+    best_posting_days = _compute_best_posting_days(spring_stories)
+
+    # --- Seasonal revenue spikes ---
+    revenue_spikes = _compute_revenue_spikes(weekly_performance)
+
     return {
-        "ltk_posts_scored":   ltk_posts_scored,
-        "ig_stories_scored":  ig_stories_scored,
-        "ig_reels_scored":    ig_reels_scored,
-        "theme_performance":  theme_performance,
-        "weekly_performance": weekly_performance,
-        "insights":           insights,
-        "summary":            summary,
-        "top_products":       compute_top_products(data.get('ltk_products', [])),
+        "ltk_posts_scored":         ltk_posts_scored,
+        "ig_stories_scored":        ig_stories_scored,
+        "ig_reels_scored":          ig_reels_scored,
+        "theme_performance":        theme_performance,
+        "weekly_performance":       weekly_performance,
+        "insights":                 insights,
+        "summary":                  summary,
+        "top_products":             compute_top_products(data.get('ltk_products', [])),
+        "hook_revenue_correlation": hook_revenue_correlation,
+        "best_posting_days":        best_posting_days,
+        "revenue_spikes":           revenue_spikes,
     }

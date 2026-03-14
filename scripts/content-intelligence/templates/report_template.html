@@ -678,6 +678,22 @@
       border-radius: 10px;
     }
 
+    /* ─── Hook → Revenue table ─── */
+    .hook-revenue-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    .hook-revenue-table th { text-align:left; padding:8px 12px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--gray-500); border-bottom:2px solid var(--gray-200); }
+    .hook-revenue-table td { padding:9px 12px; border-bottom:1px solid var(--gray-100); color:var(--gray-700); vertical-align:middle; }
+    .hook-revenue-table tr:hover td { background:var(--gray-50); }
+    .hook-revenue-table td:first-child { font-weight:600; color:var(--gray-800); text-transform:capitalize; }
+    .hook-revenue-bar { height:8px; border-radius:4px; background:var(--primary); display:inline-block; min-width:4px; vertical-align:middle; }
+
+    /* ─── Revenue spike callout cards ─── */
+    .spike-cards-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; margin-top:8px; }
+    .spike-card { background:white; border:1px solid var(--gray-200); border-radius:var(--radius-sm); padding:16px 18px; border-left:4px solid var(--accent); }
+    .spike-card-holiday { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); margin-bottom:6px; }
+    .spike-card-week { font-size:11px; color:var(--gray-500); margin-bottom:10px; }
+    .spike-card-comm { font-size:22px; font-weight:800; color:var(--gray-900); line-height:1; }
+    .spike-card-factor { display:inline-block; margin-top:6px; font-size:12px; font-weight:600; padding:2px 10px; border-radius:20px; background:var(--success-light); color:var(--success); }
+
     /* ─── Themes data table ─── */
     .themes-data-table {
       margin-top: 20px;
@@ -853,12 +869,15 @@ const DATA = {{DATA_JSON}};
   </div>
 
   <!-- ── Section 7: Caption Intelligence (SEO-enhanced) ──────── -->
-  <div class="section">
+  <div class="section" id="caption-intelligence-section">
     <div class="section-header">
       <span class="section-icon">✍️</span>
       <span class="section-title">Caption Intelligence</span>
       <span class="section-sub">IG SEO scoring, intent, hooks, engagement patterns &amp; prescriptions</span>
     </div>
+
+    <!-- Caption stat chips (populated by JS) -->
+    <div class="caption-stat-chips" id="caption-stat-chips" style="margin-bottom:28px;"></div>
 
     <!-- Panel 1: SEO Overview KPIs + distribution -->
     <div style="margin-bottom:32px;">
@@ -926,6 +945,17 @@ const DATA = {{DATA_JSON}};
         </div>
       </div>
     </div>
+
+    <!-- Panel 8: Hook → Revenue Correlation -->
+    <div style="margin-top:32px;" id="hook-revenue-panel"><!-- populated by JS --></div>
+
+    <!-- Panel 9: Best Time to Post -->
+    <div style="margin-top:32px;margin-bottom:8px;" id="best-posting-days-panel">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Best Time to Post <span style="font-weight:400;color:var(--gray-500);font-size:11px;">— avg story views by day of week</span></div>
+      <div class="chart-wrap" style="height:220px;">
+        <canvas id="bestPostingDaysChart"></canvas>
+      </div>
+    </div>
   </div>
 
   <!-- ── Section 8: Seasonal Performance ─────────────────── -->
@@ -949,6 +979,9 @@ const DATA = {{DATA_JSON}};
       <div class="legend-item"><div class="legend-dot" style="background:#f472b6;"></div>Mother's Day (May 11)</div>
       <div class="legend-item"><div class="legend-dot" style="background:#60a5fa;"></div>Memorial Day (May 26)</div>
     </div>
+
+    <!-- Revenue Spike Callouts -->
+    <div style="margin-top:28px;" id="revenue-spikes-panel"><!-- populated by JS --></div>
   </div>
 
   <!-- ── Section 9: IG Reels Performance ─────────────────── -->
@@ -1060,9 +1093,10 @@ function renderInsightCards() {
 // ═══════════════════════════════════════════════════════════
 
 function renderTopPerformers() {
-  const ltk   = DATA.top_ltk_post;
-  const story = DATA.top_ig_story;
-  const reel  = DATA.top_ig_reel;
+  const s     = DATA.summary || {};
+  const ltk   = s.top_ltk_post;
+  const story = s.top_ig_story;
+  const reel  = s.top_ig_reel;
 
   if (!ltk && !story && !reel) return;
 
@@ -1384,138 +1418,10 @@ function renderThemes() {
 // ═══════════════════════════════════════════════════════════
 
 function renderCaptions() {
-  // ── Engagement by Intent (horizontal bar) ──────────────────
-  const intentData = DATA.engagement_by_intent || {};
-  if (Object.keys(intentData).length) {
-    const intentEntries = Object.entries(intentData).sort((a,b) => b[1].avg_views - a[1].avg_views);
-    const ctxIntent = document.getElementById('engagementByIntentChart').getContext('2d');
-    new Chart(ctxIntent, {
-      type: 'bar',
-      data: {
-        labels: intentEntries.map(([k]) => k.replace(/_/g,' ')),
-        datasets: [
-          {
-            label: 'Avg Views',
-            data: intentEntries.map(([,v]) => v.avg_views),
-            backgroundColor: '#c7d2fe',
-            borderColor: '#6366f1',
-            borderWidth: 1.5,
-            borderRadius: 4,
-            borderSkipped: false,
-          },
-          {
-            label: 'Avg Link Clicks',
-            data: intentEntries.map(([,v]) => v.avg_link_clicks),
-            backgroundColor: '#fde68a',
-            borderColor: '#f59e0b',
-            borderWidth: 1.5,
-            borderRadius: 4,
-            borderSkipped: false,
-          }
-        ]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } },
-          tooltip: {
-            callbacks: {
-              label: ctx => {
-                const entry = intentEntries[ctx.dataIndex];
-                if (ctx.datasetIndex === 0) return ` Avg Views: ${fmtN(Math.round(ctx.raw))} (${entry[1].count} posts)`;
-                return ` Avg Link Clicks: ${fmtN(Math.round(ctx.raw))}`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: { grid: { color: '#f3f4f6' }, ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v, font: { size: 10 } } },
-          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
-        }
-      }
-    });
-  } else {
-    const el = document.getElementById('engagementByIntentChart');
-    if (el) el.closest('.caption-charts-grid > div').style.display = 'none';
-  }
-
-  // ── Hook Type Distribution (horizontal bar) ──────────────────
-  const hookData = DATA.hook_type_distribution || {};
-  if (Object.keys(hookData).length) {
-    const hookEntries = Object.entries(hookData).sort((a,b) => b[1] - a[1]);
-    const ctxHook = document.getElementById('hookTypeChart').getContext('2d');
-    new Chart(ctxHook, {
-      type: 'bar',
-      data: {
-        labels: hookEntries.map(([k]) => k.replace(/_/g,' ')),
-        datasets: [{
-          label: 'Posts',
-          data: hookEntries.map(([,v]) => v),
-          backgroundColor: hookEntries.map((_, i) => CHART_COLORS[i % CHART_COLORS.length] + 'cc'),
-          borderColor:      hookEntries.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
-          borderWidth: 1.5,
-          borderRadius: 4,
-          borderSkipped: false,
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} posts` } }
-        },
-        scales: {
-          x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } },
-          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
-        }
-      }
-    });
-  } else {
-    const el = document.getElementById('hookTypeChart');
-    if (el) el.closest('.caption-charts-grid > div').style.display = 'none';
-  }
-
-  // ── Caption Length Performance (horizontal bar) ──────────────
-  const lengthData = DATA.caption_length_performance || {};
-  if (Object.keys(lengthData).length) {
-    const buckets = ['short', 'medium', 'long'].filter(k => lengthData[k]);
-    const ctxLen = document.getElementById('captionLengthChart').getContext('2d');
-    new Chart(ctxLen, {
-      type: 'bar',
-      data: {
-        labels: buckets.map(b => `${b.charAt(0).toUpperCase() + b.slice(1)} (${lengthData[b].count} posts)`),
-        datasets: [{
-          label: 'Avg Views',
-          data: buckets.map(b => lengthData[b].avg_views),
-          backgroundColor: ['#d1fae5','#bfdbfe','#ede9fe'],
-          borderColor:      ['#10b981','#3b82f6','#8b5cf6'],
-          borderWidth: 1.5,
-          borderRadius: 6,
-          borderSkipped: false,
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` Avg Views: ${fmtN(Math.round(ctx.raw))}` } }
-        },
-        scales: {
-          x: { grid: { color: '#f3f4f6' }, ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v, font: { size: 10 } } },
-          y: { grid: { display: false }, ticks: { font: { size: 12 } } }
-        }
-      }
-    });
-  } else {
-    const lenWrap = document.getElementById('captionLengthChart');
-    if (lenWrap) lenWrap.closest('div[style]').style.display = 'none';
-  }
+  // NOTE: Intent distribution, hook distribution, and caption length charts are rendered
+  // by renderViralPanel() and renderCaptionLengthCards() respectively — those canvases
+  // (intentDistributionChart, hookDonutChart, caption-length-cards) live in the HTML.
+  // This function only handles: promo codes, brand mentions, caption words chart, examples.
 
   // ── Top Promo Codes list ─────────────────────────────────────
   const promoCodes = DATA.top_promo_codes || [];
@@ -1683,7 +1589,7 @@ function renderViralPanel() {
 
   // Hide entire section if both datasets are empty
   if (!Object.keys(intentData).length && !Object.keys(hookData).length) {
-    const sec = document.getElementById('viral-section');
+    const sec = document.getElementById('caption-intelligence-section');
     if (sec) sec.style.display = 'none';
     return;
   }
@@ -2107,6 +2013,145 @@ function renderPrescriptions() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// HOOK → REVENUE CORRELATION TABLE
+// ═══════════════════════════════════════════════════════════
+function renderHookRevenueTable() {
+  const rows = DATA.hook_revenue_correlation || [];
+  const panel = document.getElementById('hook-revenue-panel');
+  if (!panel) return;
+  if (!rows.length) { panel.style.display = 'none'; return; }
+
+  const maxComm = Math.max(...rows.map(r => r.avg_commissions || 0)) || 1;
+
+  const tableRows = rows.map(r => {
+    const barPct = Math.round((r.avg_commissions / maxComm) * 100);
+    return `<tr>
+      <td>${(r.hook_type || '—').replace(/_/g, ' ')}</td>
+      <td>${fmt$(r.avg_commissions)}</td>
+      <td>${fmtN(r.avg_clicks)}</td>
+      <td>${r.count}</td>
+      <td><span class="hook-revenue-bar" style="width:${barPct}%;"></span></td>
+    </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">
+      Hook Type → Revenue Correlation
+      <span style="font-weight:400;color:var(--gray-500);font-size:11px;"> — which caption openers drive the most LTK revenue</span>
+    </div>
+    <div class="table-wrap">
+      <table class="hook-revenue-table">
+        <thead>
+          <tr>
+            <th>Hook Type</th>
+            <th>Avg Commissions</th>
+            <th>Avg Clicks</th>
+            <th>Posts</th>
+            <th style="width:120px;">Revenue Bar</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// BEST TIME TO POST — HORIZONTAL BAR CHART
+// ═══════════════════════════════════════════════════════════
+let bestPostingChart = null;
+
+function renderBestPostingDaysChart() {
+  const days = DATA.best_posting_days || [];
+  const panel = document.getElementById('best-posting-days-panel');
+  if (!panel) return;
+  if (!days.length) { panel.style.display = 'none'; return; }
+
+  // Sort by day-of-week order for display (Mon first), but colour by rank
+  const DOW_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const sorted = [...days].sort((a, b) => DOW_ORDER.indexOf(a.day) - DOW_ORDER.indexOf(b.day));
+  const maxViews = Math.max(...sorted.map(d => d.avg_views || 0)) || 1;
+
+  const labels    = sorted.map(d => d.day.slice(0,3));
+  const values    = sorted.map(d => d.avg_views || 0);
+  const bgColors  = sorted.map(d =>
+    d.avg_views === maxViews ? '#6366f1' : '#e0e7ff'
+  );
+
+  if (bestPostingChart) { bestPostingChart.destroy(); }
+  const ctx = document.getElementById('bestPostingDaysChart');
+  if (!ctx) return;
+
+  bestPostingChart = new Chart(ctx.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: bgColors,
+        borderRadius: 6,
+        barThickness: 28,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` Avg Views: ${fmtN(ctx.raw)}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: { callback: v => fmtN(v), font: { size: 11 } },
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 12, weight: '500' } },
+        }
+      }
+    }
+  });
+
+  // Annotate post counts below chart
+  const countNote = sorted.map(d => `${d.day.slice(0,3)}: ${d.post_count} post${d.post_count !== 1 ? 's' : ''}`).join(' · ');
+  const noteEl = document.createElement('div');
+  noteEl.style.cssText = 'font-size:11px;color:var(--gray-400);margin-top:6px;';
+  noteEl.textContent = countNote;
+  panel.appendChild(noteEl);
+}
+
+// ═══════════════════════════════════════════════════════════
+// REVENUE SPIKE CALLOUTS
+// ═══════════════════════════════════════════════════════════
+function renderRevenueSpikes() {
+  const spikes = DATA.revenue_spikes || [];
+  const panel = document.getElementById('revenue-spikes-panel');
+  if (!panel) return;
+  if (!spikes.length) { panel.style.display = 'none'; return; }
+
+  const cards = spikes.map(s => `
+    <div class="spike-card">
+      <div class="spike-card-holiday">${s.nearest_holiday || '—'}</div>
+      <div class="spike-card-week">Week of ${fmtDate(s.week_start)}</div>
+      <div class="spike-card-comm">${fmt$(s.commissions)}</div>
+      <div><span class="spike-card-factor">${s.spike_factor}x mean</span></div>
+    </div>
+  `).join('');
+
+  panel.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">
+      Revenue Spike Weeks
+      <span style="font-weight:400;color:var(--gray-500);font-size:11px;"> — weeks with &gt;1.5x mean commissions</span>
+    </div>
+    <div class="spike-cards-grid">${cards}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
 // INIT — render all sections
 // ═══════════════════════════════════════════════════════════
 (function init() {
@@ -2126,8 +2171,11 @@ function renderPrescriptions() {
   try { renderCaptionLengthCards(); } catch(e) { console.error('Caption length cards error:', e); }
   try { renderCaptionExamples(); } catch(e) { console.error('Caption examples error:', e); }
   try { renderPrescriptions(); } catch(e) { console.error('Prescriptions error:', e); }
+  try { renderHookRevenueTable(); } catch(e) { console.error('Hook revenue table error:', e); }
+  try { renderBestPostingDaysChart(); } catch(e) { console.error('Best posting days chart error:', e); }
   try { renderViralPanel(); } catch(e) { console.error('Viral panel error:', e); }
   try { renderSeasonalChart(); } catch(e) { console.error('Seasonal chart error:', e); }
+  try { renderRevenueSpikes(); } catch(e) { console.error('Revenue spikes error:', e); }
   try { renderReels(); } catch(e) { console.error('Reels error:', e); }
 })();
 </script>
