@@ -11,6 +11,7 @@ import {
   DollarSign,
   Activity,
   MessageCircle,
+  FlaskConical,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { creatorTokens } from "@/lib/schema";
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/creators",             label: "Creators",     icon: Users },
   { href: "/dashboard/compare",              label: "Compare",      icon: GitCompareArrows },
   { href: "/dashboard/intelligence/search",  label: "Intelligence", icon: Brain },
+  { href: "/dashboard/content-lab",          label: "Content Lab",  icon: FlaskConical },
   { href: "/dashboard/sync-health",          label: "Sync Health",  icon: Activity },
   { href: "/dashboard/manychat",             label: "ManyChat",     icon: MessageCircle },
 ];

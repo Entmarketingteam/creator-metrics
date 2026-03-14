@@ -271,6 +271,81 @@ export const brandCollabs = pgTable("brand_collabs", {
   syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── Content Lab ──────────────────────────────────────────────────────────────
+
+export const contentReports = pgTable(
+  "content_reports",
+  {
+    id:          serial("id").primaryKey(),
+    creatorId:   text("creator_id").notNull().references(() => creators.id),
+    season:      text("season").notNull(), // 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'full_year', etc.
+    year:        integer("year").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow(),
+    reportData:  jsonb("report_data").notNull(),
+  },
+  (t) => [uniqueIndex("content_reports_creator_season_year_idx").on(t.creatorId, t.season, t.year)]
+);
+
+export const contentPostsScored = pgTable(
+  "content_posts_scored",
+  {
+    id:               serial("id").primaryKey(),
+    creatorId:        text("creator_id").notNull().references(() => creators.id),
+    reportId:         integer("report_id").references(() => contentReports.id),
+    // post identity
+    postId:           text("post_id").notNull(),         // LTK share_url or IG media_ig_id
+    platform:         text("platform").notNull(),        // 'ltk' | 'instagram'
+    postUrl:          text("post_url"),
+    heroImage:        text("hero_image"),
+    postedAt:         timestamp("posted_at", { withTimezone: true }),
+    caption:          text("caption"),
+    // raw metrics
+    clicks:           integer("clicks").default(0),
+    orders:           integer("orders").default(0),
+    commissions:      numeric("commissions", { precision: 12, scale: 2 }).default("0"),
+    reach:            integer("reach"),
+    saves:            integer("saves"),
+    likes:            integer("likes"),
+    // scores
+    overallScore:     integer("overall_score"),          // 0-100
+    engagementScore:  integer("engagement_score"),       // 0-100
+    revenueScore:     integer("revenue_score"),          // 0-100
+    scoreBreakdown:   jsonb("score_breakdown"),          // detailed sub-scores
+    tags:             jsonb("tags"),                     // ["top_earner", "high_saves", etc.]
+    syncedAt:         timestamp("synced_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [uniqueIndex("content_posts_scored_post_report_idx").on(t.postId, t.reportId)]
+);
+
+export const contentIgAnalyzed = pgTable(
+  "content_ig_analyzed",
+  {
+    id:               serial("id").primaryKey(),
+    creatorId:        text("creator_id").notNull().references(() => creators.id),
+    reportId:         integer("report_id").references(() => contentReports.id),
+    mediaIgId:        text("media_ig_id").notNull(),
+    mediaType:        text("media_type"),                // 'REEL' | 'IMAGE' | 'CAROUSEL_ALBUM'
+    postedAt:         timestamp("posted_at", { withTimezone: true }),
+    caption:          text("caption"),
+    // engagement metrics
+    reach:            integer("reach"),
+    saves:            integer("saves"),
+    likes:            integer("likes"),
+    comments:         integer("comments"),
+    shares:           integer("shares"),
+    // caption analysis results (mirrors captionAnalysis but report-scoped)
+    seoScore:         integer("seo_score"),
+    hookQualityLabel: text("hook_quality_label"),        // 'strong' | 'moderate' | 'weak'
+    intent:           text("intent"),
+    tone:             text("tone"),
+    keyTopics:        jsonb("key_topics"),
+    recommendations:  jsonb("recommendations"),
+    fullAnalysis:     jsonb("full_analysis"),            // raw AI output
+    analyzedAt:       timestamp("analyzed_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [uniqueIndex("content_ig_analyzed_media_report_idx").on(t.mediaIgId, t.reportId)]
+);
+
 export const captionAnalysis = pgTable('caption_analysis', {
   id:               serial('id').primaryKey(),
   mediaIgId:        text('media_ig_id').notNull(),

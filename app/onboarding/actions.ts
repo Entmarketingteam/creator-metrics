@@ -12,12 +12,12 @@ export async function startOAuth() {
     maxAge: 300,
   });
 
+  const appId = (process.env.META_APP_ID ?? "").trim();
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+
   const url = new URL("https://www.facebook.com/v21.0/dialog/oauth");
-  url.searchParams.set("client_id", process.env.META_APP_ID!);
-  url.searchParams.set(
-    "redirect_uri",
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/instagram/callback`
-  );
+  url.searchParams.set("client_id", appId);
+  url.searchParams.set("redirect_uri", `${appUrl}/api/auth/instagram/callback`);
   url.searchParams.set(
     "scope",
     "pages_show_list,instagram_basic,instagram_manage_insights,pages_read_engagement"
