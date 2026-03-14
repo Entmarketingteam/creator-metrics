@@ -172,7 +172,7 @@ def score_ig_story(story: dict, all_stories: Optional[list] = None) -> dict:
     - link_engagement_rate: (link_clicks + sticker_taps) / views
     - virality_score: 0-100 percentile rank of views
     - engagement_score: 0-100 percentile rank of engagement_rate
-    - composite_score: 60% virality + 40% engagement
+    - composite_score: 50% virality + 35% engagement + 15% SEO
     - tier: 'viral' | 'hero' | 'strong' | 'average' | 'underperformer'
     """
     result = dict(story)
@@ -200,9 +200,10 @@ def score_ig_story(story: dict, all_stories: Optional[list] = None) -> dict:
             e = 0.0
         all_eng.append(e)
 
-    virality   = percentile_rank(views, all_views)
-    eng_score  = percentile_rank(eng_rate, all_eng)
-    composite  = round(virality * 0.60 + eng_score * 0.40, 1)
+    virality      = percentile_rank(views, all_views)
+    eng_score     = percentile_rank(eng_rate, all_eng)
+    seo_score_pct = (story.get("seo_score") or 0) / 100.0 * 100.0
+    composite     = round(virality * 0.50 + eng_score * 0.35 + seo_score_pct * 0.15, 1)
 
     if composite >= 95:
         tier = "viral"
@@ -220,6 +221,7 @@ def score_ig_story(story: dict, all_stories: Optional[list] = None) -> dict:
         "link_engagement_rate": link_rate,
         "virality_score":       virality,
         "engagement_score":     eng_score,
+        "seo_score":            seo_score_pct,
         "composite_score":      composite,
         "tier":                 tier,
     })
@@ -227,7 +229,10 @@ def score_ig_story(story: dict, all_stories: Optional[list] = None) -> dict:
 
 
 def score_ig_stories_batch(stories: list) -> list:
-    """Score a list of IG stories with percentile ranks computed across the batch."""
+    """Score a list of IG stories with percentile ranks computed across the batch.
+
+    Composite formula: 50% virality + 35% engagement + 15% SEO.
+    """
     all_views = [s.get("views") for s in stories]
     all_eng = []
     for s in stories:
@@ -237,6 +242,7 @@ def score_ig_stories_batch(stories: list) -> list:
         else:
             e = 0.0
         all_eng.append(e)
+    all_seo = [s.get("seo_score") or 0 for s in stories]
 
     scored = []
     for story in stories:
@@ -252,9 +258,11 @@ def score_ig_stories_batch(stories: list) -> list:
         eng_rate  = round((likes + replies + follows) / reach, 4) if reach > 0 else 0.0
         link_rate = round((link_clicks + sticker_taps) / views, 4) if views > 0 else 0.0
 
-        virality  = percentile_rank(views, all_views)
-        eng_score = percentile_rank(eng_rate, all_eng)
-        composite = round(virality * 0.60 + eng_score * 0.40, 1)
+        seo_raw       = story.get("seo_score") or 0
+        virality      = percentile_rank(views, all_views)
+        eng_score     = percentile_rank(eng_rate, all_eng)
+        seo_score_pct = percentile_rank(seo_raw, all_seo)
+        composite     = round(virality * 0.50 + eng_score * 0.35 + seo_score_pct * 0.15, 1)
 
         if composite >= 95:
             tier = "viral"
@@ -272,6 +280,7 @@ def score_ig_stories_batch(stories: list) -> list:
             "link_engagement_rate": link_rate,
             "virality_score":       virality,
             "engagement_score":     eng_score,
+            "seo_score":            seo_score_pct,
             "composite_score":      composite,
             "tier":                 tier,
         })
@@ -292,7 +301,7 @@ def score_ig_reel(reel: dict, all_reels: Optional[list] = None) -> dict:
     - save_rate: saves / views
     - share_rate: shares / views
     - virality_score: 0-100 percentile rank of views
-    - composite_score: 50% views + 30% engagement_rate + 20% saves
+    - composite_score: 44% virality + 27% engagement + 17% saves + 12% SEO
     - tier: 'viral' | 'hero' | 'strong' | 'average' | 'underperformer'
     """
     result = dict(reel)
@@ -322,10 +331,11 @@ def score_ig_reel(reel: dict, all_reels: Optional[list] = None) -> dict:
         all_eng.append(e)
         all_saves.append(r.get("saves"))
 
-    virality   = percentile_rank(views, all_views)
-    eng_score  = percentile_rank(eng_rate, all_eng)
-    save_score = percentile_rank(saves, all_saves)
-    composite  = round(virality * 0.50 + eng_score * 0.30 + save_score * 0.20, 1)
+    virality      = percentile_rank(views, all_views)
+    eng_score     = percentile_rank(eng_rate, all_eng)
+    save_score    = percentile_rank(saves, all_saves)
+    seo_score_pct = (reel.get("seo_score") or 0) / 100.0 * 100.0
+    composite     = round(virality * 0.44 + eng_score * 0.27 + save_score * 0.17 + seo_score_pct * 0.12, 1)
 
     if composite >= 95:
         tier = "viral"
@@ -343,6 +353,7 @@ def score_ig_reel(reel: dict, all_reels: Optional[list] = None) -> dict:
         "save_rate":       save_rate,
         "share_rate":      share_rate,
         "virality_score":  virality,
+        "seo_score":       seo_score_pct,
         "composite_score": composite,
         "tier":            tier,
     })
@@ -350,7 +361,10 @@ def score_ig_reel(reel: dict, all_reels: Optional[list] = None) -> dict:
 
 
 def score_ig_reels_batch(reels: list) -> list:
-    """Score a list of IG reels with percentile ranks computed across the batch."""
+    """Score a list of IG reels with percentile ranks computed across the batch.
+
+    Composite formula: 44% virality + 27% engagement + 17% saves + 12% SEO.
+    """
     all_views = [r.get("views") for r in reels]
     all_eng = []
     all_saves = []
@@ -363,6 +377,7 @@ def score_ig_reels_batch(reels: list) -> list:
             e = 0.0
         all_eng.append(e)
         all_saves.append(r.get("saves"))
+    all_seo_r = [r.get("seo_score") or 0 for r in reels]
 
     scored = []
     for reel in reels:
@@ -377,10 +392,12 @@ def score_ig_reels_batch(reels: list) -> list:
         save_rate  = round(saves / views, 4) if views > 0 else 0.0
         share_rate = round(shares / views, 4) if views > 0 else 0.0
 
-        virality   = percentile_rank(views, all_views)
-        eng_score  = percentile_rank(eng_rate, all_eng)
-        save_score = percentile_rank(saves, all_saves)
-        composite  = round(virality * 0.50 + eng_score * 0.30 + save_score * 0.20, 1)
+        seo_raw       = reel.get("seo_score") or 0
+        virality      = percentile_rank(views, all_views)
+        eng_score     = percentile_rank(eng_rate, all_eng)
+        save_score    = percentile_rank(saves, all_saves)
+        seo_score_pct = percentile_rank(seo_raw, all_seo_r)
+        composite     = round(virality * 0.44 + eng_score * 0.27 + save_score * 0.17 + seo_score_pct * 0.12, 1)
 
         if composite >= 95:
             tier = "viral"
@@ -398,6 +415,7 @@ def score_ig_reels_batch(reels: list) -> list:
             "save_rate":       save_rate,
             "share_rate":      share_rate,
             "virality_score":  virality,
+            "seo_score":       seo_score_pct,
             "composite_score": composite,
             "tier":            tier,
         })

@@ -270,3 +270,27 @@ export const brandCollabs = pgTable("brand_collabs", {
   source: text("source").default("google_sheets"),
   syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
 });
+
+export const captionAnalysis = pgTable('caption_analysis', {
+  id:               serial('id').primaryKey(),
+  mediaIgId:        text('media_ig_id').notNull(),
+  creatorId:        text('creator_id').notNull(),
+  captionHash:      text('caption_hash').notNull(),
+  seoScore:         integer('seo_score'),
+  seoBreakdown:     jsonb('seo_breakdown'),
+  hookText:         text('hook_text'),
+  hookQualityLabel: text('hook_quality_label'),
+  hashtagQuality:   text('hashtag_quality'),
+  ctaType:          text('cta_type'),
+  intent:           text('intent'),
+  tone:             text('tone'),
+  hookType:         text('hook_type'),
+  keyTopics:        jsonb('key_topics'),
+  productCategory:  text('product_category'),
+  hasUrgency:       boolean('has_urgency').default(false),
+  viralitySignals:  jsonb('virality_signals'),
+  recommendations:  jsonb('recommendations'),
+  analyzedAt:       timestamp('analyzed_at').defaultNow(),
+}, (table) => ({
+  uniq: unique().on(table.mediaIgId, table.creatorId),
+}));

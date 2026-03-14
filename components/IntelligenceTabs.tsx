@@ -6,6 +6,7 @@ const TABS = [
   { path: "/dashboard/intelligence/search",   label: "Search"   },
   { path: "/dashboard/intelligence/insights",  label: "Insights" },
   { path: "/dashboard/intelligence/trends",    label: "Trends"   },
+  { path: "/dashboard/intelligence/captions", label: "Captions" },
 ];
 
 export function IntelligenceTabs() {

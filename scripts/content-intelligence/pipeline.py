@@ -173,6 +173,16 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     data_for_report['ig_reels'] = _normalize_post_numerics(
         copy.deepcopy(data['ig_reels']), _ig_numeric_fields)
 
+    # Ensure SEO fields have defaults
+    _seo_defaults = {'seo_score': 0, 'hook_quality_label': 'weak',
+                     'hashtag_quality': 'none', 'cta_type': 'none',
+                     'seo_breakdown': {}, 'hook_text': ''}
+    for collection in (data_for_report['ig_stories'], data_for_report['ig_reels']):
+        for item in collection:
+            for k, v in _seo_defaults.items():
+                if item.get(k) is None:
+                    item[k] = v
+
     # report_generator._build_weekly_performance expects date_published as string (ISO),
     # but ingest returns actual datetime objects — convert to ISO strings
     for p in data_for_report['ltk_posts']:
@@ -264,6 +274,12 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     report_data['high_performing_captions'] = caption_results.get('high_performing_captions', [])
     report_data['engagement_by_intent'] = caption_results.get('engagement_by_intent', {})
     report_data['caption_length_performance'] = caption_results.get('caption_length_performance', {})
+
+    # SEO aggregate fields for Section 7
+    report_data['avg_seo_score']          = caption_results.get('avg_seo_score', 0)
+    report_data['seo_score_distribution'] = caption_results.get('seo_score_distribution', {})
+    report_data['seo_top_issues']         = caption_results.get('seo_top_issues', [])
+    report_data['seo_prescriptions']      = caption_results.get('seo_prescriptions', [])
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     generate_report(report_data, output_path)

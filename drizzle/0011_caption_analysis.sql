@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS "caption_analysis" (
+  "id"                serial PRIMARY KEY,
+  "media_ig_id"       text NOT NULL,
+  "creator_id"        text NOT NULL,
+  "caption_hash"      text NOT NULL,
+  "seo_score"         integer,
+  "seo_breakdown"     jsonb,
+  "hook_text"         text,
+  "hook_quality_label" text,
+  "hashtag_quality"   text,
+  "cta_type"          text,
+  "intent"            text,
+  "tone"              text,
+  "hook_type"         text,
+  "key_topics"        jsonb,
+  "product_category"  text,
+  "has_urgency"       boolean DEFAULT false,
+  "virality_signals"  jsonb,
+  "recommendations"   jsonb,
+  "analyzed_at"       timestamp DEFAULT now(),
+  CONSTRAINT "caption_analysis_media_ig_id_creator_id_unique" UNIQUE ("media_ig_id", "creator_id")
+);

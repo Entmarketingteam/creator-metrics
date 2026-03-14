@@ -633,6 +633,42 @@
     }
     .mini-list-row:last-child { border-bottom: none; }
     .mini-list-label { font-weight: 500; color: var(--gray-800); text-transform: capitalize; }
+    /* SEO KPI grid */
+    .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .kpi-card  { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
+    .kpi-value { font-size:28px; font-weight:700; color:var(--white); margin-bottom:4px; }
+    .kpi-label { font-size:11px; color:var(--gray-500); text-transform:uppercase; letter-spacing:.05em; }
+
+    /* Caption length cards */
+    .caption-length-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .length-card { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px; }
+    .length-card-label { font-size:11px; font-weight:600; color:var(--gray-500); text-transform:uppercase; margin-bottom:4px; }
+    .length-card-value { font-size:22px; font-weight:700; color:var(--white); }
+    .length-card-sub   { font-size:11px; color:var(--gray-500); margin-top:4px; }
+    .length-card.best  { border-color: var(--accent); }
+
+    /* Prescription box */
+    .prescription-box { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .prescription-title { font-size:13px; font-weight:700; color:var(--white); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+    .prescription-item { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; font-size:13px; color:var(--gray-300); line-height:1.5; }
+    .prescription-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+    .dot-high    { background:#ef4444; }
+    .dot-medium  { background:#f59e0b; }
+    .dot-low     { background:#22c55e; }
+
+    /* 125-char hook highlight in caption examples */
+    .caption-hook-highlight { background:rgba(99,102,241,.15); border-left:3px solid var(--accent); padding:2px 6px; border-radius:0 4px 4px 0; }
+    .seo-badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; margin-left:8px; }
+    .seo-badge-strong   { background:rgba(34,197,94,.2);  color:#22c55e; }
+    .seo-badge-moderate { background:rgba(245,158,11,.2); color:#f59e0b; }
+    .seo-badge-weak     { background:rgba(239,68,68,.2);  color:#ef4444; }
+
+    /* Engagement by intent table */
+    .intent-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .intent-table th { text-align:left; padding:8px 12px; color:var(--gray-500); font-weight:500; border-bottom:1px solid var(--border); }
+    .intent-table td { padding:8px 12px; color:var(--gray-300); border-bottom:1px solid rgba(255,255,255,.04); }
+    .intent-table tr:hover td { background:var(--surface-2); }
+
     .mini-list-count {
       background: var(--primary-light);
       color: var(--primary-dark);
@@ -816,42 +852,64 @@ const DATA = {{DATA_JSON}};
     </div>
   </div>
 
-  <!-- ── Section 7: Caption Intelligence ─────────────────── -->
+  <!-- ── Section 7: Caption Intelligence (SEO-enhanced) ──────── -->
   <div class="section">
     <div class="section-header">
       <span class="section-icon">✍️</span>
       <span class="section-title">Caption Intelligence</span>
-      <span class="section-sub">NLP patterns, intent, hooks &amp; length analysis</span>
+      <span class="section-sub">IG SEO scoring, intent, hooks, engagement patterns &amp; prescriptions</span>
     </div>
 
-    <!-- Section B: Caption Stats chips -->
-    <div class="caption-stat-chips" id="caption-stat-chips"><!-- populated by JS --></div>
+    <!-- Panel 1: SEO Overview KPIs + distribution -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;">IG SEO Overview</div>
+      <div class="kpi-grid" id="seo-kpi-grid"><!-- populated by JS --></div>
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;">Score Distribution</div>
+        <div class="chart-wrap" style="height:80px;">
+          <canvas id="seoDistributionChart"></canvas>
+        </div>
+      </div>
+    </div>
 
-    <!-- Row 1: engagement by intent + hook type distribution -->
-    <div class="caption-charts-grid">
+    <!-- Panel 2: Intent & Hook Distribution -->
+    <div class="caption-charts-grid" style="margin-bottom:28px;">
       <div>
-        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Avg Views by Caption Intent</div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Caption Intent Distribution</div>
         <div class="chart-wrap" style="height:260px;">
-          <canvas id="engagementByIntentChart"></canvas>
+          <canvas id="intentDistributionChart"></canvas>
         </div>
       </div>
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Hook Type Distribution</div>
         <div class="chart-wrap" style="height:260px;">
-          <canvas id="hookTypeChart"></canvas>
+          <canvas id="hookDonutChart"></canvas>
         </div>
       </div>
     </div>
 
-    <!-- Row 2: caption length performance -->
+    <!-- Panel 3: Engagement by Intent table -->
     <div style="margin-bottom:28px;">
-      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Avg Views by Caption Length</div>
-      <div class="chart-wrap" style="height:120px;">
-        <canvas id="captionLengthChart"></canvas>
-      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Engagement by Intent</div>
+      <div id="engagement-by-intent-table"><!-- populated by JS --></div>
     </div>
 
-    <!-- Row 3: promo codes + brand mentions + top words -->
+    <!-- Panel 4: Caption Length Performance -->
+    <div style="margin-bottom:28px;">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Caption Length vs Performance</div>
+      <div class="caption-length-cards" id="caption-length-cards"><!-- populated by JS --></div>
+    </div>
+
+    <!-- Panel 5: High-Performing Captions (125-char highlight) -->
+    <div style="margin-bottom:28px;">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Top-Performing Captions <span style="font-weight:400;color:var(--gray-500);font-size:11px;">— first 125 chars = Google meta description</span></div>
+      <div class="caption-examples" id="caption-examples"><!-- populated by JS --></div>
+    </div>
+
+    <!-- Panel 6: Prescription Box -->
+    <div style="margin-bottom:28px;" id="prescription-box"><!-- populated by JS --></div>
+
+    <!-- Panel 7: Promo Codes + Brand Mentions -->
     <div class="caption-lists-grid">
       <div class="mini-list-card">
         <div class="mini-list-title">Top Promo Codes</div>
@@ -865,38 +923,6 @@ const DATA = {{DATA_JSON}};
         <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Most Common Words</div>
         <div class="chart-wrap" style="height:320px;">
           <canvas id="captionWordsChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- Row 4: high-performing caption samples -->
-    <div>
-      <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:12px;">Top-Performing Caption Samples</div>
-      <div class="caption-examples" id="caption-examples"><!-- populated by JS --></div>
-    </div>
-  </div>
-
-  <!-- ── Section 7b: What Goes Viral ────────────────────── -->
-  <div class="section" id="viral-section">
-    <div class="section-header">
-      <span class="section-icon">⚡</span>
-      <span class="section-title">What Goes Viral</span>
-      <span class="section-sub">Intent, hook &amp; content signals behind top performance</span>
-    </div>
-
-    <div class="viral-grid">
-      <!-- Left: intent distribution horizontal bar -->
-      <div>
-        <div class="viral-chart-label">Caption Intent Distribution</div>
-        <div class="chart-wrap" style="height:260px;">
-          <canvas id="intentDistributionChart"></canvas>
-        </div>
-      </div>
-      <!-- Right: hook type donut -->
-      <div>
-        <div class="viral-chart-label">Hook Type Mix</div>
-        <div class="chart-wrap" style="height:260px;">
-          <canvas id="hookDonutChart"></canvas>
         </div>
       </div>
     </div>
@@ -1942,6 +1968,144 @@ function renderTopProducts() {
   `;
 }
 
+// ── Panel 1: SEO KPIs ─────────────────────────────────────────
+function renderSeoKpis() {
+  const avgScore  = DATA.avg_seo_score || 0;
+  const stories   = (DATA.ig_stories || []);
+  const reels     = (DATA.ig_reels || []);
+  const allIG     = stories.concat(reels);
+  const strongHooks = allIG.filter(p => p.hook_quality_label === 'strong').length;
+  const strongPct   = allIG.length ? Math.round(strongHooks / allIG.length * 100) : 0;
+  const optHash     = allIG.filter(p => p.hashtag_quality === 'optimal').length;
+  const optHashPct  = allIG.length ? Math.round(optHash / allIG.length * 100) : 0;
+
+  document.getElementById('seo-kpi-grid').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-value">${avgScore}</div>
+      <div class="kpi-label">Avg SEO Score</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">${strongPct}%</div>
+      <div class="kpi-label">Posts with Strong Hook</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">${optHashPct}%</div>
+      <div class="kpi-label">Optimal Hashtag Count</div>
+    </div>`;
+
+  const dist = DATA.seo_score_distribution || {};
+  const labels = ['0–25','26–50','51–75','76–100'];
+  const vals   = [dist['0-25']||0, dist['26-50']||0, dist['51-75']||0, dist['76-100']||0];
+  new Chart(document.getElementById('seoDistributionChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data: vals,
+        backgroundColor: ['#ef4444','#f59e0b','#6366f1','#22c55e'],
+        borderRadius: 6, borderSkipped: false }]
+    },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#9ca3af'}},
+              y:{grid:{display:false},ticks:{color:'#9ca3af'}}} }
+  });
+}
+
+// ── Panel 3: Engagement by Intent table ──────────────────────
+function renderEngagementByIntentTable() {
+  const data = DATA.engagement_by_intent || {};
+  if (!Object.keys(data).length) return;
+  const rows = Object.entries(data)
+    .sort((a,b) => (b[1].avg_views||0) - (a[1].avg_views||0))
+    .map(([intent, d]) => `
+      <tr>
+        <td>${intent.replace(/_/g,' ')}</td>
+        <td>${(d.avg_views||0).toLocaleString()}</td>
+        <td>${(d.avg_link_clicks||0).toFixed(1)}</td>
+        <td>${d.count||0}</td>
+      </tr>`).join('');
+  document.getElementById('engagement-by-intent-table').innerHTML = `
+    <table class="intent-table">
+      <thead><tr><th>Intent</th><th>Avg Views</th><th>Avg Link Clicks</th><th>Posts</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Panel 4: Caption Length cards ────────────────────────────
+function renderCaptionLengthCards() {
+  const perf = DATA.caption_length_performance || {};
+  const buckets = [
+    { key:'short',      label:'Short',       sub:'< 50 chars' },
+    { key:'medium',     label:'Medium',      sub:'50–150 chars' },
+    { key:'long',       label:'Long',        sub:'150–300 chars' },
+    { key:'extra_long', label:'Extra Long',  sub:'> 300 chars' },
+  ];
+  const best = buckets.reduce((b,c) =>
+    ((perf[c.key]||{}).avg_views||0) > ((perf[b.key]||{}).avg_views||0) ? c : b,
+    buckets[0]
+  );
+  const html = buckets.map(b => {
+    const d = perf[b.key] || {};
+    const isBest = b.key === best.key;
+    return `<div class="length-card${isBest?' best':''}">
+      <div class="length-card-label">${b.label} ${isBest?'★':''}</div>
+      <div class="length-card-value">${(d.avg_views||0).toLocaleString()}</div>
+      <div class="length-card-sub">${b.sub} · ${d.count||0} posts</div>
+    </div>`;
+  }).join('');
+  document.getElementById('caption-length-cards').innerHTML = html;
+}
+
+// ── Panel 5: High-performing captions with 125-char highlight ─
+function renderCaptionExamples() {
+  const captions = DATA.high_performing_captions || [];
+  if (!captions.length) { document.getElementById('caption-examples').innerHTML = '<p style="color:#6b7280">No caption data available.</p>'; return; }
+
+  const html = captions.slice(0,5).map((c,i) => {
+    const full    = c.caption || '';
+    const hook    = full.slice(0,125);
+    const rest    = full.slice(125);
+    const seoLabel = c.hook_quality_label || 'weak';
+    const badgeCls = `seo-badge seo-badge-${seoLabel}`;
+    const seoScore = c.seo_score != null ? ` · ${c.seo_score}/100` : '';
+    return `<div class="caption-example-card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:600;color:#9ca3af;">#${i+1} · ${c.platform||''} · ${(c.views||0).toLocaleString()} views</span>
+        <span class="${badgeCls}">${seoLabel}${seoScore}</span>
+      </div>
+      <div style="font-size:13px;line-height:1.6;color:#d1d5db;">
+        <span class="caption-hook-highlight">${escHtml(hook)}</span>${escHtml(rest)}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('caption-examples').innerHTML = html;
+}
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Panel 6: Prescription box ─────────────────────────────────
+function renderPrescriptions() {
+  const prescriptions = DATA.seo_prescriptions || [];
+  const issues        = DATA.seo_top_issues    || [];
+  if (!prescriptions.length) return;
+  const colors = ['dot-high','dot-medium','dot-low'];
+  const items = prescriptions.map((p,i) =>
+    `<div class="prescription-item">
+      <div class="prescription-dot ${colors[i % colors.length]}"></div>
+      <div>${p}</div>
+    </div>`
+  ).join('');
+  const issueText = issues.length
+    ? `<div style="margin-top:12px;font-size:12px;color:#6b7280;">Top weak dimensions: ${issues.map(d=>d.replace(/_/g,' ')).join(' · ')}</div>`
+    : '';
+  document.getElementById('prescription-box').innerHTML = `
+    <div class="prescription-box">
+      <div class="prescription-title">💊 Caption Prescriptions</div>
+      ${items}${issueText}
+    </div>`;
+}
+
 // ═══════════════════════════════════════════════════════════
 // INIT — render all sections
 // ═══════════════════════════════════════════════════════════
@@ -1957,6 +2121,11 @@ function renderTopProducts() {
   try { renderThemes(); } catch(e) { console.error('Themes error:', e); }
   try { renderCaptionStatChips(); } catch(e) { console.error('Caption stat chips error:', e); }
   try { renderCaptions(); } catch(e) { console.error('Captions error:', e); }
+  try { renderSeoKpis(); } catch(e) { console.error('SEO KPIs error:', e); }
+  try { renderEngagementByIntentTable(); } catch(e) { console.error('Engagement by intent error:', e); }
+  try { renderCaptionLengthCards(); } catch(e) { console.error('Caption length cards error:', e); }
+  try { renderCaptionExamples(); } catch(e) { console.error('Caption examples error:', e); }
+  try { renderPrescriptions(); } catch(e) { console.error('Prescriptions error:', e); }
   try { renderViralPanel(); } catch(e) { console.error('Viral panel error:', e); }
   try { renderSeasonalChart(); } catch(e) { console.error('Seasonal chart error:', e); }
   try { renderReels(); } catch(e) { console.error('Reels error:', e); }
