@@ -49,6 +49,33 @@ CREATOR_ENV_PREFIX = {
 
 # ── Webshare proxy mode helpers ───────────────────────────────────────────────
 
+# 44,744 US backbone residential proxies available.
+# Each uses username rpeolskt-US-{N}, port 10000+(N-1), host p.webshare.io.
+# Rotate randomly on each sync run to distribute load and avoid pattern detection.
+_WEBSHARE_US_PROXY_COUNT = 44744
+_WEBSHARE_HOST = "p.webshare.io"
+_WEBSHARE_BASE_PORT = 10000
+
+
+def _get_rotating_proxy_url() -> str:
+    """
+    Build a random US residential backbone proxy URL.
+    Uses WEBSHARE_PROXY_PASS from env (same password for all backbone proxies).
+    Falls back to WEBSHARE_PROXY_URL if set directly.
+    """
+    import random
+    direct = os.environ.get("WEBSHARE_PROXY_URL", "")
+    if direct and "US" in direct:
+        return direct  # Already a US proxy URL, use as-is
+
+    password = os.environ.get("WEBSHARE_PROXY_PASS", "bilkz2iph8i7")
+    n = random.randint(1, _WEBSHARE_US_PROXY_COUNT)
+    port = _WEBSHARE_BASE_PORT + (n - 1)
+    url = f"http://rpeolskt-US-{n}:{password}@{_WEBSHARE_HOST}:{port}"
+    logger.info("Rotating proxy: rpeolskt-US-%d @ %s:%d", n, _WEBSHARE_HOST, port)
+    return url
+
+
 def _build_opener_proxy(proxy_url: str) -> urllib.request.OpenerDirector:
     return urllib.request.build_opener(
         urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
@@ -143,7 +170,7 @@ def _fetch_daily_proxy(opener, headers, tag, start, end):
 
 def _sync_amazon_proxy(conn) -> dict:
     """Sync Amazon earnings using stored credentials + Webshare residential proxy."""
-    proxy_url = os.environ["WEBSHARE_PROXY_URL"]
+    proxy_url = _get_rotating_proxy_url()
     masked = proxy_url.split("@")[-1] if "@" in proxy_url else proxy_url
     logger.info("Amazon proxy sync via %s", masked)
 
@@ -262,8 +289,10 @@ def sync_amazon(conn) -> dict:
       1. AIRTOP_API_KEY set  → Airtop cloud browser login (full headless)
       2. WEBSHARE_PROXY_URL set → Residential proxy + stored Doppler credentials
     """
-    if not os.environ.get("AIRTOP_API_KEY") and os.environ.get("WEBSHARE_PROXY_URL"):
-        logger.info("No AIRTOP_API_KEY — using Webshare proxy mode")
+    if not os.environ.get("AIRTOP_API_KEY") and (
+        os.environ.get("WEBSHARE_PROXY_URL") or os.environ.get("WEBSHARE_PROXY_PASS")
+    ):
+        logger.info("No AIRTOP_API_KEY — using Webshare backbone proxy mode (rotating US IPs)")
         return _sync_amazon_proxy(conn)
 
     today = date.today()
