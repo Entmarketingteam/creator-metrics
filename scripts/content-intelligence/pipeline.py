@@ -22,7 +22,7 @@ from modules.caption_nlp import run_caption_analysis
 from modules.scoring import run_scoring
 from modules.report_generator import build_report_data, generate_report
 
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyCnF9aEZ169jgQXfUdqZuMFmyT22LUuEvg')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY', '')
 
 
 def _empty_visual_results():
@@ -70,11 +70,18 @@ def _upload_report_to_dashboard(report_data: dict, season: str = "spring", year:
         }
     }
 
+    # Make payload JSON-serializable (convert datetime to ISO strings)
+    def _json_safe(obj):
+        if hasattr(obj, 'isoformat'):
+            return obj.isoformat()
+        raise TypeError(f"Not serializable: {type(obj)}")
+
     try:
+        payload_json = json.dumps(payload, default=_json_safe)
         resp = requests.post(
             api_url,
-            json=payload,
-            headers={"x-cron-secret": cron_secret},
+            data=payload_json,
+            headers={"Authorization": f"Bearer {cron_secret}", "Content-Type": "application/json"},
             timeout=30
         )
         if resp.status_code == 200:
@@ -87,6 +94,7 @@ def _upload_report_to_dashboard(report_data: dict, season: str = "spring", year:
 
 def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
                  visual_sample: int = None, use_caption_cache: bool = False,
+                 use_visual_cache: bool = False,
                  skip_upload: bool = False, season: str = "spring", year: int = 2025):
     """
     Full pipeline:
@@ -119,10 +127,26 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
     print(f"  ✓ ${stats['total_attributed_commissions']:.2f} attributed to IG content")
 
     # ── Step 3: Visual analysis ────────────────────────────────────────────────
+    visual_cache_path = os.path.join(os.path.dirname(__file__), 'output', 'visual_cache.json')
     print("\nStep 3/7: Running Gemini visual analysis...")
     if fast_mode:
         print("  → Fast mode: skipping visual analysis")
         visual_results = _empty_visual_results()
+    elif use_visual_cache and os.path.exists(visual_cache_path):
+        print(f"  → Loading visual analysis from cache: {visual_cache_path}")
+        with open(visual_cache_path, 'r') as f:
+            visual_cache = json.load(f)
+        visual_results = visual_cache.get('visual_results', _empty_visual_results())
+        # Restore visual_analysis into ltk_posts
+        visual_map = visual_cache.get('visual_map', {})
+        for post in data['ltk_posts']:
+            url = post.get('share_url')
+            if url and url in visual_map:
+                post['visual_analysis'] = visual_map[url]
+        analyzed_count = len([p for p in data['ltk_posts'] if p.get('visual_analysis')])
+        print(f"  ✓ {analyzed_count} posts restored from cache")
+        if visual_results.get('top_themes'):
+            print(f"  ✓ Top themes: {', '.join(visual_results['top_themes'][:5])}")
     else:
         # Filter to Spring 2025 posts only (Mar–May 2025)
         spring_posts = [
@@ -154,6 +178,22 @@ def run_pipeline(data_dir: str, output_path: str, fast_mode: bool = False,
         print(f"  ✓ {analyzed_count} posts analyzed")
         if visual_results['top_themes']:
             print(f"  ✓ Top themes: {', '.join(visual_results['top_themes'][:5])}")
+
+        # Save visual cache for future runs (avoids re-running Gemini)
+        def _strip_embeddings(vr):
+            """Remove large embedding arrays before caching."""
+            vr = dict(vr)
+            vr['similarity_index'] = {'embeddings': [], 'post_ids': []}
+            return vr
+        try:
+            with open(visual_cache_path, 'w') as f:
+                json.dump({
+                    'visual_results': _strip_embeddings(visual_results),
+                    'visual_map':     visual_map,
+                }, f)
+            print(f"  ✓ Visual cache saved to {visual_cache_path}")
+        except Exception as e:
+            print(f"  ⚠ Could not save visual cache: {e}")
 
     # ── Step 4: Caption NLP ────────────────────────────────────────────────────
     cache_path = os.path.join(os.path.dirname(__file__), 'output', 'caption_cache.json')
@@ -372,6 +412,8 @@ if __name__ == '__main__':
                         help='Analyze only N posts visually (default: all Spring posts)')
     parser.add_argument('--use-caption-cache', action='store_true',
                         help='Load caption results from cache instead of re-running Claude NLP')
+    parser.add_argument('--use-visual-cache', action='store_true',
+                        help='Load visual analysis from cache instead of re-running Gemini')
     parser.add_argument('--season', default='spring',
                         help='Season label (spring/summer/fall/winter)')
     parser.add_argument('--year', type=int, default=2025,
@@ -387,6 +429,7 @@ if __name__ == '__main__':
     run_pipeline(args.data_dir, output, fast_mode=args.fast,
                  visual_sample=args.visual_sample,
                  use_caption_cache=args.use_caption_cache,
+                 use_visual_cache=args.use_visual_cache,
                  skip_upload=args.skip_upload,
                  season=args.season,
                  year=args.year)
