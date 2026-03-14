@@ -9,6 +9,7 @@ import {
   Brain,
   ImageIcon,
   DollarSign,
+  Activity,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { creatorTokens } from "@/lib/schema";
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/creators",             label: "Creators",     icon: Users },
   { href: "/dashboard/compare",              label: "Compare",      icon: GitCompareArrows },
   { href: "/dashboard/intelligence/search",  label: "Intelligence", icon: Brain },
+  { href: "/dashboard/sync-health",          label: "Sync Health",  icon: Activity },
 ];
 
 export default async function DashboardLayout({
