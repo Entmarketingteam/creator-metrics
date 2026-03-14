@@ -2,6 +2,8 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { creators as creatorsTable } from "@/lib/schema";
 import { formatCurrency } from "@/lib/utils";
 import {
   DollarSign,
@@ -15,14 +17,41 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import AmazonEarningsChart from "@/components/earnings/AmazonEarningsChart";
 import AmazonDailyChart from "@/components/earnings/AmazonDailyChart";
 
 export const dynamic = "force-dynamic";
 
-export default async function AmazonEarningsPage() {
+export default async function AmazonEarningsPage({
+  searchParams,
+}: {
+  searchParams: { creator?: string };
+}) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+
+  const creatorId = searchParams.creator ?? "nicki_entenmann";
+
+  // ── Creator lookup ────────────────────────────────────────────────
+  const creatorRows = await db
+    .select()
+    .from(creatorsTable)
+    .where(eq(creatorsTable.id, creatorId))
+    .limit(1);
+
+  const creator = creatorRows[0];
+  if (!creator) notFound();
+
+  const displayName = creator.displayName ?? creator.username;
+  const amazonTag =
+    creator.amazonAssociateTag ??
+    (() => {
+      // Derive tag from the creator id: strip trailing _entenmann suffix if present,
+      // otherwise just use the id prefix as-is and append entenman-20
+      const base = creatorId.replace(/_entenmann$/, "");
+      return `${base}entenman-20`;
+    })();
 
   // ── All Amazon monthly history ────────────────────────────────────
   const monthlyHistory = await db.execute(sql`
@@ -36,7 +65,7 @@ export default async function AmazonEarningsPage() {
       synced_at
     FROM platform_earnings
     WHERE platform = 'amazon'
-      AND creator_id = 'nicki_entenmann'
+      AND creator_id = ${creatorId}
       AND period_end = (DATE_TRUNC('month', period_start::date) + INTERVAL '1 month - 1 day')::date
     ORDER BY period_start ASC
   `);
@@ -75,7 +104,7 @@ export default async function AmazonEarningsPage() {
     const dailyRaw = await db.execute(sql`
       SELECT day, clicks, ordered_items, revenue, CAST(commission AS FLOAT) AS commission
       FROM amazon_daily_earnings
-      WHERE creator_id = 'nicki_entenmann'
+      WHERE creator_id = ${creatorId}
         AND day >= NOW() - INTERVAL '90 days'
       ORDER BY day ASC
     `);
@@ -109,7 +138,7 @@ export default async function AmazonEarningsPage() {
         CAST(SUM(revenue) AS FLOAT) AS revenue,
         CAST(SUM(commission) AS FLOAT) AS commission
       FROM amazon_orders
-      WHERE creator_id = 'nicki_entenmann'
+      WHERE creator_id = ${creatorId}
         AND period_start >= NOW() - INTERVAL '90 days'
       GROUP BY asin
       ORDER BY SUM(commission) DESC
@@ -142,7 +171,7 @@ export default async function AmazonEarningsPage() {
         comments_count,
         total_interactions
       FROM media_snapshots
-      WHERE creator_id = 'nicki_entenmann'
+      WHERE creator_id = ${creatorId}
         AND caption ILIKE '%amazon%'
         AND posted_at IS NOT NULL
       ORDER BY media_ig_id, captured_at DESC
@@ -192,7 +221,7 @@ export default async function AmazonEarningsPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Amazon Associates</h1>
             <p className="text-sm text-muted-foreground">
-              Nicki Entenmann · <span className="font-mono text-amber-400/80">nickientenman-20</span>
+              {displayName} · <span className="font-mono text-amber-400/80">{amazonTag}</span>
             </p>
           </div>
         </div>
