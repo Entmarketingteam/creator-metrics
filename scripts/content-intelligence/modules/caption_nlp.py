@@ -160,6 +160,7 @@ def calculate_seo_score(caption: str, features: dict) -> dict:
     hashtag_count = features.get("hashtag_count") if features else None
     if hashtag_count is None:
         hashtag_count = len(_RE_HASHTAG.findall(caption))
+    hashtag_count = int(hashtag_count)
 
     if hashtag_count == 0:
         hashtag_pts = 7
@@ -186,7 +187,7 @@ def calculate_seo_score(caption: str, features: dict) -> dict:
     mention_count = features.get("mention_count") if features else None
     if mention_count is None:
         mention_count = len(_RE_MENTION.findall(caption))
-    brand_pts = min(mention_count * 4, 10)
+    brand_pts = min(int(mention_count) * 4, 10)
 
     # ── Alt text flag (caption describes visual) ──────────────────────
     visual_words = re.compile(
@@ -540,10 +541,10 @@ def classify_caption_batch(captions: list, batch_size: int = 20) -> list:
                     for item in batches[idx]
                 ]
 
-    # Flatten in order
+    # Flatten in order — use `is not None` to preserve legitimately empty batches
     flat: list = []
     for batch_result in ordered_results:
-        if batch_result:
+        if batch_result is not None:
             flat.extend(batch_result)
     return flat
 
