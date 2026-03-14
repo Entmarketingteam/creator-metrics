@@ -5,7 +5,8 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 
 const AGENT_SERVER = "https://ent-agent-server-production.up.railway.app";
-const BATCH_SIZE = 30;
+const BATCH_SIZE = 24;
+const CONCURRENCY = 6;
 
 function captionHash(caption: string): string {
   return crypto.createHash("sha256").update(caption ?? "").digest("hex").slice(0, 16);
@@ -44,7 +45,8 @@ Return ONLY valid JSON, no markdown.`;
   });
 
   if (!res.ok) throw new Error(`Agent server ${res.status}`);
-  const { result } = await res.json();
+  const data = await res.json();
+  const result = data.text ?? data.result ?? "";
 
   let parsed: Record<string, unknown>;
   try {
@@ -102,58 +104,47 @@ export async function GET(req: NextRequest) {
   let processed = 0;
   let errors = 0;
 
-  for (const row of pending) {
-    try {
-      const hash = captionHash(row.caption!);
-      const analysis = await analyzeCaption(row.mediaIgId, row.creatorId!, row.caption!);
+  async function processOne(row: typeof pending[number]) {
+    const hash = captionHash(row.caption!);
+    const analysis = await analyzeCaption(row.mediaIgId, row.creatorId!, row.caption!);
+    const values = {
+      mediaIgId:        row.mediaIgId!,
+      creatorId:        row.creatorId!,
+      captionHash:      hash,
+      seoScore:         (analysis.seo_score as number) ?? null,
+      seoBreakdown:     analysis.seo_breakdown ?? null,
+      hookText:         (analysis.hook_text as string) ?? null,
+      hookQualityLabel: (analysis.hook_quality_label as string) ?? null,
+      hashtagQuality:   (analysis.hashtag_quality as string) ?? null,
+      ctaType:          (analysis.cta_type as string) ?? null,
+      intent:           (analysis.intent as string) ?? null,
+      tone:             (analysis.tone as string) ?? null,
+      hookType:         (analysis.hook_type as string) ?? null,
+      keyTopics:        analysis.key_topics ?? null,
+      productCategory:  (analysis.product_category as string) ?? null,
+      hasUrgency:       (analysis.has_urgency as boolean) ?? false,
+      viralitySignals:  analysis.virality_signals ?? null,
+      recommendations:  analysis.recommendations ?? null,
+    };
+    await db
+      .insert(captionAnalysis)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [captionAnalysis.mediaIgId, captionAnalysis.creatorId],
+        set: { ...values, analyzedAt: new Date() },
+      });
+  }
 
-      await db
-        .insert(captionAnalysis)
-        .values({
-          mediaIgId:        row.mediaIgId!,
-          creatorId:        row.creatorId!,
-          captionHash:      hash,
-          seoScore:         (analysis.seo_score as number) ?? null,
-          seoBreakdown:     analysis.seo_breakdown ?? null,
-          hookText:         (analysis.hook_text as string) ?? null,
-          hookQualityLabel: (analysis.hook_quality_label as string) ?? null,
-          hashtagQuality:   (analysis.hashtag_quality as string) ?? null,
-          ctaType:          (analysis.cta_type as string) ?? null,
-          intent:           (analysis.intent as string) ?? null,
-          tone:             (analysis.tone as string) ?? null,
-          hookType:         (analysis.hook_type as string) ?? null,
-          keyTopics:        analysis.key_topics ?? null,
-          productCategory:  (analysis.product_category as string) ?? null,
-          hasUrgency:       (analysis.has_urgency as boolean) ?? false,
-          viralitySignals:  analysis.virality_signals ?? null,
-          recommendations:  analysis.recommendations ?? null,
-        })
-        .onConflictDoUpdate({
-          target: [captionAnalysis.mediaIgId, captionAnalysis.creatorId],
-          set: {
-            captionHash:      hash,
-            seoScore:         (analysis.seo_score as number) ?? null,
-            seoBreakdown:     analysis.seo_breakdown ?? null,
-            hookText:         (analysis.hook_text as string) ?? null,
-            hookQualityLabel: (analysis.hook_quality_label as string) ?? null,
-            hashtagQuality:   (analysis.hashtag_quality as string) ?? null,
-            ctaType:          (analysis.cta_type as string) ?? null,
-            intent:           (analysis.intent as string) ?? null,
-            tone:             (analysis.tone as string) ?? null,
-            hookType:         (analysis.hook_type as string) ?? null,
-            keyTopics:        analysis.key_topics ?? null,
-            productCategory:  (analysis.product_category as string) ?? null,
-            hasUrgency:       (analysis.has_urgency as boolean) ?? false,
-            viralitySignals:  analysis.virality_signals ?? null,
-            recommendations:  analysis.recommendations ?? null,
-            analyzedAt:       new Date(),
-          },
-        });
-
-      processed++;
-    } catch (err) {
-      console.error(`Failed to analyze ${row.mediaIgId}:`, err);
-      errors++;
+  // Process in parallel batches of CONCURRENCY to stay under 30s Vercel timeout
+  for (let i = 0; i < pending.length; i += CONCURRENCY) {
+    const chunk = pending.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(chunk.map((row) => processOne(row)));
+    for (const r of results) {
+      if (r.status === "fulfilled") processed++;
+      else {
+        console.error("Caption analysis failed:", r.reason);
+        errors++;
+      }
     }
   }
 

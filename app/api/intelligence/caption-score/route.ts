@@ -82,7 +82,8 @@ Return ONLY valid JSON.`;
     return NextResponse.json({ error: "Agent server error" }, { status: 502 });
   }
 
-  const { result } = await res.json();
+  const _data = await res.json();
+  const result = _data.text ?? _data.result ?? "";
   let analysis: Record<string, unknown>;
   try {
     const clean = result.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "");
