@@ -167,6 +167,58 @@ def main():
     if captured.get("authorization", "").startswith("Bearer "):
         secrets["AMAZON_NICKI_BEARER_TOKEN"] = captured["authorization"][7:]
 
+    # Fallback: extract CSRF / Bearer / customer_id from page HTML if not in headers
+    # Amazon sometimes sends these via page-embedded JS rather than request headers
+    if not all(k in secrets for k in ["AMAZON_NICKI_CSRF_TOKEN", "AMAZON_NICKI_BEARER_TOKEN"]):
+        print("Headers incomplete — extracting tokens from page HTML...")
+        try:
+            import re
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p2:
+                b2 = p2.chromium.connect_over_cdp(CDP_URL)
+                ctx2 = b2.contexts[0] if b2.contexts else b2.new_context()
+                pg2 = None
+                for tab in ctx2.pages:
+                    if "affiliate-program.amazon.com" in tab.url:
+                        pg2 = tab
+                        break
+                if pg2 is None:
+                    pg2 = ctx2.new_page()
+                    pg2.goto("https://affiliate-program.amazon.com/p/reporting/earnings",
+                             wait_until="networkidle", timeout=30000)
+                    time.sleep(3)
+
+                html = pg2.content()
+                b2.close()
+
+            # CSRF from <meta name="csrf-token" content="..."> (Amazon's current meta tag name)
+            if "AMAZON_NICKI_CSRF_TOKEN" not in secrets:
+                for tag_name in ["csrf-token", "anti-csrftoken-a2z"]:
+                    m = re.search(rf'<meta[^>]+name="{tag_name}"[^>]+content="([^"]+)"', html, re.IGNORECASE)
+                    if not m:
+                        m = re.search(rf'<meta[^>]+content="([^"]+)"[^>]+name="{tag_name}"', html, re.IGNORECASE)
+                    if m:
+                        secrets["AMAZON_NICKI_CSRF_TOKEN"] = m.group(1)
+                        print(f"  CSRF from HTML ({tag_name}): {m.group(1)[:40]}...")
+                        break
+
+            # Bearer JWT from page HTML
+            if "AMAZON_NICKI_BEARER_TOKEN" not in secrets:
+                m = re.search(r'(eyJ6aXAiOiJERUYi[A-Za-z0-9._\-]+)', html)
+                if m:
+                    secrets["AMAZON_NICKI_BEARER_TOKEN"] = m.group(1)
+                    print(f"  Bearer from HTML: {m.group(1)[:40]}...")
+
+            # Customer ID from HTML
+            if "AMAZON_NICKI_CUSTOMER_ID" not in secrets:
+                m = re.search(r'"customerId"\s*:\s*"([A-Z0-9]{10,20})"', html)
+                if m:
+                    secrets["AMAZON_NICKI_CUSTOMER_ID"] = m.group(1)
+                    print(f"  Customer ID from HTML: {m.group(1)}")
+
+        except Exception as e:
+            print(f"  HTML extraction error: {e}")
+
     print(f"\nSaving {len(secrets)} secrets to Doppler...")
     return save_secrets_to_doppler(secrets)
 

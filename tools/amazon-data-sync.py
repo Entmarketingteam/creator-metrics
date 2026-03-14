@@ -25,34 +25,37 @@ from datetime import datetime, timezone, timedelta
 
 
 BROWSER_UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
 )
 
 # Vercel push endpoint — handles the DB write (local Mac can't reach Supabase ports directly)
 VERCEL_PUSH_URL = "https://creator-metrics.vercel.app/api/admin/amazon-data-push"
 
 
-def get_secret(key: str, project: str = "ent-agency-automation", config: str = "dev") -> str:
+def get_secret(key: str, project: str = "ent-agency-analytics", config: str = "prd") -> str:
+    # When launched via `doppler run`, secrets are already in env — fast path
+    val = os.environ.get(key, "")
+    if val:
+        return val
     result = subprocess.run(
         ["doppler", "secrets", "get", key, "--project", project, "--config", config, "--plain"],
-        capture_output=True, text=True
+        capture_output=True,
     )
-    return result.stdout.strip()
+    return result.stdout.decode("utf-8", errors="replace").strip()
 
 
 def build_headers(cookies: str, bearer: str, csrf: str, customer: str, marketplace: str, tag: str) -> dict:
     return {
         "Cookie": cookies,
         "Authorization": f"Bearer {bearer}",
-        "X-Csrf-Token": csrf,
+        "X-CSRF-Token": csrf,
         "X-Requested-With": "XMLHttpRequest",
-        "customerid": customer,
-        "marketplaceid": marketplace,
-        "programid": "1",
+        "customerId": customer,
+        "marketplaceId": marketplace,
+        "programId": "1",
         "roles": "Primary",
-        "storeid": tag,
-        "language": "en_US",
+        "storeId": tag,
         "locale": "en_US",
         "User-Agent": BROWSER_UA,
         "Accept": "application/json, text/plain, */*",
@@ -79,7 +82,7 @@ def fetch_monthly_summary(headers: dict, tag: str, year: int, month: int):
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             if resp.status != 200:
-                print(f"  ⚠ {year}-{month:02d}: HTTP {resp.status}")
+                print(f"  WARN {year}-{month:02d}: HTTP {resp.status}")
                 return None
             data = json.loads(resp.read().decode())
             records = data.get("records") or []
@@ -101,10 +104,10 @@ def fetch_monthly_summary(headers: dict, tag: str, year: int, month: int):
             body = e.read().decode()[:200]
         except Exception:
             pass
-        print(f"  ⚠ {year}-{month:02d}: HTTP {e.code} {body[:80]}")
+        print(f"  WARN {year}-{month:02d}: HTTP {e.code} {body[:80]}")
         return None
     except Exception as e:
-        print(f"  ⚠ {year}-{month:02d}: {e}")
+        print(f"  WARN {year}-{month:02d}: {e}")
         return None
 
 
@@ -126,7 +129,7 @@ def fetch_daily_earnings(headers: dict, tag: str, start: str, end: str):
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             if resp.status != 200:
-                print(f"  ⚠ daily fetch: HTTP {resp.status}")
+                print(f"  WARN daily fetch: HTTP {resp.status}")
                 return None
             data = json.loads(resp.read().decode())
             return data.get("records") or []
@@ -136,10 +139,10 @@ def fetch_daily_earnings(headers: dict, tag: str, start: str, end: str):
             body = e.read().decode()[:200]
         except Exception:
             pass
-        print(f"  ⚠ daily fetch: HTTP {e.code} {body[:80]}")
+        print(f"  WARN daily fetch: HTTP {e.code} {body[:80]}")
         return None
     except Exception as e:
-        print(f"  ⚠ daily fetch: {e}")
+        print(f"  WARN daily fetch: {e}")
         return None
 
 
@@ -169,9 +172,9 @@ def trigger_intelligence(creator_db_id: str) -> None:
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode())
-            print(f"  📊 Intelligence: {data.get('summary', 'sent to Slack')}")
+            print(f"  INFO Intelligence: {data.get('summary', 'sent to Slack')}")
     except Exception as e:
-        print(f"  ⚠ Intelligence trigger failed (non-blocking): {e}")
+        print(f"  WARN Intelligence trigger failed (non-blocking): {e}")
 
 
 def push_to_vercel(creator_id: str, monthly_rows: list, daily_rows: list, order_rows: list) -> dict:
@@ -206,7 +209,7 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
     tag = f"{creator}entenman-20"
 
     if not cookies or not bearer:
-        print(f"❌ Missing Doppler secrets for {creator}. Run amazon-cookie-refresh.py first.")
+        print(f"ERROR Missing Doppler secrets for {creator}. Run amazon-cookie-refresh.py first.")
         return
 
     headers = build_headers(cookies, bearer, csrf, customer, marketplace, tag)
@@ -248,7 +251,7 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
     daily_rows = fetch_daily_earnings(headers, tag, str(day_start), str(day_end))
 
     if daily_rows is None:
-        print(f"  ⚠ Daily fetch failed — skipping")
+        print(f"  WARN Daily fetch failed — skipping")
         daily_rows = []
     else:
         # Normalize commission field name from API
@@ -267,7 +270,7 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
     order_rows = fetch_orders(headers, tag, str(day_start), str(day_end))
 
     if order_rows is None:
-        print(f"  ⚠ Orders fetch failed — skipping")
+        print(f"  WARN Orders fetch failed — skipping")
         order_rows = []
     else:
         # Add period dates and normalize field name
@@ -295,13 +298,13 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
         m = result.get("results", {}).get("monthly", {})
         d = result.get("results", {}).get("daily", {})
         o = result.get("results", {}).get("orders", {})
-        print(f"  ✅ monthly={m.get('upserted',0)} daily={d.get('upserted',0)} orders={o.get('upserted',0)}")
+        print(f"  OK monthly={m.get('upserted',0)} daily={d.get('upserted',0)} orders={o.get('upserted',0)}")
         errs = result.get("total_errors", 0)
         if errs:
-            print(f"  ⚠ {errs} errors — check response")
+            print(f"  WARN {errs} errors — check response")
         push_ok = True
     except Exception as e:
-        print(f"  ❌ Push failed: {e}")
+        print(f"  ERROR Push failed: {e}")
 
     # ── Post-sync intelligence (non-blocking) ──────────────────────────
     if push_ok:
@@ -321,5 +324,5 @@ if __name__ == "__main__":
         try:
             sync_creator(c, args.months, args.days, args.dry_run)
         except Exception as e:
-            print(f"\n❌ {c}: {e}")
+            print(f"\nERROR {c}: {e}")
             sys.exit(1)
