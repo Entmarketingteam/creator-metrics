@@ -105,13 +105,13 @@ export async function GET(req: NextRequest) {
   for (const row of pending) {
     try {
       const hash = captionHash(row.caption!);
-      const analysis = await analyzeCaption(row.mediaIgId, row.creatorId, row.caption!);
+      const analysis = await analyzeCaption(row.mediaIgId, row.creatorId!, row.caption!);
 
       await db
         .insert(captionAnalysis)
         .values({
-          mediaIgId:        row.mediaIgId,
-          creatorId:        row.creatorId,
+          mediaIgId:        row.mediaIgId!,
+          creatorId:        row.creatorId!,
           captionHash:      hash,
           seoScore:         (analysis.seo_score as number) ?? null,
           seoBreakdown:     analysis.seo_breakdown ?? null,
