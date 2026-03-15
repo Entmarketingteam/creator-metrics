@@ -98,24 +98,23 @@ export default async function AmazonEarningsPage({
   const commissionRate = ytdRevenue > 0 ? ((ytdCommission / ytdRevenue) * 100).toFixed(1) : "—";
   const ytdCvr = ytdClicks > 0 ? ((ytdOrders / ytdClicks) * 100).toFixed(1) + "%" : "—";
 
-  // ── Daily earnings (last 90 days) ─────────────────────────────────
-  let dailyData: { date: string; Commission: number; Revenue: number; Orders: number }[] = [];
+  // ── Daily earnings (all history) ─────────────────────────────────
+  let dailyData: { date: string; Commission: number; Revenue: number }[] = [];
   try {
     const dailyRaw = await db.execute(sql`
-      SELECT day, clicks, ordered_items, revenue, CAST(commission AS FLOAT) AS commission
+      SELECT day, CAST(revenue AS FLOAT) AS revenue, CAST(commission AS FLOAT) AS commission
       FROM amazon_daily_earnings
       WHERE creator_id = ${creatorId}
-        AND day >= NOW() - INTERVAL '90 days'
       ORDER BY day ASC
     `);
     dailyData = (dailyRaw as any[]).map((r) => ({
       date: new Date(String(r.day) + "T00:00:00").toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
+        year: "2-digit",
       }),
       Commission: Number(r.commission),
       Revenue: Number(r.revenue),
-      Orders: Number(r.ordered_items),
     }));
   } catch {
     // Table may not exist yet — fall through to monthly chart

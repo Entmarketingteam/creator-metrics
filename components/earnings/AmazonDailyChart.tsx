@@ -6,8 +6,8 @@ import { TrendingUp } from "lucide-react";
 interface DailyPoint {
   date: string;
   Commission: number;
-  Revenue: number;
-  Orders: number;
+  Revenue?: number;
+  Orders?: number;
 }
 
 export default function AmazonDailyChart({
