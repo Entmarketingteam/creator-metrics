@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { creatorIntelligence, creators } from "@/lib/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -51,8 +51,10 @@ async function analyzeCreator(creatorId: string, today: string) {
     .select({ id: creatorIntelligence.id })
     .from(creatorIntelligence)
     .where(
-      eq(creatorIntelligence.creatorId, creatorId) &&
-      sql`${creatorIntelligence.generatedAt} = ${today}::date`
+      and(
+        eq(creatorIntelligence.creatorId, creatorId),
+        sql`${creatorIntelligence.generatedAt} = ${today}::date`
+      )
     )
     .limit(1);
 
