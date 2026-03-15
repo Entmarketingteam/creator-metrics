@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { captionAnalysis, mediaSnapshots, creators } from "@/lib/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 
 const AGENT_SERVER = "https://ent-agent-server-production.up.railway.app";
@@ -76,40 +76,40 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ processed: 0, message: "No owned creators" });
   }
 
-  // Find posts not yet analyzed or with stale caption hash
-  const toAnalyze = await db
-    .select({
-      mediaIgId: mediaSnapshots.mediaIgId,
-      creatorId: mediaSnapshots.creatorId,
-      caption:   mediaSnapshots.caption,
-      existingHash: sql<string | null>`
-        (SELECT caption_hash FROM caption_analysis ca
-         WHERE ca.media_ig_id = ${mediaSnapshots.mediaIgId}
-           AND ca.creator_id = ${mediaSnapshots.creatorId}
-         LIMIT 1)
-      `,
-    })
-    .from(mediaSnapshots)
-    .where(inArray(mediaSnapshots.creatorId, creatorIds))
-    .limit(BATCH_SIZE * 2);
+  // Find unanalyzed posts: one row per (media_ig_id, creator_id) with no existing analysis
+  const pendingRows = await db.execute(sql`
+    SELECT DISTINCT ON (ms.media_ig_id, ms.creator_id)
+      ms.media_ig_id AS "mediaIgId",
+      ms.creator_id  AS "creatorId",
+      ms.caption
+    FROM media_snapshots ms
+    WHERE ms.creator_id = ANY(${creatorIds})
+      AND ms.caption IS NOT NULL
+      AND ms.caption != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM caption_analysis ca
+        WHERE ca.media_ig_id = ms.media_ig_id
+          AND ca.creator_id  = ms.creator_id
+      )
+    ORDER BY ms.media_ig_id, ms.creator_id, ms.captured_at DESC
+    LIMIT ${BATCH_SIZE}
+  `) as any;
 
-  const pending = toAnalyze
-    .filter((row) => {
-      if (!row.caption) return false;
-      const hash = captionHash(row.caption);
-      return !row.existingHash || row.existingHash !== hash;
-    })
-    .slice(0, BATCH_SIZE);
+  const pending = (Array.from(pendingRows) as Array<{
+    mediaIgId: string;
+    creatorId: string;
+    caption: string;
+  }>).filter((r) => r.caption);
 
   let processed = 0;
   let errors = 0;
 
   async function processOne(row: typeof pending[number]) {
-    const hash = captionHash(row.caption!);
-    const analysis = await analyzeCaption(row.mediaIgId, row.creatorId!, row.caption!);
+    const hash = captionHash(row.caption);
+    const analysis = await analyzeCaption(row.mediaIgId, row.creatorId, row.caption);
     const values = {
-      mediaIgId:        row.mediaIgId!,
-      creatorId:        row.creatorId!,
+      mediaIgId:        row.mediaIgId,
+      creatorId:        row.creatorId,
       captionHash:      hash,
       seoScore:         (analysis.seo_score as number) ?? null,
       seoBreakdown:     analysis.seo_breakdown ?? null,
