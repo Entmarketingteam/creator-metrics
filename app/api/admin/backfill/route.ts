@@ -76,7 +76,6 @@ export async function GET(req: NextRequest) {
                 commission: String(f.Commission || f.commission || 0),
                 clicks: f.Clicks || f.clicks || 0,
                 orders: f.Orders || f.orders || 0,
-                status: (f.Status || f.status || "open").toLowerCase() as any,
                 rawPayload: JSON.stringify(f),
               })
               .onConflictDoNothing();

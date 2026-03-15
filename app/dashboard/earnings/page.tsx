@@ -257,14 +257,14 @@ export default async function EarningsPage({
 
       {/* ── Brand breakdown + top performers ────────────────────── */}
       {brandBreakdown.length > 0 && <BrandBreakdown data={brandBreakdown} />}
-      {topProducts.length > 0 && <TopPerformers products={topProducts} />}
+      {topProducts.length > 0 && <TopPerformers products={topProducts.map((p) => ({ ...p, id: 0, productName: p.productName ?? "" }))} />}
 
       {/* ── Sales table ─────────────────────────────────────────── */}
       <SalesTable
         initialData={recentSales.map((s) => ({
           id: s.id,
           platform: s.platform,
-          saleDate: s.saleDate.toISOString(),
+          saleDate: s.saleDate?.toISOString() ?? "",
           productName: s.productName,
           brand: s.brand,
           commissionAmount: s.commissionAmount,

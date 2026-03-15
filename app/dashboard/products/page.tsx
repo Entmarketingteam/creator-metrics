@@ -47,7 +47,7 @@ export default async function ProductsPage() {
                 <div className="aspect-video bg-gray-800 relative">
                   <img
                     src={p.imageUrl}
-                    alt={p.productName}
+                    alt={p.productName ?? undefined}
                     className="w-full h-full object-cover"
                   />
                 </div>

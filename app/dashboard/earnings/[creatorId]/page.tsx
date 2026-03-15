@@ -212,7 +212,7 @@ export default async function CreatorEarningsPage({
       {/* Top Products */}
       {topProducts.length > 0 && (
         <div className="mb-6">
-          <TopPerformers products={topProducts} />
+          <TopPerformers products={topProducts.map((p) => ({ ...p, id: 0, productName: p.productName ?? "" }))} />
         </div>
       )}
 
@@ -221,7 +221,7 @@ export default async function CreatorEarningsPage({
         initialData={recentSales.map((s) => ({
           id: s.id,
           platform: s.platform,
-          saleDate: s.saleDate.toISOString(),
+          saleDate: s.saleDate?.toISOString() ?? "",
           productName: s.productName,
           brand: s.brand,
           commissionAmount: s.commissionAmount,
@@ -250,7 +250,7 @@ export default async function CreatorEarningsPage({
               initialData={shopmySales.map((s) => ({
                 id: s.id,
                 platform: s.platform,
-                saleDate: s.saleDate.toISOString(),
+                saleDate: s.saleDate?.toISOString() ?? "",
                 productName: s.productName,
                 brand: s.brand,
                 commissionAmount: s.commissionAmount,

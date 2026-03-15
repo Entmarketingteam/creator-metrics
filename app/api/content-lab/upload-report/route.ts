@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { contentReports } from "@/lib/schema";
-import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +60,7 @@ export async function POST(req: NextRequest) {
         generatedAt: new Date(),
       })
       .onConflictDoUpdate({
-        target: sql`(creator_id, season, year)`,
+        target: [contentReports.creatorId, contentReports.season, contentReports.year],
         set: {
           reportData:  report_data,
           generatedAt: new Date(),

@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
             orderValue: parseShopMyAmount(c.order_amount),
             productName: c.title ?? c.product_title ?? c.productTitle ?? c.name ?? null,
             status: mapShopMyStatus(c),
-            externalOrderId: externalId,
+            externalId: externalId,
           })
           .onConflictDoNothing();
       }

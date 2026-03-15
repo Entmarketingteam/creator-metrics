@@ -323,27 +323,11 @@ export default async function CreatorDetailPage({
     .sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0));
 
   // Reels performance aggregates
-  const reelsWithWatchTime = reels.filter(
-    (r) => r.reelsAvgWatchTimeMs != null && r.reelsAvgWatchTimeMs > 0
-  );
-  const avgWatchTimeSec =
-    reelsWithWatchTime.length > 0
-      ? reelsWithWatchTime.reduce((s, r) => s + (r.reelsAvgWatchTimeMs ?? 0), 0) /
-        reelsWithWatchTime.length /
-        1000
-      : null;
+  // reelsAvgWatchTimeMs and viewsCount are not in the media_snapshots schema
+  const avgWatchTimeSec: number | null = (null as number | null);
 
-  // Replay rate = total plays / unique reach (avg across reels that have both)
-  const reelsWithReplay = reels.filter(
-    (r) => r.viewsCount != null && r.reach != null && r.reach > 0
-  );
-  const avgReplayRate =
-    reelsWithReplay.length > 0
-      ? reelsWithReplay.reduce(
-          (s, r) => s + (r.viewsCount ?? 0) / (r.reach ?? 1),
-          0
-        ) / reelsWithReplay.length
-      : null;
+  // Replay rate not available without viewsCount
+  const avgReplayRate: number | null = (null as number | null);
 
   // Avg reach per reel
   const reelsWithReach = reels.filter((r) => r.reach != null && r.reach > 0);
@@ -677,7 +661,7 @@ export default async function CreatorDetailPage({
 
       {/* ── Date Filter ───────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <DateRangePicker from={from} to={to} />
+        <DateRangePicker />
         {(from || to) && (
           <p className="text-xs text-gray-500">
             Filtering {allPosts.length} posts

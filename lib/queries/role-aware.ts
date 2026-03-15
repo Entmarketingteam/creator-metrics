@@ -25,14 +25,17 @@ export async function getCurrentUserRole(): Promise<ResolvedRole> {
  */
 export async function getCreatorEarningsSummaryForUser(
   creatorId: string,
-  days?: number
+  startDate?: string,
+  endDate?: string
 ) {
   const role = await getCurrentUserRole();
   const accessible = getAccessibleCreatorIds(role);
   if (accessible !== null && !accessible.includes(creatorId)) {
     return [];
   }
-  return getCreatorEarningsSummary(creatorId, days);
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  return getCreatorEarningsSummary(creatorId, startDate ?? thirtyDaysAgo, endDate ?? today);
 }
 
 /**
@@ -62,12 +65,16 @@ export async function getCreatorSalesForUser(
  * Internal users see all creators. Non-internal users see the standard
  * aggregate (their pages are already filtered by creator).
  */
-export async function getAggregateEarningsForUser(days?: number) {
+export async function getAggregateEarningsForUser(startDate?: string, endDate?: string) {
   const role = await getCurrentUserRole();
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  const start = startDate ?? thirtyDaysAgo;
+  const end = endDate ?? today;
   if (role.role === "internal") {
-    return getAggregateEarnings(days);
+    return getAggregateEarnings(start, end);
   }
   // For non-internal, return standard aggregate.
   // Creator/client will access this from pages already scoped to their creators.
-  return getAggregateEarnings(days);
+  return getAggregateEarnings(start, end);
 }

@@ -105,9 +105,6 @@ export async function GET(req: NextRequest) {
               saved: insights.saved ?? null,
               shares: insights.shares ?? null,
               totalInteractions: insights.total_interactions ?? null,
-              reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
-              reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
-              viewsCount: insights.views ?? null,
               linkUrl,
             })
             .onConflictDoUpdate({
@@ -121,9 +118,6 @@ export async function GET(req: NextRequest) {
                 saved: insights.saved ?? null,
                 shares: insights.shares ?? null,
                 totalInteractions: insights.total_interactions ?? null,
-                reelsAvgWatchTimeMs: insights.ig_reels_avg_watch_time ?? null,
-                reelsVideoViewTotalTimeMs: insights.ig_reels_video_view_total_time ?? null,
-                viewsCount: insights.views ?? null,
                 linkUrl,
               },
             });
