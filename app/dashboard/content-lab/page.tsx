@@ -3,6 +3,7 @@ import { contentReports, creators } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { FlaskConical, Calendar, TrendingUp } from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -115,9 +116,10 @@ export default async function ContentLabPage({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {reports.map((r) => (
-            <div
+            <Link
               key={r.id}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors"
+              href={`/dashboard/content-lab/${r.id}`}
+              className="block bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 hover:bg-gray-800/50 transition-colors cursor-pointer"
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -140,7 +142,7 @@ export default async function ContentLabPage({
                     })
                   : "—"}
               </p>
-            </div>
+            </Link>
           ))}
         </div>
       )}
