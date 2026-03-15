@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { creators, creatorSnapshots, mediaSnapshots } from "@/lib/schema";
+import { creators, creatorSnapshots, creatorTokens, mediaSnapshots } from "@/lib/schema";
 import { CREATORS } from "@/lib/creators";
 import { eq } from "drizzle-orm";
 import {
@@ -183,6 +183,90 @@ export async function GET(req: NextRequest) {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       results.push({ creator: creator.id, status: "error", error: msg });
+    }
+  }
+
+  // Also collect for creators who connected via OAuth (creator_tokens)
+  const ownedIds = new Set(CREATORS.filter((c) => c.isOwned).map((c) => c.id));
+  const tokenRows = await db.select().from(creatorTokens);
+
+  for (const row of tokenRows) {
+    if (ownedIds.has(row.creatorId)) continue; // already handled above
+    try {
+      const t = row.accessToken;
+      const igId = row.igUserId;
+
+      const [profile, media, accountInsights] = await Promise.all([
+        fetchOwnedProfile(igId, t),
+        fetchOwnedMedia(igId, t),
+        fetchOwnedAccountInsights(igId, t),
+      ]);
+
+      await db.update(creators).set({
+        profilePictureUrl: profile.profile_picture_url ?? null,
+        biography: profile.biography ?? null,
+        displayName: profile.name ?? row.creatorId,
+      }).where(eq(creators.id, row.creatorId));
+
+      await db.insert(creatorSnapshots).values({
+        creatorId: row.creatorId,
+        capturedAt: today,
+        followersCount: profile.followers_count,
+        followsCount: profile.follows_count,
+        mediaCount: profile.media_count,
+        reach28d: accountInsights.reach ?? null,
+        accountsEngaged28d: accountInsights.accounts_engaged ?? null,
+        totalInteractions28d: accountInsights.total_interactions ?? null,
+        followsUnfollows28d: accountInsights.follows_and_unfollows ?? null,
+      }).onConflictDoNothing();
+
+      for (const m of media) {
+        const insights = await fetchOwnedMediaInsights(m.id, t, m.media_product_type);
+        const linkUrl = m.link ?? extractAffiliateUrl(m.caption) ?? null;
+        let mediaUrl = m.media_url ?? null;
+        let thumbnailUrl = m.thumbnail_url ?? null;
+        if (m.media_type === "CAROUSEL_ALBUM" && !mediaUrl && !thumbnailUrl) {
+          const childUrl = await fetchCarouselFirstChildUrl(m.id, t);
+          if (childUrl) mediaUrl = childUrl;
+        }
+        await db.insert(mediaSnapshots).values({
+          creatorId: row.creatorId,
+          mediaIgId: m.id,
+          capturedAt: today,
+          mediaType: m.media_type ?? null,
+          mediaProductType: m.media_product_type ?? null,
+          caption: m.caption ?? null,
+          permalink: m.permalink ?? null,
+          mediaUrl,
+          thumbnailUrl,
+          postedAt: m.timestamp ? new Date(m.timestamp) : null,
+          likeCount: m.like_count ?? null,
+          commentsCount: m.comments_count ?? null,
+          reach: insights.reach ?? null,
+          saved: insights.saved ?? null,
+          shares: insights.shares ?? null,
+          totalInteractions: insights.total_interactions ?? null,
+          linkUrl,
+        }).onConflictDoUpdate({
+          target: [mediaSnapshots.mediaIgId, mediaSnapshots.capturedAt],
+          set: {
+            mediaUrl,
+            thumbnailUrl,
+            likeCount: m.like_count ?? null,
+            commentsCount: m.comments_count ?? null,
+            reach: insights.reach ?? null,
+            saved: insights.saved ?? null,
+            shares: insights.shares ?? null,
+            totalInteractions: insights.total_interactions ?? null,
+            linkUrl,
+          },
+        });
+      }
+
+      results.push({ creator: row.creatorId, status: "ok (token)" });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({ creator: row.creatorId, status: "error", error: msg });
     }
   }
 

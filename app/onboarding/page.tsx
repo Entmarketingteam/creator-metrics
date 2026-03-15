@@ -1,10 +1,11 @@
 import { startOAuth } from "./actions";
 
-export default function OnboardingPage({
+export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const { error } = await searchParams;
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="max-w-md w-full text-center space-y-6 px-6">
@@ -16,12 +17,17 @@ export default function OnboardingPage({
           Link your account to see your analytics dashboard.
         </p>
 
-        {searchParams.error === "already_claimed" && (
+        {error === "already_claimed" && (
           <p className="text-red-400 text-sm bg-red-950 rounded-lg px-4 py-3">
             This Instagram account is already connected to another login.
           </p>
         )}
-        {searchParams.error === "true" && (
+        {error === "no_ig_account" && (
+          <p className="text-red-400 text-sm bg-red-950 rounded-lg px-4 py-3">
+            No Instagram Business account found. Make sure your Instagram is connected to a Facebook Page.
+          </p>
+        )}
+        {error === "true" && (
           <p className="text-red-400 text-sm bg-red-950 rounded-lg px-4 py-3">
             Connection failed. Please try again.
           </p>
