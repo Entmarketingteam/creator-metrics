@@ -24,6 +24,22 @@ export type ScoreDistribution = {
   "76-100": number;
 };
 
+export async function getCaptionStats(
+  creatorId: string
+): Promise<{ totalAnalyzed: number; avgScore: number }> {
+  const [row] = await db
+    .select({
+      total: sql<number>`COUNT(*)`,
+      avg:   sql<number>`ROUND(AVG(${captionAnalysis.seoScore}))`,
+    })
+    .from(captionAnalysis)
+    .where(eq(captionAnalysis.creatorId, creatorId));
+  return {
+    totalAnalyzed: Number(row?.total ?? 0),
+    avgScore:      Number(row?.avg ?? 0),
+  };
+}
+
 export async function getCaptionScoreDistribution(
   creatorId: string
 ): Promise<ScoreDistribution> {

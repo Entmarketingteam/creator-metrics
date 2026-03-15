@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import {
+  getCaptionStats,
   getCaptionScoreDistribution,
   getTopCaptionIssues,
   getCaptionPosts,
@@ -19,19 +20,13 @@ export default async function CaptionsPage({
   const creatorId = searchParams.creatorId ?? "nicki_entenmann";
   if (!creatorId) redirect("/dashboard");
 
-  const [dist, issues, posts, prescriptions] = await Promise.all([
+  const [stats, dist, issues, posts, prescriptions] = await Promise.all([
+    getCaptionStats(creatorId),
     getCaptionScoreDistribution(creatorId),
     getTopCaptionIssues(creatorId),
     getCaptionPosts(creatorId, { limit: 25 }),
     getCaptionPrescription(creatorId),
   ]);
-
-  const avgScore =
-    posts.length > 0
-      ? Math.round(
-          posts.reduce((s, p) => s + (p.seoScore ?? 0), 0) / posts.length
-        )
-      : 0;
 
   return (
     <div className="space-y-6">
@@ -39,8 +34,8 @@ export default async function CaptionsPage({
         <div>
           <p className="text-gray-500 text-sm">
             Avg SEO Score:{" "}
-            <span className="text-white font-semibold">{avgScore}/100</span>
-            {" "}· {posts.length} analyzed
+            <span className="text-white font-semibold">{stats.avgScore}/100</span>
+            {" "}· {stats.totalAnalyzed.toLocaleString()} analyzed
           </p>
         </div>
         <ReanalyzeButton creatorId={creatorId} />
@@ -52,7 +47,7 @@ export default async function CaptionsPage({
 
       <div>
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
-          Analyzed Posts
+          Top Posts by SEO Score
         </h3>
         <Suspense fallback={<p className="text-gray-500 text-sm">Loading...</p>}>
           <CaptionPostTable posts={posts} />
