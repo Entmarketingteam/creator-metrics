@@ -60,32 +60,41 @@ async function analyzeCreator(creatorId: string, today: string) {
 
   if (existing) return; // Already done today
 
+  // Use latest snapshot per post (DISTINCT ON) for all metric queries.
+  // media_snapshots has the live metrics; timestamp = post date, captured_at = snapshot date.
+  const baseSubq = sql`
+    SELECT DISTINCT ON (media_ig_id)
+      media_ig_id, caption, permalink AS post_url,
+      reach, saved AS saves, like_count AS likes, shares,
+      media_product_type, timestamp AS posted_at
+    FROM media_snapshots
+    WHERE creator_id = ${creatorId}
+    ORDER BY media_ig_id, captured_at DESC
+  `;
+
   // Pull 90-day post performance summary
   const [stats] = await db.execute(sql`
     SELECT
-      COUNT(*) AS total_posts,
+      COUNT(*)           AS total_posts,
       ROUND(AVG(reach))  AS avg_reach,
       ROUND(AVG(saves))  AS avg_saves,
       ROUND(AVG(likes))  AS avg_likes,
       ROUND(AVG(shares)) AS avg_shares
-    FROM creator_posts
-    WHERE creator_id = ${creatorId}
-      AND posted_at >= NOW() - INTERVAL '90 days'
+    FROM (${baseSubq}) p
+    WHERE posted_at >= NOW() - INTERVAL '90 days'
   `) as any;
 
   // Recent vs older period comparison (engagement trend)
   const recentRows = await db.execute(sql`
     SELECT ROUND(AVG(reach)) AS avg_reach, ROUND(AVG(saves)) AS avg_saves
-    FROM creator_posts
-    WHERE creator_id = ${creatorId}
-      AND posted_at >= NOW() - INTERVAL '30 days'
+    FROM (${baseSubq}) p
+    WHERE posted_at >= NOW() - INTERVAL '30 days'
   `) as any;
 
   const olderRows = await db.execute(sql`
     SELECT ROUND(AVG(reach)) AS avg_reach, ROUND(AVG(saves)) AS avg_saves
-    FROM creator_posts
-    WHERE creator_id = ${creatorId}
-      AND posted_at >= NOW() - INTERVAL '60 days'
+    FROM (${baseSubq}) p
+    WHERE posted_at >= NOW() - INTERVAL '60 days'
       AND posted_at < NOW() - INTERVAL '30 days'
   `) as any;
 
@@ -96,9 +105,8 @@ async function analyzeCreator(creatorId: string, today: string) {
       COUNT(*) AS post_count,
       ROUND(AVG(reach)) AS avg_reach,
       ROUND(AVG(saves)) AS avg_saves
-    FROM creator_posts
-    WHERE creator_id = ${creatorId}
-      AND posted_at >= NOW() - INTERVAL '90 days'
+    FROM (${baseSubq}) p
+    WHERE posted_at >= NOW() - INTERVAL '90 days'
       AND media_product_type IS NOT NULL
     GROUP BY media_product_type
     ORDER BY avg_reach DESC NULLS LAST
@@ -109,9 +117,8 @@ async function analyzeCreator(creatorId: string, today: string) {
     SELECT
       TO_CHAR(posted_at, 'Day') AS day_name,
       ROUND(AVG(reach)) AS avg_reach
-    FROM creator_posts
-    WHERE creator_id = ${creatorId}
-      AND posted_at >= NOW() - INTERVAL '90 days'
+    FROM (${baseSubq}) p
+    WHERE posted_at >= NOW() - INTERVAL '90 days'
     GROUP BY day_name
     ORDER BY avg_reach DESC NULLS LAST
     LIMIT 3
@@ -119,10 +126,9 @@ async function analyzeCreator(creatorId: string, today: string) {
 
   // Top captions (for theme analysis)
   const topPostRows = await db.execute(sql`
-    SELECT caption, saves, likes, reach, post_id, post_url
-    FROM creator_posts
-    WHERE creator_id = ${creatorId}
-      AND posted_at >= NOW() - INTERVAL '90 days'
+    SELECT caption, saves, likes, reach, media_ig_id AS post_id, post_url
+    FROM (${baseSubq}) p
+    WHERE posted_at >= NOW() - INTERVAL '90 days'
       AND caption IS NOT NULL AND caption != ''
       AND saves IS NOT NULL
     ORDER BY saves DESC NULLS LAST
@@ -131,23 +137,20 @@ async function analyzeCreator(creatorId: string, today: string) {
 
   // Hidden gems: high-saves posts with below-average reach
   const hiddenGemRows = await db.execute(sql`
-    SELECT post_id, post_url, caption, saves, likes, reach
-    FROM creator_posts
-    WHERE creator_id = ${creatorId}
-      AND posted_at >= NOW() - INTERVAL '90 days'
+    SELECT media_ig_id AS post_id, post_url, caption, saves, likes, reach
+    FROM (${baseSubq}) p
+    WHERE posted_at >= NOW() - INTERVAL '90 days'
       AND saves > (
         SELECT PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY saves)
-        FROM creator_posts
-        WHERE creator_id = ${creatorId}
-          AND posted_at >= NOW() - INTERVAL '90 days'
-          AND saves IS NOT NULL
+        FROM (${baseSubq}) sub
+        WHERE sub.posted_at >= NOW() - INTERVAL '90 days'
+          AND sub.saves IS NOT NULL
       )
       AND reach < (
         SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY reach)
-        FROM creator_posts
-        WHERE creator_id = ${creatorId}
-          AND posted_at >= NOW() - INTERVAL '90 days'
-          AND reach IS NOT NULL
+        FROM (${baseSubq}) sub
+        WHERE sub.posted_at >= NOW() - INTERVAL '90 days'
+          AND sub.reach IS NOT NULL
       )
     ORDER BY saves DESC
     LIMIT 5
