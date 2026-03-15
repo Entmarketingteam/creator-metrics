@@ -3,16 +3,12 @@ import { creatorIntelligence, creatorSnapshots } from "./schema";
 import { eq, desc, and, gte, sql } from "drizzle-orm";
 
 export async function getTodayAnalysis(creatorId: string) {
-  const today = new Date().toISOString().split("T")[0];
+  // Return the most recent analysis (not just today) so data shows even when cron ran yesterday
   const [row] = await db
     .select()
     .from(creatorIntelligence)
-    .where(
-      and(
-        eq(creatorIntelligence.creatorId, creatorId),
-        eq(creatorIntelligence.generatedAt, today)
-      )
-    )
+    .where(eq(creatorIntelligence.creatorId, creatorId))
+    .orderBy(desc(creatorIntelligence.generatedAt))
     .limit(1);
   return row ?? null;
 }

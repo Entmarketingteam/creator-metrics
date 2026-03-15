@@ -23,10 +23,13 @@ export default async function InsightsPage({
     <div className="space-y-8">
       {!data ? (
         <div className="text-gray-500 text-sm py-12 text-center">
-          No analysis yet for today. Check back after 9am UTC.
+          No analysis yet. Check back after the daily cron runs.
         </div>
       ) : (
         <>
+          <p className="text-xs text-gray-600">
+            Analysis from {new Date(analysis!.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </p>
           {/* Engagement trend */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-900 rounded-xl p-5 border border-gray-800 col-span-1">
