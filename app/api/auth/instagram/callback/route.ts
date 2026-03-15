@@ -50,12 +50,43 @@ export async function GET(req: NextRequest) {
     const expiresIn: number = longData.expires_in ?? 5184000; // default 60d
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // 3. Get Pages — find one with instagram_business_account
-    const pagesData = await igGet(
-      `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token,instagram_business_account&access_token=${longUserToken}`
-    );
-    const page = pagesData.data?.find((p: any) => p.instagram_business_account);
-    if (!page) return NextResponse.redirect(`${APP_URL}/onboarding?error=no_ig_account`);
+    // 3. Get Pages — paginate through all, find one with instagram_business_account
+    let allPages: any[] = [];
+    let nextUrl: string | null =
+      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${longUserToken}`;
+    while (nextUrl) {
+      const pagesData = await igGet(nextUrl);
+      console.log("Pages batch:", JSON.stringify(pagesData.data?.map((p: any) => ({
+        id: p.id, name: p.name, hasIg: !!p.instagram_business_account,
+      }))));
+      if (pagesData.data) allPages = allPages.concat(pagesData.data);
+      nextUrl = pagesData.paging?.next ?? null;
+    }
+
+    // First pass: instagram_business_account already in response
+    let page = allPages.find((p: any) => p.instagram_business_account);
+
+    // Second pass: field sometimes missing from /me/accounts — fetch per page
+    if (!page) {
+      for (const p of allPages) {
+        try {
+          const detail = await igGet(
+            `https://graph.facebook.com/v21.0/${p.id}?fields=instagram_business_account&access_token=${p.access_token}`
+          );
+          if (detail.instagram_business_account) {
+            page = { ...p, instagram_business_account: detail.instagram_business_account };
+            break;
+          }
+        } catch (e) {
+          console.error(`Failed IG lookup for page ${p.id}:`, e);
+        }
+      }
+    }
+
+    if (!page) {
+      console.error("No IG business account. Pages found:", allPages.map((p: any) => ({ id: p.id, name: p.name })));
+      return NextResponse.redirect(`${APP_URL}/onboarding?error=no_ig_account`);
+    }
 
     const pageToken = page.access_token;
     const igUserId  = page.instagram_business_account.id;
