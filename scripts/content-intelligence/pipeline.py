@@ -47,7 +47,7 @@ def _upload_report_to_dashboard(report_data: dict, season: str = "spring", year:
 
     # Build uploadable payload — strip large base64/embedding data to keep size manageable
     payload = {
-        "creator_id": "nicki",  # TODO: make configurable
+        "creator_id": "nicki_entenmann",
         "season": season,
         "year": year,
         "report_data": {
