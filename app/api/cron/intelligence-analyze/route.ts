@@ -204,9 +204,13 @@ Return a JSON object with EXACTLY these fields (no markdown):
 
 Identify 3-5 content themes from the top posts. Return ONLY valid JSON.`;
 
+  const agentKey = process.env.AGENT_SERVER_API_KEY;
   const res = await fetch(`${AGENT_SERVER}/complete`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(agentKey ? { Authorization: `Bearer ${agentKey}` } : {}),
+    },
     body: JSON.stringify({ prompt }),
   });
 
