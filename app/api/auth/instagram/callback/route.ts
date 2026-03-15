@@ -84,8 +84,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (!page) {
+      const pageCount = allPages.length;
+      const pageIds = allPages.map((p: any) => p.id).join(",");
       console.error("No IG business account. Pages found:", allPages.map((p: any) => ({ id: p.id, name: p.name })));
-      return NextResponse.redirect(`${APP_URL}/onboarding?error=no_ig_account`);
+      return NextResponse.redirect(
+        `${APP_URL}/onboarding?error=no_ig_account&pages=${pageCount}&ids=${encodeURIComponent(pageIds)}`
+      );
     }
 
     const pageToken = page.access_token;
