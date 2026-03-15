@@ -23,10 +23,22 @@ export async function POST(req: NextRequest) {
   }
 
   if (!mediaIgId) {
-    return NextResponse.json({
-      status: "queued",
-      message: "Call GET /api/cron/caption-analyze to process batch",
-    });
+    // Trigger the cron batch — forward internally with CRON_SECRET auth
+    const cronSecret = process.env.CRON_SECRET;
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+    const cronRes = await fetch(`${baseUrl}/api/cron/caption-analyze`, {
+      headers: cronSecret ? { Authorization: `Bearer ${cronSecret}` } : {},
+    }).catch(() => null);
+
+    if (!cronRes?.ok) {
+      return NextResponse.json({ status: "error", message: "Failed to trigger batch" }, { status: 502 });
+    }
+
+    const result = await cronRes.json().catch(() => ({}));
+    return NextResponse.json({ status: "triggered", ...result });
   }
 
   const [snapshot] = await db
