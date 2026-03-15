@@ -56,8 +56,9 @@ export async function GET(req: NextRequest) {
   // Map creatorId → credential env prefix (extend as more creators are added)
   const creatorCredMap: Record<string, string> = {
     nicki: "SHOPMY_NICKI",
-    // sara: "SHOPMY_SARA",
-    // ellen: "SHOPMY_ELLEN",
+    ann: "SHOPMY_ANN",
+    ellen: "SHOPMY_ELLEN",
+    livefitwithem: "SHOPMY_EMILY",
   };
 
   const results: { creator: string; status: string; error?: string }[] = [];

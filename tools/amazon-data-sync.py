@@ -228,8 +228,14 @@ def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
 
     print(f"\n[{creator}] Syncing {len(periods)} months...")
 
-    # Creator ID in DB (convention: {first_name}_entenmann)
-    creator_db_id = f"{creator}_entenmann"
+    # Creator ID in DB — maps CLI name to actual DB creator ID
+    CREATOR_DB_IDS = {
+        "nicki": "nicki_entenmann",
+        "ann": "annbschulte",
+        "ellen": "ellenludwigfitness",
+        "emily": "livefitwithem",
+    }
+    creator_db_id = CREATOR_DB_IDS.get(creator, f"{creator}_entenmann")
 
     monthly_payload = []
     for year, month in sorted(periods):
