@@ -40,7 +40,10 @@ def _upload_report_to_dashboard(report_data: dict, season: str = "spring", year:
     import requests
 
     cron_secret = os.environ.get('CRON_SECRET', '')
-    api_url = "https://creator-metrics.vercel.app/api/content-lab/upload-report"
+    api_url = os.environ.get(
+        'CONTENT_LAB_API_URL',
+        "https://creator-metrics.vercel.app/api/content-lab/upload-report"
+    )
 
     # Build uploadable payload — strip large base64/embedding data to keep size manageable
     payload = {
