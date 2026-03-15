@@ -53,7 +53,7 @@ export default async function DashboardLayout({
   let creatorIds: string[] = [];
   if (role === "admin") {
     const rows = await db.execute(
-      sql`SELECT DISTINCT creator_id FROM creator_posts ORDER BY creator_id`
+      sql`SELECT DISTINCT creator_id FROM media_snapshots ORDER BY creator_id`
     );
     creatorIds = (Array.from(rows) as any[]).map((r: any) => r.creator_id);
   }

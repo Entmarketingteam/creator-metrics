@@ -78,7 +78,13 @@ export default function TrendsPage() {
             <h2 className="text-white font-semibold mb-4">Top Posts by Saves</h2>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {(data?.topPosts ?? []).map((post: any) => (
-                <div key={post.post_id} className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
+                <a
+                  key={post.post_id}
+                  href={post.post_url ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 hover:border-gray-600 transition-colors block"
+                >
                   {post.image_url && (
                     <img src={post.image_url} alt="" className="w-full aspect-square object-cover" />
                   )}
@@ -87,7 +93,7 @@ export default function TrendsPage() {
                     <p>👁 {(post.reach ?? 0).toLocaleString()}</p>
                     <p className="text-gray-600">{post.posted_at?.split("T")[0]}</p>
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           </div>
