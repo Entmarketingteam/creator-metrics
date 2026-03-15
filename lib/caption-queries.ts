@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { captionAnalysis, mediaSnapshots } from "@/lib/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 export type CaptionPost = {
   id: number;
@@ -84,35 +84,38 @@ export async function getCaptionPosts(
   opts: { limit?: number; offset?: number } = {}
 ): Promise<CaptionPost[]> {
   const { limit = 25, offset = 0 } = opts;
-  const rows = await db
-    .select({
-      id:               captionAnalysis.id,
-      mediaIgId:        captionAnalysis.mediaIgId,
-      creatorId:        captionAnalysis.creatorId,
-      seoScore:         captionAnalysis.seoScore,
-      hookQualityLabel: captionAnalysis.hookQualityLabel,
-      hashtagQuality:   captionAnalysis.hashtagQuality,
-      ctaType:          captionAnalysis.ctaType,
-      intent:           captionAnalysis.intent,
-      hookType:         captionAnalysis.hookType,
-      analyzedAt:       captionAnalysis.analyzedAt,
-      caption:          mediaSnapshots.caption,
-      saves:            mediaSnapshots.saved,
-    })
-    .from(captionAnalysis)
-    .leftJoin(
-      mediaSnapshots,
-      and(
-        eq(mediaSnapshots.mediaIgId, captionAnalysis.mediaIgId),
-        eq(mediaSnapshots.creatorId, captionAnalysis.creatorId)
-      )
-    )
-    .where(eq(captionAnalysis.creatorId, creatorId))
-    .orderBy(desc(captionAnalysis.seoScore))
-    .limit(limit)
-    .offset(offset);
 
-  return rows as CaptionPost[];
+  // Use a correlated subquery to fetch only the latest snapshot per post,
+  // avoiding fan-out from multiple captured_at dates in media_snapshots.
+  const rows = await db.execute(sql`
+    SELECT
+      ca.id,
+      ca.media_ig_id     AS "mediaIgId",
+      ca.creator_id      AS "creatorId",
+      ca.seo_score       AS "seoScore",
+      ca.hook_quality_label AS "hookQualityLabel",
+      ca.hashtag_quality AS "hashtagQuality",
+      ca.cta_type        AS "ctaType",
+      ca.intent,
+      ca.hook_type       AS "hookType",
+      ca.analyzed_at     AS "analyzedAt",
+      ms.caption,
+      ms.saved           AS saves
+    FROM caption_analysis ca
+    LEFT JOIN LATERAL (
+      SELECT caption, saved
+      FROM media_snapshots
+      WHERE media_ig_id = ca.media_ig_id
+        AND creator_id  = ca.creator_id
+      ORDER BY captured_at DESC
+      LIMIT 1
+    ) ms ON true
+    WHERE ca.creator_id = ${creatorId}
+    ORDER BY ca.seo_score DESC NULLS LAST
+    LIMIT ${limit} OFFSET ${offset}
+  `);
+
+  return Array.from(rows) as CaptionPost[];
 }
 
 export async function getCaptionPrescription(
