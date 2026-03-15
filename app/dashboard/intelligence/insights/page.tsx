@@ -70,6 +70,21 @@ export default async function InsightsPage({
             </div>
           </div>
 
+          {/* Key insights */}
+          {data.keyInsights?.length > 0 && (
+            <div>
+              <h2 className="text-white font-semibold mb-3">Key Insights</h2>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+                {data.keyInsights.map((insight: string, i: number) => (
+                  <div key={i} className="flex items-start gap-3 text-sm text-gray-300">
+                    <span className="text-purple-400 font-bold mt-0.5 shrink-0">{i + 1}.</span>
+                    <span>{insight}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Hidden gems */}
           {data.hiddenGems?.length > 0 && (
             <div>
