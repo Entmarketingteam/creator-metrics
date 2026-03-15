@@ -20,6 +20,7 @@ from sync_ltk import refresh_ltk_tokens, sync_ltk_data
 from sync_mavely import sync_mavely
 from sync_amazon import sync_amazon
 from sync_impact import sync_impact
+from sync_shopmy import sync_shopmy
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,6 +58,9 @@ class SyncConn:
     def executemany(self, query: str, args_list: list):
         return self._loop.run_until_complete(self._conn.executemany(query, args_list))
 
+    def fetch(self, query: str, *args):
+        return self._loop.run_until_complete(self._conn.fetch(query, *args))
+
     def close(self):
         try:
             self._loop.run_until_complete(self._conn.close())
@@ -77,6 +81,14 @@ def _run_amazon(dsn: str) -> dict:
     conn = SyncConn(dsn)
     try:
         return sync_amazon(conn)
+    finally:
+        conn.close()
+
+
+def _run_shopmy(dsn: str) -> dict:
+    conn = SyncConn(dsn)
+    try:
+        return sync_shopmy(conn)
     finally:
         conn.close()
 
@@ -135,6 +147,15 @@ async def job_amazon_sync():
         logger.error("Amazon sync FAILED: %s", e)
 
 
+async def job_shopmy_sync():
+    logger.info("=== JOB: ShopMy sync ===")
+    try:
+        result = await asyncio.to_thread(_run_shopmy, _get_dsn())
+        logger.info("ShopMy sync done: %s", result)
+    except Exception as e:
+        logger.error("ShopMy sync FAILED: %s", e)
+
+
 async def job_impact_sync():
     logger.info("=== JOB: Impact.com sync ===")
     try:
@@ -163,6 +184,9 @@ async def lifespan(app: FastAPI):
 
     # Amazon sync: 9:00 UTC daily
     scheduler.add_job(job_amazon_sync, CronTrigger(hour=9, minute=0), id="amazon_sync")
+
+    # ShopMy sync: 7:15 UTC daily (matches Vercel cron timing)
+    scheduler.add_job(job_shopmy_sync, CronTrigger(hour=7, minute=15), id="shopmy_sync")
 
     # Impact.com sync: 9:30 UTC daily (skips gracefully if no API creds configured)
     scheduler.add_job(job_impact_sync, CronTrigger(hour=9, minute=30), id="impact_sync")
@@ -243,6 +267,11 @@ async def dashboard():
       <div class="status" id="amazon-status"></div>
     </div>
     <div class="card">
+      <h2>ShopMy Sync</h2>
+      <button onclick="trigger('/sync/shopmy', this, 'shopmy-status')">Run Now</button>
+      <div class="status" id="shopmy-status"></div>
+    </div>
+    <div class="card">
       <h2>Impact.com Sync</h2>
       <button onclick="trigger('/sync/impact', this, 'impact-status')">Run Now</button>
       <div class="status" id="impact-status"></div>
@@ -317,6 +346,13 @@ async def trigger_amazon_sync(req: Request):
     _check_secret(req)
     asyncio.create_task(job_amazon_sync())
     return {"status": "accepted", "message": "Amazon sync started in background"}
+
+
+@app.post("/sync/shopmy")
+async def trigger_shopmy_sync(req: Request):
+    _check_secret(req)
+    asyncio.create_task(job_shopmy_sync())
+    return {"status": "accepted", "message": "ShopMy sync started in background"}
 
 
 @app.post("/sync/impact")

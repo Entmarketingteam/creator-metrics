@@ -1,5 +1,16 @@
 """
 LTK sync — token refresh (Playwright via Airtop) + data sync to Supabase.
+
+Multi-creator support:
+  Creator list is loaded from the Supabase `creators` table at sync time.
+  Any creator with a non-null `ltk_publisher_id` column is eligible.
+  LTK tokens are stored per-creator in Airtable LTK_Credentials and looked
+  up by creator_id — see get_ltk_tokens_from_airtable().
+
+  To add a creator:
+    1. Set `ltk_publisher_id` on their row in the `creators` table
+    2. Add their LTK tokens to Airtable LTK_Credentials with matching Creator_ID
+    3. (Optional) Store email/password in Doppler for automated token refresh
 """
 import calendar
 import os, json, logging
@@ -17,32 +28,46 @@ LTK_HEADERS   = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
 }
 
-# Add creators here as LTK credentials become available.
-# email_env / password_env: Doppler env vars used by the Playwright token-refresh flow.
-# publisher_id: LTK publisher ID used in the performance_summary API call.
-# Tokens (access_token / id_token) are stored in Airtable LTK_Credentials and looked
-# up at sync time by creator_id — see get_ltk_tokens_from_airtable().
-LTK_CREATORS = [
-    {
-        "creator_id": "nicki_entenmann",
-        "email_env": "LTK_EMAIL",
-        "password_env": "LTK_PASSWORD",
-        "publisher_id": "293045",
-    },
-    # Add more creators here once tokens are in Airtable:
-    # {
-    #     "creator_id": "ann_schulte",
-    #     "email_env": "ANN_LTK_EMAIL",
-    #     "password_env": "ANN_LTK_PASSWORD",
-    #     "publisher_id": "<ann_publisher_id>",
-    # },
-    # {
-    #     "creator_id": "ellen_ludwig",
-    #     "email_env": "ELLEN_LTK_EMAIL",
-    #     "password_env": "ELLEN_LTK_PASSWORD",
-    #     "publisher_id": "<ellen_publisher_id>",
-    # },
-]
+# Env-var naming convention for LTK credentials per creator.
+# Maps creator_id → (email_env, password_env).
+# Used by the token-refresh flow to determine if credentials are available.
+# Convention: LTK_{CREATOR_KEY}_EMAIL / LTK_{CREATOR_KEY}_PASSWORD
+# where CREATOR_KEY is derived from creator_id (uppercase, underscores).
+# The first creator (nicki_entenmann) uses legacy env var names for backwards compat.
+_LTK_CREDENTIAL_OVERRIDES = {
+    "nicki_entenmann": ("LTK_EMAIL", "LTK_PASSWORD"),
+}
+
+
+def _ltk_env_vars(creator_id: str) -> tuple[str, str]:
+    """Return (email_env, password_env) for a given creator_id."""
+    if creator_id in _LTK_CREDENTIAL_OVERRIDES:
+        return _LTK_CREDENTIAL_OVERRIDES[creator_id]
+    key = creator_id.upper()
+    return (f"LTK_{key}_EMAIL", f"LTK_{key}_PASSWORD")
+
+
+def _get_ltk_creators(conn) -> list[dict]:
+    """
+    Query the creators table for all creators with an LTK publisher ID.
+    Returns a list of dicts compatible with _sync_ltk_creator().
+    """
+    rows = conn.fetch(
+        "SELECT id, ltk_publisher_id FROM creators WHERE ltk_publisher_id IS NOT NULL"
+    )
+    creators = []
+    for row in rows:
+        creator_id = row["id"]
+        email_env, password_env = _ltk_env_vars(creator_id)
+        creators.append({
+            "creator_id": creator_id,
+            "publisher_id": row["ltk_publisher_id"],
+            "email_env": email_env,
+            "password_env": password_env,
+        })
+    logger.info("Loaded %d LTK-enabled creators from DB: %s",
+                len(creators), [c["creator_id"] for c in creators])
+    return creators
 
 
 # ── Airtable helpers ────────────────────────────────────────────────────────
@@ -293,16 +318,16 @@ def _sync_ltk_creator(conn, creator: dict, period_start: date, period_end: date)
     creator_id   = creator["creator_id"]
     publisher_id = creator["publisher_id"]
 
-    # Verify the email env var is present (indicates credentials exist for this creator)
+    # Check if credentials are available for token refresh (optional —
+    # sync can still proceed if tokens exist in Airtable from manual refresh)
     email_env    = creator.get("email_env")
     password_env = creator.get("password_env")
     if email_env and not os.environ.get(email_env):
-        logger.warning(
-            "Skipping %s — missing LTK credentials (%s not set). "
-            "Add email/password to Doppler and ensure tokens are in Airtable LTK_Credentials.",
+        logger.info(
+            "No LTK login credentials for %s (%s not set) — "
+            "will attempt sync with existing Airtable tokens.",
             creator_id, email_env,
         )
-        return {"creator": creator_id, "status": "skipped"}
 
     try:
         tokens = get_ltk_tokens_from_airtable(creator_id=creator_id)
@@ -310,7 +335,7 @@ def _sync_ltk_creator(conn, creator: dict, period_start: date, period_end: date)
         logger.warning("Skipping %s — %s", creator_id, e)
         return {"creator": creator_id, "status": "skipped", "reason": str(e)}
 
-    # Use publisher_id from creator config; fall back to what's in Airtable
+    # Use publisher_id from creators table; fall back to what's in Airtable
     pub_id = publisher_id or str(tokens["publisher_id"])
 
     # Fetch commissions summary (lifetime/open earnings)
@@ -362,7 +387,8 @@ def _sync_ltk_creator(conn, creator: dict, period_start: date, period_end: date)
 def sync_ltk_data(conn) -> dict:
     """
     Fetch LTK commissions + performance stats and upsert into platform_earnings.
-    Uses tokens from Airtable. Syncs current calendar month for all configured creators.
+    Uses tokens from Airtable. Syncs current calendar month for all creators
+    that have ltk_publisher_id set in the creators table.
     Calendar-month window aligns with Mavely and Amazon for consistent deduplication
     by (creator_id, platform, period_start, period_end).
     """
@@ -370,10 +396,17 @@ def sync_ltk_data(conn) -> dict:
     period_start = date(today.year, today.month, 1)
     period_end   = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
 
+    # Load creators from DB instead of hardcoded list
+    ltk_creators = _get_ltk_creators(conn)
+    if not ltk_creators:
+        logger.warning("No creators found with ltk_publisher_id set — nothing to sync")
+        return {"status": "ok", "synced": [], "skipped": [],
+                "period": {"start": str(period_start), "end": str(period_end)}}
+
     results  = []
     skipped  = []
 
-    for creator in LTK_CREATORS:
+    for creator in ltk_creators:
         result = _sync_ltk_creator(conn, creator, period_start, period_end)
         if result.get("status") == "skipped":
             skipped.append(result["creator"])

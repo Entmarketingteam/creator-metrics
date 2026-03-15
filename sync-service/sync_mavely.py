@@ -4,13 +4,19 @@ Authenticates via NextAuth (creators.mave.ly), fetches link metrics +
 individual transactions, writes to Supabase platform_earnings + mavely_links.
 
 Multi-creator support:
-  Each entry in MAVELY_CREATORS maps a creator_id to env var names for
-  their Mavely email and password. Add a creator here once their credentials
-  are stored in Doppler as MAVELY_{CREATOR_ID_UPPER}_EMAIL / _PASSWORD.
+  Creator list is loaded from the Supabase `creators` table at sync time.
+  Any creator with a non-null `mavely_creator_id` column is eligible.
+
+  Credentials are stored in Doppler as env vars. The naming convention is:
+    MAVELY_{CREATOR_KEY}_EMAIL / MAVELY_{CREATOR_KEY}_PASSWORD
+  where CREATOR_KEY is derived from creator_id (uppercase).
+
+  The first creator (nicki_entenmann) uses legacy env var names for
+  backwards compatibility: MAVELY_EMAIL / MAVELY_PASSWORD.
 
   To add a creator:
-    1. Store creds in Doppler: MAVELY_<CREATOR>_EMAIL / MAVELY_<CREATOR>_PASSWORD
-    2. Add an entry to MAVELY_CREATORS below
+    1. Set `mavely_creator_id` on their row in the `creators` table
+    2. Store creds in Doppler: MAVELY_{CREATOR_KEY}_EMAIL / MAVELY_{CREATOR_KEY}_PASSWORD
 """
 import os, logging
 from datetime import datetime, timedelta
@@ -27,21 +33,42 @@ CLIENT_HEADERS = {
     "client-revision": "71e8d2f8",
 }
 
-# ── Creator list ──────────────────────────────────────────────────────────────
-# Credentials are stored in Doppler. Add creators here once their creds exist.
-MAVELY_CREATORS = [
-    {
-        "creator_id": "nicki_entenmann",
-        "email_env": "MAVELY_EMAIL",
-        "password_env": "MAVELY_PASSWORD",
-    },
-    # Add more as credentials become available, e.g.:
-    # {
-    #     "creator_id": "maganhendry",
-    #     "email_env": "MAVELY_MAGANHENDRY_EMAIL",
-    #     "password_env": "MAVELY_MAGANHENDRY_PASSWORD",
-    # },
-]
+# Env-var naming overrides for backwards compatibility.
+# Maps creator_id → (email_env, password_env).
+_MAVELY_CREDENTIAL_OVERRIDES = {
+    "nicki_entenmann": ("MAVELY_EMAIL", "MAVELY_PASSWORD"),
+}
+
+
+def _mavely_env_vars(creator_id: str) -> tuple[str, str]:
+    """Return (email_env, password_env) for a given creator_id."""
+    if creator_id in _MAVELY_CREDENTIAL_OVERRIDES:
+        return _MAVELY_CREDENTIAL_OVERRIDES[creator_id]
+    key = creator_id.upper()
+    return (f"MAVELY_{key}_EMAIL", f"MAVELY_{key}_PASSWORD")
+
+
+def _get_mavely_creators(conn) -> list[dict]:
+    """
+    Query the creators table for all creators with a Mavely creator ID.
+    Returns a list of dicts with creator_id, email_env, password_env.
+    """
+    rows = conn.fetch(
+        "SELECT id, mavely_creator_id FROM creators WHERE mavely_creator_id IS NOT NULL"
+    )
+    creators = []
+    for row in rows:
+        creator_id = row["id"]
+        email_env, password_env = _mavely_env_vars(creator_id)
+        creators.append({
+            "creator_id": creator_id,
+            "mavely_creator_id": row["mavely_creator_id"],
+            "email_env": email_env,
+            "password_env": password_env,
+        })
+    logger.info("Loaded %d Mavely-enabled creators from DB: %s",
+                len(creators), [c["creator_id"] for c in creators])
+    return creators
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -285,12 +312,19 @@ def _sync_one_creator(conn, creator_id: str, token: str, now: datetime) -> dict:
 
 
 def sync_mavely(conn) -> dict:
-    """Sync Mavely data for all creators in MAVELY_CREATORS."""
+    """Sync Mavely data for all creators with mavely_creator_id in the DB."""
     now = datetime.utcnow()
+
+    # Load creators from DB instead of hardcoded list
+    mavely_creators = _get_mavely_creators(conn)
+    if not mavely_creators:
+        logger.warning("No creators found with mavely_creator_id set — nothing to sync")
+        return {"status": "ok", "synced": [], "skipped": []}
+
     results = []
     skipped = []
 
-    for creator in MAVELY_CREATORS:
+    for creator in mavely_creators:
         creator_id   = creator["creator_id"]
         email        = os.environ.get(creator["email_env"])
         password     = os.environ.get(creator["password_env"])
