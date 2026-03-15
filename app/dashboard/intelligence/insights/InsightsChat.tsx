@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { TextStreamChatTransport } from "ai";
 
 export function InsightsChat({ creatorId }: { creatorId: string }) {
   const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({
+    transport: new TextStreamChatTransport({
       api: "/api/intelligence/ask",
       body: { creatorId },
     }),
