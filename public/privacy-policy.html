@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — ENT Agency Creator Metrics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0f0f0f;
+      --muted: #5a5a5a;
+      --rule: #e2e2e2;
+      --accent: #1a1a2e;
+      --highlight: #c8b8ff;
+      --bg: #fafaf8;
+      --card: #ffffff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      line-height: 1.75;
+      font-size: 16px;
+    }
+
+    header {
+      background: var(--accent);
+      color: #fff;
+      padding: 56px 0 48px;
+      text-align: center;
+    }
+
+    header .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--highlight);
+      margin-bottom: 14px;
+      font-weight: 500;
+    }
+
+    header h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 400;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    header p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 0.04em;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .toc {
+      background: var(--card);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 32px 36px;
+      margin: 48px auto;
+      max-width: 760px;
+    }
+
+    .toc h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1rem;
+      font-weight: 400;
+      margin-bottom: 16px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    .toc ol {
+      list-style: none;
+      counter-reset: toc;
+    }
+
+    .toc li {
+      counter-increment: toc;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--rule);
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .toc li:last-child { border-bottom: none; }
+
+    .toc li::before {
+      content: counter(toc, decimal-leading-zero);
+      font-size: 11px;
+      color: var(--muted);
+      min-width: 24px;
+    }
+
+    .toc a {
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+    }
+
+    .toc a:hover { color: #5b4fcf; }
+
+    .sections {
+      max-width: 760px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 48px 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    section:last-child { border-bottom: none; }
+
+    .section-label {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #5b4fcf;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.75rem;
+      font-weight: 400;
+      margin-bottom: 20px;
+      line-height: 1.2;
+    }
+
+    p { margin-bottom: 16px; color: #2a2a2a; }
+    p:last-child { margin-bottom: 0; }
+
+    ul, ol {
+      padding-left: 20px;
+      margin-bottom: 16px;
+    }
+
+    li { margin-bottom: 8px; color: #2a2a2a; }
+
+    .pill-list {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .pill-list li {
+      margin: 0;
+      background: #f0eeff;
+      border: 1px solid #d4caff;
+      color: #3d2f9e;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-weight: 500;
+    }
+
+    .callout {
+      background: #f8f6ff;
+      border-left: 3px solid #5b4fcf;
+      border-radius: 0 6px 6px 0;
+      padding: 16px 20px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+
+    .callout strong { color: #3d2f9e; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 20px 0;
+    }
+
+    th {
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      text-align: left;
+      font-weight: 500;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--rule);
+      color: #2a2a2a;
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #fafaf8; }
+
+    .contact-card {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 32px 36px;
+      margin-top: 16px;
+    }
+
+    .contact-card h3 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.3rem;
+      font-weight: 400;
+      margin-bottom: 16px;
+    }
+
+    .contact-card a { color: var(--highlight); }
+
+    .contact-card p { color: rgba(255,255,255,0.75); margin-bottom: 10px; }
+
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--rule);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <p class="eyebrow">ENT Agency · Creator Metrics</p>
+    <h1>Privacy Policy</h1>
+    <p>Effective Date: March 15, 2026 &nbsp;·&nbsp; Last Updated: March 15, 2026</p>
+  </div>
+</header>
+
+<div class="toc container">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Overview &amp; Scope</a></li>
+    <li><a href="#who">Who We Are</a></li>
+    <li><a href="#data-collected">Data We Collect</a></li>
+    <li><a href="#instagram-data">Instagram &amp; Facebook Platform Data</a></li>
+    <li><a href="#how-we-use">How We Use Your Data</a></li>
+    <li><a href="#sharing">Data Sharing &amp; Disclosure</a></li>
+    <li><a href="#retention">Data Retention</a></li>
+    <li><a href="#security">Security</a></li>
+    <li><a href="#rights">Your Rights</a></li>
+    <li><a href="#meta-policy">Meta Platform Policy Compliance</a></li>
+    <li><a href="#children">Children's Privacy</a></li>
+    <li><a href="#changes">Changes to This Policy</a></li>
+    <li><a href="#contact">Contact Us</a></li>
+  </ol>
+</div>
+
+<div class="sections">
+
+  <section id="overview">
+    <p class="section-label">01</p>
+    <h2>Overview &amp; Scope</h2>
+    <p>This Privacy Policy describes how ENT Agency ("we," "us," or "our") collects, uses, stores, and protects information in connection with the <strong>Creator Metrics</strong> application ("the App"), a multi-creator Instagram analytics dashboard accessible at <a href="https://creator-metrics.vercel.app">creator-metrics.vercel.app</a>.</p>
+    <p>This App is authorized by Meta Platforms, Inc. and accesses data through the <strong>Instagram Graph API</strong> and <strong>Meta Login</strong> platform. This policy governs all data obtained through those integrations.</p>
+    <div class="callout">
+      <strong>Internal Tool Notice:</strong> Creator Metrics is a proprietary, invitation-only internal tool operated by ENT Agency. Access is restricted to authorized creators and staff. It is not a consumer-facing public application.
+    </div>
+  </section>
+
+  <section id="who">
+    <p class="section-label">02</p>
+    <h2>Who We Are</h2>
+    <p><strong>ENT Agency</strong> is a creator management agency specializing in health and wellness influencer marketing. We manage a curated roster of content creators across social media platforms and brand partnership programs.</p>
+    <p>This App was built to provide ENT Agency's internal team and managed creators with unified access to Instagram performance analytics, enabling data-driven content strategy and brand partnership reporting.</p>
+  </section>
+
+  <section id="data-collected">
+    <p class="section-label">03</p>
+    <h2>Data We Collect</h2>
+    <p>We collect the following categories of data:</p>
+
+    <h3 style="font-size:1rem;margin:20px 0 10px;font-weight:500;">Account &amp; Authentication Data</h3>
+    <ul>
+      <li>Meta / Instagram user ID and username</li>
+      <li>OAuth 2.0 access tokens (encrypted at rest)</li>
+      <li>Instagram Business Account information</li>
+    </ul>
+
+    <h3 style="font-size:1rem;margin:20px 0 10px;font-weight:500;">Instagram Analytics Data</h3>
+    <ul>
+      <li>Profile metrics (followers, following, profile views)</li>
+      <li>Media insights (reach, impressions, saves, comments, likes, shares)</li>
+      <li>Reel and story performance metrics</li>
+      <li>Audience demographics (age, gender, location — aggregated)</li>
+      <li>Account-level reach and engagement data</li>
+    </ul>
+
+    <h3 style="font-size:1rem;margin:20px 0 10px;font-weight:500;">Technical / Usage Data</h3>
+    <ul>
+      <li>Browser type and device information</li>
+      <li>IP address (for security and authentication purposes)</li>
+      <li>App usage logs and session data</li>
+    </ul>
+  </section>
+
+  <section id="instagram-data">
+    <p class="section-label">04</p>
+    <h2>Instagram &amp; Facebook Platform Data</h2>
+    <p>The App uses the following Meta platform permissions and features:</p>
+
+    <ul class="pill-list">
+      <li>instagram_basic</li>
+      <li>instagram_manage_insights</li>
+      <li>pages_show_list</li>
+      <li>pages_read_engagement</li>
+      <li>business_management</li>
+      <li>instagram_content_publish</li>
+    </ul>
+
+    <p>Data accessed via these permissions is used <strong>exclusively</strong> for displaying analytics within the Creator Metrics dashboard. We do not use Instagram or Facebook data to build advertising audiences, sell data, or profile users for any purpose outside of the stated analytics functionality.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Permission</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>instagram_basic</code></td>
+          <td>Read creator profile data and media for dashboard display</td>
+        </tr>
+        <tr>
+          <td><code>instagram_manage_insights</code></td>
+          <td>Access post and account-level performance metrics</td>
+        </tr>
+        <tr>
+          <td><code>pages_show_list</code></td>
+          <td>Identify connected Facebook Pages linked to Instagram accounts</td>
+        </tr>
+        <tr>
+          <td><code>pages_read_engagement</code></td>
+          <td>Read Page insights for linked accounts</td>
+        </tr>
+        <tr>
+          <td><code>business_management</code></td>
+          <td>Access Business Account data for multi-creator management</td>
+        </tr>
+        <tr>
+          <td><code>instagram_content_publish</code></td>
+          <td>Publish content on behalf of managed creators for campaign deliverables</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="how-we-use">
+    <p class="section-label">05</p>
+    <h2>How We Use Your Data</h2>
+    <p>We use the data we collect strictly for the following purposes:</p>
+    <ol>
+      <li><strong>Analytics Dashboard:</strong> Display Instagram performance metrics to authorized creators and ENT Agency staff in a unified internal dashboard.</li>
+      <li><strong>Performance Reporting:</strong> Generate reports for brand partnership campaigns managed by ENT Agency.</li>
+      <li><strong>Content Strategy:</strong> Help creators and account managers identify high-performing content to inform future content decisions.</li>
+      <li><strong>Account Authentication:</strong> Verify identity and maintain secure, authorized access to the App.</li>
+      <li><strong>App Improvement:</strong> Monitor app performance, fix bugs, and improve reliability for our internal users.</li>
+    </ol>
+    <p>We do <strong>not</strong> use your data for advertising, resale, training machine learning models, or any purpose not explicitly stated above.</p>
+  </section>
+
+  <section id="sharing">
+    <p class="section-label">06</p>
+    <h2>Data Sharing &amp; Disclosure</h2>
+    <p>We do not sell, rent, or trade your data. We may share data only in the following limited circumstances:</p>
+
+    <ul>
+      <li><strong>ENT Agency Internal Team:</strong> Authorized ENT Agency staff and account managers who require access to fulfill their management duties.</li>
+      <li><strong>Infrastructure Providers:</strong> We use Vercel (hosting), Supabase (database), and Doppler (secrets management). These providers process data only as necessary to operate the App and are contractually bound to appropriate data handling standards.</li>
+      <li><strong>Legal Requirements:</strong> We may disclose data if required by law, subpoena, court order, or to protect the rights, property, or safety of ENT Agency or others.</li>
+    </ul>
+
+    <div class="callout">
+      Instagram and Facebook platform data is <strong>never</strong> transferred to third-party data brokers, advertisers, or analytics companies.
+    </div>
+  </section>
+
+  <section id="retention">
+    <p class="section-label">07</p>
+    <h2>Data Retention</h2>
+    <p>We retain data according to the following schedule:</p>
+    <table>
+      <thead>
+        <tr><th>Data Type</th><th>Retention Period</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Instagram analytics snapshots</td><td>Up to 24 months for trend analysis</td></tr>
+        <tr><td>OAuth access tokens</td><td>Until revoked by user or token expiry</td></tr>
+        <tr><td>Session / authentication logs</td><td>90 days</td></tr>
+        <tr><td>Account profile data</td><td>Duration of active account; deleted upon request</td></tr>
+      </tbody>
+    </table>
+    <p>Upon account termination or written request, we will delete all associated personal data within 30 days, except where retention is required by law.</p>
+  </section>
+
+  <section id="security">
+    <p class="section-label">08</p>
+    <h2>Security</h2>
+    <p>We implement industry-standard safeguards to protect your data, including:</p>
+    <ul>
+      <li>TLS/HTTPS encryption for all data in transit</li>
+      <li>Encrypted storage of OAuth tokens via Doppler secrets management</li>
+      <li>Row-level security policies in our Supabase database</li>
+      <li>Access controls limiting data visibility to authorized personnel only</li>
+      <li>Regular security reviews of our authentication and data access flows</li>
+    </ul>
+    <p>While we take reasonable measures to protect your information, no system is completely secure. If you become aware of any security concern, please contact us immediately at the address below.</p>
+  </section>
+
+  <section id="rights">
+    <p class="section-label">09</p>
+    <h2>Your Rights</h2>
+    <p>Depending on your jurisdiction, you may have the following rights regarding your personal data:</p>
+    <ul>
+      <li><strong>Access:</strong> Request a copy of the data we hold about you.</li>
+      <li><strong>Correction:</strong> Request that we correct inaccurate or incomplete data.</li>
+      <li><strong>Deletion:</strong> Request deletion of your personal data ("right to be forgotten").</li>
+      <li><strong>Revocation:</strong> Revoke Instagram/Facebook API access at any time via your <a href="https://www.facebook.com/settings?tab=applications" target="_blank" rel="noopener">Facebook App Settings</a>. Revoking access will immediately prevent the App from accessing your Instagram data.</li>
+      <li><strong>Portability:</strong> Request your data in a portable format.</li>
+      <li><strong>Objection:</strong> Object to certain processing activities.</li>
+    </ul>
+    <p>To exercise any of these rights, contact us at <strong>marketingteam@entagency.co</strong>. We will respond within 30 days.</p>
+  </section>
+
+  <section id="meta-policy">
+    <p class="section-label">10</p>
+    <h2>Meta Platform Policy Compliance</h2>
+    <p>Creator Metrics is built on Meta's platform and complies with the <a href="https://developers.facebook.com/policy/" target="_blank" rel="noopener">Meta Platform Terms</a> and <a href="https://developers.facebook.com/devpolicy/" target="_blank" rel="noopener">Meta Developer Policies</a>, including:</p>
+    <ul>
+      <li>We only request permissions necessary for the App's core functionality.</li>
+      <li>We do not use Instagram or Facebook data to build advertising audiences or shadow profiles.</li>
+      <li>We do not sell or license any data obtained through Meta APIs to third parties.</li>
+      <li>We provide users with a clear and accessible means to revoke data access.</li>
+      <li>We store platform data securely and delete it upon user request or account termination.</li>
+      <li>We do not use platform data for any purpose beyond what is disclosed in this policy and authorized by Meta.</li>
+    </ul>
+    <p>Users can revoke the App's access to their Instagram data at any time by visiting <a href="https://www.instagram.com/accounts/manage_access/" target="_blank" rel="noopener">Instagram's Authorized Apps settings</a> or through their Facebook account settings.</p>
+  </section>
+
+  <section id="children">
+    <p class="section-label">11</p>
+    <h2>Children's Privacy</h2>
+    <p>Creator Metrics is intended solely for professional use by adults (18+). We do not knowingly collect personal information from individuals under the age of 18. If we become aware that a minor has provided personal information, we will take steps to delete that data promptly. If you believe a minor has accessed the App, please contact us immediately.</p>
+  </section>
+
+  <section id="changes">
+    <p class="section-label">12</p>
+    <h2>Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time to reflect changes in our practices or legal requirements. When we make material changes, we will update the "Last Updated" date at the top of this page and notify authorized users via email or in-app notification.</p>
+    <p>Your continued use of the App after any changes constitutes your acceptance of the updated policy.</p>
+  </section>
+
+  <section id="contact">
+    <p class="section-label">13</p>
+    <h2>Contact Us</h2>
+    <p>For privacy questions, data requests, or to exercise your rights, please reach out:</p>
+    <div class="contact-card">
+      <h3>ENT Agency Privacy Contact</h3>
+      <p>📧 <a href="mailto:marketingteam@entagency.co">marketingteam@entagency.co</a></p>
+      <p>🌐 <a href="https://creator-metrics.vercel.app" target="_blank">creator-metrics.vercel.app</a></p>
+      <p>📁 <a href="https://github.com/Entmarketingteam/creator-metrics" target="_blank">github.com/Entmarketingteam/creator-metrics</a></p>
+      <p style="margin-top:16px;font-size:13px;color:rgba(255,255,255,0.5);">We aim to respond to all privacy inquiries within 30 days.</p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <p>© 2026 ENT Agency. All rights reserved. &nbsp;·&nbsp; Creator Metrics is an internal tool.</p>
+  <p style="margin-top:6px;">This policy is compliant with Meta Platform Terms and applicable data protection regulations.</p>
+</footer>
+
+</body>
+</html>
