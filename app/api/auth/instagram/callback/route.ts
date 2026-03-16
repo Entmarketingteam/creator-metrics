@@ -11,8 +11,12 @@ const REDIRECT_URI = `${APP_URL}/api/auth/instagram/callback`;
 
 async function igGet(url: string) {
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`IG API error: ${r.status} ${await r.text()}`);
-  return r.json();
+  const json = await r.json();
+  if (!r.ok || json.error) {
+    const msg = json.error?.message ?? json.error_description ?? `HTTP ${r.status}`;
+    throw new Error(`IG API error: ${msg}`);
+  }
+  return json;
 }
 
 export async function GET(req: NextRequest) {
@@ -47,6 +51,10 @@ export async function GET(req: NextRequest) {
       `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SEC}&fb_exchange_token=${shortToken}`
     );
     const longUserToken = longData.access_token;
+    if (!longUserToken) {
+      console.error("Long-lived token exchange failed:", longData);
+      return NextResponse.redirect(`${APP_URL}/onboarding?error=true`);
+    }
     const expiresIn: number = longData.expires_in ?? 5184000; // default 60d
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
@@ -85,10 +93,12 @@ export async function GET(req: NextRequest) {
 
     if (!page) {
       const pageCount = allPages.length;
-      const pageIds = allPages.map((p: any) => p.id).join(",");
-      console.error("No IG business account. Pages found:", allPages.map((p: any) => ({ id: p.id, name: p.name })));
+      const pageNames = allPages.map((p: any) => p.name).join(", ");
+      console.error("No IG business account. Pages found:", allPages.map((p: any) => ({ id: p.id, name: p.name, hasIg: !!p.instagram_business_account })));
+      // pages=0 → Facebook account has no Pages at all (wrong FB account, or no Page exists)
+      // pages>0 → Pages found but none linked to an Instagram Business/Creator account
       return NextResponse.redirect(
-        `${APP_URL}/onboarding?error=no_ig_account&pages=${pageCount}&ids=${encodeURIComponent(pageIds)}`
+        `${APP_URL}/onboarding?error=no_ig_account&pages=${pageCount}&names=${encodeURIComponent(pageNames)}`
       );
     }
 

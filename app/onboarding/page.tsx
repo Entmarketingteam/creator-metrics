@@ -3,9 +3,9 @@ import { startOAuth } from "./actions";
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; pages?: string; names?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, pages, names } = await searchParams;
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="max-w-md w-full text-center space-y-6 px-6">
@@ -23,9 +23,13 @@ export default async function OnboardingPage({
           </p>
         )}
         {error === "no_ig_account" && (
-          <p className="text-red-400 text-sm bg-red-950 rounded-lg px-4 py-3">
-            No Instagram Business account found. Make sure your Instagram is connected to a Facebook Page.
-          </p>
+          <div className="text-red-400 text-sm bg-red-950 rounded-lg px-4 py-3 text-left space-y-1">
+            {pages === "0" ? (
+              <p>No Facebook Pages found on this account. You may be logged into the wrong Facebook account, or your Instagram isn&apos;t linked to a Facebook Page yet.</p>
+            ) : (
+              <p>Found {pages} Facebook Page{Number(pages) !== 1 ? "s" : ""} ({names ? decodeURIComponent(names) : "unknown"}) but none are linked to an Instagram Business or Creator account.</p>
+            )}
+          </div>
         )}
         {error === "true" && (
           <p className="text-red-400 text-sm bg-red-950 rounded-lg px-4 py-3">
