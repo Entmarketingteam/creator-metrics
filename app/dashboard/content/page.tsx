@@ -49,31 +49,85 @@ export default async function ContentPage({
   const platformFilter = params.platform ?? "";
   const typeFilter = params.type ?? "";
 
-  const mediaRows = await db.execute(sql`
-    SELECT DISTINCT ON (media_ig_id)
-      media_ig_id,
-      "timestamp" AS posted_at,
-      media_type,
-      media_url,
-      thumbnail_url,
-      permalink,
-      link_url,
-      caption,
-      like_count,
-      comments_count,
-      reach,
-      saved
-    FROM media_snapshots
-    WHERE creator_id = ${creatorId}
-      AND "timestamp" >= ${startDate}::date
-      AND "timestamp" < (${endDate}::date + interval '1 day')
-    ORDER BY media_ig_id, captured_at DESC
-  `);
+  // Fetch posts + bulk revenue in parallel (2 queries, not N+1)
+  const [mediaRows, mavelyRows, ltkRows] = await Promise.all([
+    db.execute(sql`
+      SELECT DISTINCT ON (media_ig_id)
+        media_ig_id,
+        "timestamp" AS posted_at,
+        media_type,
+        media_url,
+        thumbnail_url,
+        permalink,
+        link_url,
+        caption,
+        like_count,
+        comments_count,
+        reach,
+        saved
+      FROM media_snapshots
+      WHERE creator_id = ${creatorId}
+        AND "timestamp" >= ${startDate}::date
+        AND "timestamp" < (${endDate}::date + interval '1 day')
+      ORDER BY media_ig_id, captured_at DESC
+    `),
+    // Mavely: group commissions by referrer URL (IG permalink is stored as referrer)
+    db.execute(sql`
+      SELECT referrer, SUM(commission_amount) AS revenue, COUNT(*) AS orders
+      FROM mavely_transactions
+      WHERE creator_id = ${creatorId}
+        AND sale_date >= ${startDate}::date
+        AND sale_date < (${endDate}::date + interval '1 day')
+        AND referrer IS NOT NULL
+      GROUP BY referrer
+    `),
+    // LTK: group commissions by share_url (= IG permalink)
+    db.execute(sql`
+      SELECT share_url, SUM(commissions) AS revenue, SUM(orders) AS orders
+      FROM ltk_posts
+      WHERE creator_id = ${creatorId}
+        AND date_published >= ${startDate}::date
+        AND date_published < (${endDate}::date + interval '1 day')
+        AND share_url IS NOT NULL
+      GROUP BY share_url
+    `),
+  ]);
+
+  // Build lookup maps for O(1) joins
+  // Mavely: referrer is a URL that contains the IG permalink as a substring
+  const mavelyByReferrer = new Map<string, { revenue: number; orders: number }>();
+  for (const r of mavelyRows as any[]) {
+    mavelyByReferrer.set(String(r.referrer), { revenue: Number(r.revenue), orders: Number(r.orders) });
+  }
+  // LTK: share_url exactly equals the IG permalink
+  const ltkByShareUrl = new Map<string, { revenue: number; orders: number }>();
+  for (const r of ltkRows as any[]) {
+    ltkByShareUrl.set(String(r.share_url), { revenue: Number(r.revenue), orders: Number(r.orders) });
+  }
 
   const posts: PostCardData[] = (mediaRows as any[])
     .map((row) => {
       const platform = detectPlatform((row as any).link_url ?? row.permalink);
       const manychatKeyword = detectManyChat(row.caption);
+      const permalink = String(row.permalink ?? "");
+
+      let attributedRevenue: number | null = null;
+      let orders: number | null = null;
+
+      if (platform === "mavely" && permalink) {
+        // Mavely referrer is the full page URL; find the entry whose referrer contains this permalink
+        for (const [referrer, data] of mavelyByReferrer) {
+          if (referrer.includes(permalink)) {
+            attributedRevenue = data.revenue;
+            orders = data.orders;
+            break;
+          }
+        }
+      } else if (platform === "ltk" && permalink) {
+        const match = ltkByShareUrl.get(permalink);
+        if (match) { attributedRevenue = match.revenue; orders = match.orders; }
+      }
+
       return {
         mediaIgId: String(row.media_ig_id),
         postedAt: String(row.posted_at),
@@ -87,8 +141,8 @@ export default async function ContentPage({
         comments: Number(row.comments_count ?? 0),
         views: 0,
         saves: Number(row.saved ?? 0),
-        attributedRevenue: null,
-        orders: null,
+        attributedRevenue,
+        orders,
       } satisfies PostCardData;
     })
     .filter((p) => {
@@ -120,6 +174,8 @@ export default async function ContentPage({
   };
 
   const manychatCount = posts.filter((p) => p.manychatKeyword).length;
+  const totalRevenue = posts.reduce((sum, p) => sum + (p.attributedRevenue ?? 0), 0);
+  const postsWithRevenue = posts.filter((p) => (p.attributedRevenue ?? 0) > 0).length;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -170,9 +226,14 @@ export default async function ContentPage({
       </div>
 
       {/* Stats bar */}
-      <div className="flex items-center gap-6 text-sm text-gray-500">
+      <div className="flex items-center gap-6 text-sm text-gray-500 flex-wrap">
         <span>{posts.length} posts</span>
         <span>{posts.filter((p) => p.platform).length} with affiliate links</span>
+        {totalRevenue > 0 && (
+          <span className="text-emerald-400 font-semibold">
+            ${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} attributed · {postsWithRevenue} posts
+          </span>
+        )}
         <span className="text-orange-400">{manychatCount} ManyChat triggers</span>
         <span>{posts.filter((p) => p.platform === "mavely").length} Mavely</span>
         <span>{posts.filter((p) => p.platform === "ltk").length} LTK</span>
