@@ -15,6 +15,13 @@ interface ShortLink {
   clicks: number;
 }
 
+interface KeywordStats {
+  keyword: string;
+  triggered: number;
+  dm_sent: number;
+  clicks: number;
+}
+
 const PLATFORM_OPTIONS = [
   { label: "Mavely", value: "mavely" },
   { label: "LTK", value: "ltk" },
@@ -33,6 +40,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 export default function ManyChatPage() {
   const [links, setLinks] = useState<ShortLink[]>([]);
+  const [analytics, setAnalytics] = useState<KeywordStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -47,8 +55,12 @@ export default function ManyChatPage() {
 
   const loadLinks = async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/manychat-link");
-    if (res.ok) setLinks(await res.json());
+    const [linksRes, analyticsRes] = await Promise.all([
+      fetch("/api/admin/manychat-link"),
+      fetch("/api/admin/manychat-analytics"),
+    ]);
+    if (linksRes.ok) setLinks(await linksRes.json());
+    if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
     setLoading(false);
   };
 
@@ -201,6 +213,60 @@ export default function ManyChatPage() {
           </div>
         </div>
       )}
+
+      {/* Analytics summary */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800">
+          <h2 className="text-sm font-semibold text-white">Flow Analytics</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Triggered → DM sent → Link clicked, per keyword</p>
+        </div>
+        {analytics.length === 0 ? (
+          <div className="px-5 py-8 text-center text-gray-600 text-sm">
+            No event data yet — wire ManyChat External Request steps to start tracking.
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800">
+                <th className="text-left px-5 py-3 text-xs text-gray-500 font-medium">Keyword</th>
+                <th className="text-right px-5 py-3 text-xs text-gray-500 font-medium">Triggered</th>
+                <th className="text-right px-5 py-3 text-xs text-gray-500 font-medium">DM Sent</th>
+                <th className="text-right px-5 py-3 text-xs text-gray-500 font-medium">Clicks</th>
+                <th className="text-right px-5 py-3 text-xs text-gray-500 font-medium">Conv. Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analytics.map((row) => {
+                const triggered = Number(row.triggered);
+                const dmSent = Number(row.dm_sent);
+                const clicks = Number(row.clicks);
+                const convRate = triggered > 0 ? ((clicks / triggered) * 100).toFixed(1) : null;
+                return (
+                  <tr key={row.keyword} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                    <td className="px-5 py-3">
+                      <span className="bg-orange-500/20 text-orange-300 border border-orange-500/30 text-xs font-bold px-2 py-0.5 rounded-full">
+                        💬 {row.keyword}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right text-gray-300 font-semibold">{triggered.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right text-gray-300">{dmSent.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right text-gray-300">{clicks.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right">
+                      {convRate !== null ? (
+                        <span className={`font-semibold ${Number(convRate) >= 10 ? "text-emerald-400" : "text-gray-400"}`}>
+                          {convRate}%
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {/* Links table */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

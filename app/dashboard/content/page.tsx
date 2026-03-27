@@ -49,8 +49,8 @@ export default async function ContentPage({
   const platformFilter = params.platform ?? "";
   const typeFilter = params.type ?? "";
 
-  // Fetch posts + bulk revenue in parallel (2 queries, not N+1)
-  const [mediaRows, mavelyRows, ltkRows] = await Promise.all([
+  // Fetch posts + bulk revenue + last sync in parallel
+  const [mediaRows, mavelyRows, ltkRows, syncRow] = await Promise.all([
     db.execute(sql`
       SELECT DISTINCT ON (media_ig_id)
         media_ig_id,
@@ -91,7 +91,28 @@ export default async function ContentPage({
         AND share_url IS NOT NULL
       GROUP BY share_url
     `),
+    // Last sync time for staleness indicator
+    db.execute(sql`
+      SELECT MAX(captured_at) AS last_sync
+      FROM media_snapshots
+      WHERE creator_id = ${creatorId}
+    `),
   ]);
+
+  // Staleness indicator
+  const lastSyncRaw = (syncRow as any[])[0]?.last_sync as Date | null;
+  let syncLabel = "Never synced";
+  let syncColor = "text-red-400";
+  if (lastSyncRaw) {
+    const ageMs = Date.now() - new Date(lastSyncRaw).getTime();
+    const ageMin = Math.floor(ageMs / 60000);
+    const ageH = Math.floor(ageMs / 3600000);
+    const ageD = Math.floor(ageMs / 86400000);
+    if (ageMin < 60) { syncLabel = `Synced ${ageMin}m ago`; syncColor = "text-gray-500"; }
+    else if (ageH < 24) { syncLabel = `Synced ${ageH}h ago`; syncColor = "text-gray-500"; }
+    else if (ageD === 1) { syncLabel = `Synced 1d ago`; syncColor = "text-amber-400"; }
+    else { syncLabel = `Synced ${ageD}d ago`; syncColor = "text-red-400"; }
+  }
 
   // Build lookup maps for O(1) joins
   // Mavely: referrer is a URL that contains the IG permalink as a substring
@@ -239,6 +260,7 @@ export default async function ContentPage({
         <span>{posts.filter((p) => p.platform === "ltk").length} LTK</span>
         <span>{posts.filter((p) => p.platform === "shopmy").length} ShopMy</span>
         <span>{posts.filter((p) => p.platform === "amazon").length} Amazon</span>
+        <span className={`ml-auto text-xs ${syncColor}`}>{syncLabel}</span>
       </div>
 
       {/* Card grid */}
