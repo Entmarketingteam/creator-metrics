@@ -30,3 +30,7 @@ next-env.d.ts
 drizzle/
 .worktrees/
 doppler.env
+
+# Python
+__pycache__/
+*.pyc
