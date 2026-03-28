@@ -1,10 +1,11 @@
 "use client";
 
 const PERIODS = [
-  { label: "7d", value: "7" },
-  { label: "30d", value: "30" },
-  { label: "90d", value: "90" },
-  { label: "1y", value: "365" },
+  { label: "30d",      value: "30" },
+  { label: "90d",      value: "90" },
+  { label: "1y",       value: "365" },
+  { label: "2y",       value: "730" },
+  { label: "All Time", value: "all" },
 ];
 
 interface PeriodToggleProps {

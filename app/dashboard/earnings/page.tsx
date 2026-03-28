@@ -10,6 +10,8 @@ import PlatformBreakdown from "@/components/earnings/PlatformBreakdown";
 import EarningsChart, { type ChartDataPoint } from "@/components/earnings/EarningsChart";
 import SalesTable from "@/components/earnings/SalesTable";
 import TopPerformers from "@/components/earnings/TopPerformers";
+import MonthlyBreakdown from "@/components/earnings/MonthlyBreakdown";
+import PeriodSelector from "@/components/earnings/PeriodSelector";
 import { formatCurrency } from "@/lib/utils";
 import { Suspense } from "react";
 
@@ -172,6 +174,34 @@ export default async function EarningsPage({
     ? sql`${sales.saleDate} >= ${startDate}::date AND ${sales.saleDate} <= ${endDate}::date AND ${sales.creatorId} = ${creatorId}`
     : sql`${sales.saleDate} >= ${startDate}::date AND ${sales.saleDate} <= ${endDate}::date`;
 
+  // ── Monthly totals across all platforms ───────────────────────────
+  const monthlyRaw = await db.execute(sql`
+    SELECT
+      TO_CHAR(DATE_TRUNC('month', period_start::date), 'YYYY-MM') AS month,
+      platform,
+      SUM(CAST(commission AS FLOAT)) AS commission
+    FROM platform_earnings
+    WHERE period_start >= ${startDate}::date
+      AND period_end   <= (${endDate}::date + interval '1 day')
+      ${creatorId ? sql`AND creator_id = ${creatorId}` : sql``}
+    GROUP BY 1, 2
+    ORDER BY 1 DESC, 2
+  `);
+
+  // Pivot monthly rows into { month, ltk, shopmy, mavely, amazon, total }
+  type MonthRow = { month: string; ltk: number; shopmy: number; mavely: number; amazon: number; total: number };
+  const monthMap = new Map<string, MonthRow>();
+  for (const r of monthlyRaw as any[]) {
+    const m = String(r.month);
+    if (!monthMap.has(m)) monthMap.set(m, { month: m, ltk: 0, shopmy: 0, mavely: 0, amazon: 0, total: 0 });
+    const row = monthMap.get(m)!;
+    const val = Number(r.commission);
+    const p = String(r.platform) as keyof Omit<MonthRow, "month" | "total">;
+    if (p in row) (row as any)[p] = val;
+    row.total += val;
+  }
+  const monthlyData = Array.from(monthMap.values());
+
   const [recentSales, salesCountResult, topProducts] = await Promise.all([
     db
       .select()
@@ -203,6 +233,9 @@ export default async function EarningsPage({
             </p>
           </div>
         </div>
+        <Suspense fallback={null}>
+          <PeriodSelector startDate={startDate} endDate={endDate} />
+        </Suspense>
       </div>
 
       {/* ── Summary stats row ───────────────────────────────────── */}
@@ -258,6 +291,9 @@ export default async function EarningsPage({
       {/* ── Brand breakdown + top performers ────────────────────── */}
       {brandBreakdown.length > 0 && <BrandBreakdown data={brandBreakdown} />}
       {topProducts.length > 0 && <TopPerformers products={topProducts.map((p) => ({ ...p, id: 0, productName: p.productName ?? "" }))} />}
+
+      {/* ── Monthly breakdown ───────────────────────────────────── */}
+      {monthlyData.length > 0 && <MonthlyBreakdown data={monthlyData} />}
 
       {/* ── Sales table ─────────────────────────────────────────── */}
       <SalesTable
