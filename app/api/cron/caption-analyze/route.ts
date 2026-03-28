@@ -69,6 +69,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try {
+    return await runCaptionAnalyze();
+  } catch (e: any) {
+    console.error("[caption-analyze] Unhandled error:", e);
+    return NextResponse.json({ error: e.message ?? String(e) }, { status: 500 });
+  }
+}
+
+async function runCaptionAnalyze() {
   // Get active creators
   const allCreators = await db
     .select({ id: creators.id })
