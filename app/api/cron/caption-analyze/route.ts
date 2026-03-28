@@ -96,7 +96,7 @@ async function runCaptionAnalyze() {
       ms.creator_id  AS "creatorId",
       ms.caption
     FROM media_snapshots ms
-    WHERE ms.creator_id = ANY(${creatorIds})
+    WHERE ms.creator_id = ANY(ARRAY[${sql.join(creatorIds.map((id) => sql`${id}`), sql`, `)}])
       AND ms.caption IS NOT NULL
       AND ms.caption != ''
       AND NOT EXISTS (
