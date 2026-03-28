@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { platformEarnings, sales, products } from "@/lib/schema";
-import { sql, desc } from "drizzle-orm";
+import { platformEarnings, sales, products, creators } from "@/lib/schema";
+import { sql, desc, eq } from "drizzle-orm";
 import BrandBreakdown, { type BrandRow } from "@/components/earnings/BrandBreakdown";
 import { DollarSign, MousePointerClick, ShoppingCart, TrendingUp } from "lucide-react";
 import PlatformCard, { type PlatformCardData } from "@/components/earnings/PlatformCard";
@@ -33,6 +33,17 @@ export default async function EarningsPage({
   const endDate = searchParams.endDate ?? today;
   const creatorId = searchParams.creatorId; // undefined = all creators
   const periodLabel = `${startDate} – ${endDate}`;
+
+  // ── Creator display name (for subtitle) ───────────────────────────
+  let creatorLabel = "All Creators";
+  if (creatorId) {
+    const [creatorRow] = await db
+      .select({ displayName: creators.displayName, username: creators.username })
+      .from(creators)
+      .where(eq(creators.id, creatorId))
+      .limit(1);
+    creatorLabel = creatorRow?.displayName ?? creatorRow?.username ?? creatorId;
+  }
 
   // ── Per-platform: SUM all rows for each platform within the window ──
   // GROUP BY instead of DISTINCT ON — handles Amazon (multiple monthly rows)
@@ -229,7 +240,7 @@ export default async function EarningsPage({
           <div>
             <h1 className="text-2xl font-bold text-white">Earnings</h1>
             <p className="text-gray-500 text-sm">
-              Affiliate revenue across all platforms · Nicki Entenmann
+              Affiliate revenue across all platforms · {creatorLabel}
             </p>
           </div>
         </div>
