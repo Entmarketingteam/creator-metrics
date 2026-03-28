@@ -40,10 +40,10 @@ export default async function CreatorDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { from?: string; to?: string };
+  searchParams: { startDate?: string; endDate?: string };
 }) {
-  const from = searchParams.from;
-  const to = searchParams.to;
+  const from = searchParams.startDate;
+  const to = searchParams.endDate;
 
   const { creator, latest, previous } = await getCreatorOverview(params.id);
   if (!creator) notFound();

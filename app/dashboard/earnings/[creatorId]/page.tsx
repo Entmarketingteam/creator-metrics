@@ -9,7 +9,7 @@ import {
   platformConnections,
   shopmyOpportunityCommissions,
 } from "@/lib/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Link2, ShoppingBag } from "lucide-react";
@@ -24,28 +24,20 @@ import OpportunityCommissions from "@/components/earnings/OpportunityCommissions
 
 export const dynamic = "force-dynamic";
 
-function getDateRange(from?: string, to?: string): { start: Date; end: Date } {
-  const now = new Date();
-  const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const start = from ? new Date(from) : defaultStart;
-  const end = to ? new Date(to) : defaultEnd;
-  return { start: isNaN(start.getTime()) ? defaultStart : start, end: isNaN(end.getTime()) ? defaultEnd : end };
-}
-
 export default async function CreatorEarningsPage({
   params,
   searchParams,
 }: {
   params: { creatorId: string };
-  searchParams: { from?: string; to?: string };
+  searchParams: { startDate?: string; endDate?: string };
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { start: rangeStart, end: rangeEnd } = getDateRange(searchParams.from, searchParams.to);
-  const rangeStartStr = rangeStart.toISOString().slice(0, 10);
-  const rangeEndStr = rangeEnd.toISOString().slice(0, 10);
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  const rangeStartStr = searchParams.startDate ?? thirtyDaysAgo;
+  const rangeEndStr = searchParams.endDate ?? today;
 
   const [creator] = await db
     .select()
@@ -123,25 +115,22 @@ export default async function CreatorEarningsPage({
   }));
 
   // Recent sales
-  const recentSales = await db
-    .select()
-    .from(sales)
-    .where(eq(sales.creatorId, params.creatorId))
-    .orderBy(desc(sales.saleDate))
-    .limit(20);
+  const salesDateFilter = and(
+    eq(sales.creatorId, params.creatorId),
+    gte(sales.saleDate, new Date(rangeStartStr)),
+    lte(sales.saleDate, new Date(rangeEndStr))
+  );
 
-  const salesCount = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(sales)
-    .where(eq(sales.creatorId, params.creatorId));
-
-  // Top products
-  const topProducts = await db
-    .select()
-    .from(products)
-    .where(eq(products.creatorId, params.creatorId))
-    .orderBy(desc(sql`CAST(${products.totalRevenue} AS FLOAT)`))
-    .limit(5);
+  const [recentSales, salesCount, topProducts] = await Promise.all([
+    db.select().from(sales).where(salesDateFilter).orderBy(desc(sales.saleDate)).limit(20),
+    db.select({ count: sql<number>`COUNT(*)` }).from(sales).where(salesDateFilter),
+    db
+      .select()
+      .from(products)
+      .where(eq(products.creatorId, params.creatorId))
+      .orderBy(desc(sql`CAST(${products.totalRevenue} AS FLOAT)`))
+      .limit(5),
+  ]);
 
   // ShopMy-specific data
   const [shopmySales, shopmyOpCommissions] = await Promise.all([
@@ -151,7 +140,9 @@ export default async function CreatorEarningsPage({
       .where(
         and(
           eq(sales.creatorId, params.creatorId),
-          eq(sales.platform, "shopmy")
+          eq(sales.platform, "shopmy"),
+          gte(sales.saleDate, new Date(rangeStartStr)),
+          lte(sales.saleDate, new Date(rangeEndStr))
         )
       )
       .orderBy(desc(sales.saleDate))

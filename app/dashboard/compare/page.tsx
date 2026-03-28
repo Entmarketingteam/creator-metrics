@@ -1,7 +1,7 @@
 import { getAllCreatorsSummary, getComparison } from "@/lib/queries";
 import { db } from "@/lib/db";
 import { platformEarnings } from "@/lib/schema";
-import { sql, inArray } from "drizzle-orm";
+import { sql, inArray, and } from "drizzle-orm";
 import { formatNumber, formatCurrency } from "@/lib/utils";
 import { BarChart } from "@tremor/react";
 
@@ -10,13 +10,18 @@ export const dynamic = "force-dynamic";
 export default async function ComparePage({
   searchParams,
 }: {
-  searchParams: { ids?: string };
+  searchParams: { ids?: string; startDate?: string; endDate?: string };
 }) {
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000).toISOString().split("T")[0];
+  const startDate = searchParams.startDate ?? thirtyDaysAgo;
+  const endDate = searchParams.endDate ?? today;
+
   const allCreators = await getAllCreatorsSummary();
   const selectedIds = searchParams.ids?.split(",").filter(Boolean) ?? [];
   const comparison = selectedIds.length > 0 ? await getComparison(selectedIds) : [];
 
-  // Fetch earnings for selected creators
+  // Fetch earnings for selected creators within the selected date range
   const earningsComparison =
     selectedIds.length > 0
       ? await db
@@ -27,7 +32,13 @@ export default async function ComparePage({
             totalClicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
           })
           .from(platformEarnings)
-          .where(inArray(platformEarnings.creatorId, selectedIds))
+          .where(
+            and(
+              inArray(platformEarnings.creatorId, selectedIds),
+              sql`${platformEarnings.periodEnd} >= ${startDate}::date`,
+              sql`${platformEarnings.periodStart} <= ${endDate}::date`
+            )
+          )
           .groupBy(platformEarnings.creatorId)
       : [];
 
@@ -39,7 +50,7 @@ export default async function ComparePage({
   return (
     <div className="max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold text-white mb-1">Compare Creators</h1>
-      <p className="text-gray-500 mb-6">Side-by-side performance analysis</p>
+      <p className="text-gray-500 mb-6">Side-by-side performance analysis · {startDate} – {endDate}</p>
 
       {/* Creator selector */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 mb-8">
@@ -50,10 +61,11 @@ export default async function ComparePage({
             const newIds = isSelected
               ? selectedIds.filter((id) => id !== c.id)
               : [...selectedIds, c.id];
+            const dateParams = `&startDate=${startDate}&endDate=${endDate}`;
             return (
               <a
                 key={c.id}
-                href={`/dashboard/compare?ids=${newIds.join(",")}`}
+                href={`/dashboard/compare?ids=${newIds.join(",")}${dateParams}`}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                   isSelected
                     ? "bg-blue-600 text-white ring-2 ring-blue-400/30"
