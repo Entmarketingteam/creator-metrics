@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { platformEarnings, creators } from "@/lib/schema";
+import { platformEarnings, creators, sales } from "@/lib/schema";
 import {
   getLTKTokens,
   fetchLTKCommissionsSummary,
   fetchLTKPerformanceStats,
   fetchLTKItemsSoldPaginated,
 } from "@/lib/ltk";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -136,6 +136,29 @@ export async function GET(req: NextRequest) {
           endISO,
         );
         itemsFetched = items.length;
+
+        // Delete + reinsert current month's LTK sales (no unique constraint on externalId)
+        await db.delete(sales).where(
+          and(
+            eq(sales.creatorId, creator.id),
+            eq(sales.platform, "ltk"),
+            sql`${sales.saleDate} >= ${startDate}::date`
+          )
+        );
+
+        for (const item of items) {
+          await db.insert(sales).values({
+            creatorId: creator.id,
+            platform: "ltk",
+            saleDate: new Date(item.event_timestamp),
+            brand: item.advertiser_display_name ?? null,
+            productName: item.product_title ?? null,
+            commissionAmount: item.amount?.value ?? "0",
+            orderValue: item.amount?.value ?? "0",
+            status: item.status ?? "open",
+            externalId: `${item.product_id}-${item.event_timestamp}`,
+          });
+        }
 
         results.push({ creator: creator.id, status: "ok", upserted, itemsFetched });
       } catch (e: unknown) {

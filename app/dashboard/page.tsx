@@ -21,7 +21,7 @@ export default async function DashboardOverview() {
         totalClicks: sql<number>`COALESCE(SUM(${platformEarnings.clicks}), 0)`,
       })
       .from(platformEarnings)
-      .where(sql`${platformEarnings.syncedAt} >= NOW() - INTERVAL '30 days'`),
+      .where(sql`${platformEarnings.periodEnd} >= (CURRENT_DATE - INTERVAL '29 days') AND ${platformEarnings.periodStart} <= CURRENT_DATE`),
   ]);
 
   const earnings = earningsData[0];

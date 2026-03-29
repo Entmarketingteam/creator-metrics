@@ -14,7 +14,7 @@ import {
   fetchBrandRates,
   parseShopMyAmount,
 } from "@/lib/shopmy";
-import { eq, isNotNull, and } from "drizzle-orm";
+import { eq, isNotNull, and, sql } from "drizzle-orm";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -107,9 +107,26 @@ export async function GET(req: NextRequest) {
         }),
       ]);
 
-      // --- Upsert payouts (individual commissions) → sales table ---
-      // API returns data.payouts (not normal_commissions)
+      // --- Sync payouts (individual commissions) → sales table ---
+      // API returns data.payouts (not normal_commissions).
+      // No unique constraint on externalId in sales table, so delete open/pending rows
+      // for this creator then reinsert to avoid duplicates across sync runs.
       const normalCommissions = (summary as any).payouts ?? [];
+      const externalIds = normalCommissions
+        .map((c: any) => String(c.id ?? c.order_id ?? c.transaction_id ?? ""))
+        .filter(Boolean);
+
+      if (externalIds.length > 0) {
+        // Delete non-paid rows (open/pending) that will be re-synced fresh
+        await db.delete(sales).where(
+          and(
+            eq(sales.creatorId, creator.id),
+            eq(sales.platform, "shopmy"),
+            sql`${sales.status} IN ('open', 'pending')`
+          )
+        );
+      }
+
       for (const c of normalCommissions) {
         const externalId = String(c.id ?? c.order_id ?? c.transaction_id ?? "");
         if (!externalId) continue;
@@ -128,8 +145,7 @@ export async function GET(req: NextRequest) {
             productName: c.title ?? c.product_title ?? c.productTitle ?? c.name ?? null,
             status: mapShopMyStatus(c),
             externalId: externalId,
-          })
-          .onConflictDoNothing();
+          });
       }
 
       // --- Upsert payments (completed payouts from /api/Payments/by_user) ---
