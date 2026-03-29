@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import {
   LayoutDashboard,
@@ -37,11 +37,14 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { userId, sessionClaims } = await auth();
-  const role = (sessionClaims?.publicMetadata as any)?.role as string | undefined;
+  const { userId } = await auth();
+  if (!userId) redirect("/sign-in");
+
+  const clerk = await clerkClient();
+  const user = await clerk.users.getUser(userId);
+  const role = (user.publicMetadata as any)?.role as string | undefined;
 
   if (role !== "admin") {
-    if (!userId) redirect("/sign-in");
     const [token] = await db
       .select({ id: creatorTokens.id })
       .from(creatorTokens)
