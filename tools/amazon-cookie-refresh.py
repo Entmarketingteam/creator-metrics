@@ -73,14 +73,23 @@ def login_associates(creator: str, headless: bool = True, sms_code: str = "") ->
     headless=True: fully automated (requires device already trusted)
     headless=True + sms_code="": pauses to ask for SMS code on stdin (setup mode)
     """
-    # Load creator credentials
+    # Load creator credentials.
+    # Primary key pattern: AMAZON_{CREATOR}_EMAIL (e.g. AMAZON_NICKI_EMAIL)
+    # Legacy fallback pattern: {CREATOR}_AMAZON_EMAIL (e.g. ANN_AMAZON_EMAIL)
     prefix = f"AMAZON_{creator.upper()}"
     email = get_secret(f"{prefix}_EMAIL")
     password = get_secret(f"{prefix}_PASSWORD")
     totp_secret = get_secret(f"{prefix}_TOTP_SECRET")
 
+    if not email:
+        # Try legacy pattern: ANN_AMAZON_EMAIL
+        alt_prefix = f"{creator.upper()}_AMAZON"
+        email = get_secret(f"{alt_prefix}_EMAIL")
+        password = get_secret(f"{alt_prefix}_PASSWORD")
+        totp_secret = get_secret(f"{alt_prefix}_TOTP_SECRET") or totp_secret
+
     if not email or not password:
-        sys.exit(f"Missing credentials for {creator}. Check Doppler: {prefix}_EMAIL / {prefix}_PASSWORD")
+        sys.exit(f"Missing credentials for {creator}. Check Doppler: {prefix}_EMAIL / {prefix}_PASSWORD (also tried {creator.upper()}_AMAZON_EMAIL)")
 
     print(f"\n[{creator}] Logging into Associates Central as {email}...")
 

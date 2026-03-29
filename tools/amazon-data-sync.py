@@ -201,16 +201,29 @@ def push_to_vercel(creator_id: str, monthly_rows: list, daily_rows: list, order_
 
 
 def sync_creator(creator: str, months: int, days: int, dry_run: bool) -> None:
+    # Associate tag per creator (must match the Amazon Associates store tag exactly)
+    ASSOCIATE_TAGS = {
+        "nicki": "nickientenman-20",
+        "ann": "annschulte-20",
+        "ellen": "ellenludwig-20",
+        "emily": "livefitwithem-20",
+    }
+    tag = ASSOCIATE_TAGS.get(creator)
+    if not tag:
+        print(f"ERROR No associate tag configured for {creator}. Add to ASSOCIATE_TAGS.")
+        return
+
     prefix = f"AMAZON_{creator.upper()}"
     cookies = get_secret(f"{prefix}_COOKIES")
     bearer = get_secret(f"{prefix}_BEARER_TOKEN")
     csrf = get_secret(f"{prefix}_CSRF_TOKEN")
     customer = get_secret(f"{prefix}_CUSTOMER_ID")
     marketplace = get_secret(f"{prefix}_MARKETPLACE_ID") or "ATVPDKIKX0DER"
-    tag = f"{creator}entenman-20"
 
     if not cookies or not bearer:
-        print(f"ERROR Missing Doppler secrets for {creator}. Run amazon-cookie-refresh.py first.")
+        print(f"ERROR Missing Doppler secrets for {creator} (checked {prefix}_COOKIES / {prefix}_BEARER_TOKEN).")
+        print(f"  Run: python3 tools/amazon-cookie-refresh.py --creator {creator}")
+        print(f"  Then re-run this sync script.")
         return
 
     headers = build_headers(cookies, bearer, csrf, customer, marketplace, tag)
