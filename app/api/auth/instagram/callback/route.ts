@@ -4,9 +4,9 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { creators, creatorTokens } from "@/lib/schema";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
-const APP_ID  = process.env.META_APP_ID!;
-const APP_SEC = process.env.META_APP_SECRET!;
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+const APP_ID  = (process.env.META_APP_ID ?? "").trim();
+const APP_SEC = (process.env.META_APP_SECRET ?? "").trim();
 const REDIRECT_URI = `${APP_URL}/api/auth/instagram/callback`;
 
 async function igGet(url: string) {
