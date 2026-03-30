@@ -17,6 +17,7 @@ import PostGrid from "@/components/PostGrid";
 import DateRangePicker from "@/components/DateRangePicker";
 import PlatformCard from "@/components/earnings/PlatformCard";
 import { formatNumber, formatCurrency } from "@/lib/utils";
+import { Suspense } from "react";
 import {
   Eye,
   Zap,
@@ -661,7 +662,9 @@ export default async function CreatorDetailPage({
 
       {/* ── Date Filter ───────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <DateRangePicker />
+        <Suspense>
+          <DateRangePicker />
+        </Suspense>
         {(from || to) && (
           <p className="text-xs text-gray-500">
             Filtering {allPosts.length} posts
