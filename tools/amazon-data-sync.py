@@ -34,7 +34,7 @@ BROWSER_UA = (
 VERCEL_PUSH_URL = "https://creator-metrics.vercel.app/api/admin/amazon-data-push"
 
 
-def get_secret(key: str, project: str = "ent-agency-analytics", config: str = "prd") -> str:
+def get_secret(key: str, project: str = "ent-agency-automation", config: str = "dev") -> str:
     # When launched via `doppler run`, secrets are already in env — fast path
     val = os.environ.get(key, "")
     if val:
@@ -50,13 +50,14 @@ def build_headers(cookies: str, bearer: str, csrf: str, customer: str, marketpla
     return {
         "Cookie": cookies,
         "Authorization": f"Bearer {bearer}",
-        "X-CSRF-Token": csrf,
+        "X-Csrf-Token": csrf,
         "X-Requested-With": "XMLHttpRequest",
-        "customerId": customer,
-        "marketplaceId": marketplace,
-        "programId": "1",
+        "customerid": customer,
+        "marketplaceid": marketplace,
+        "programid": "1",
         "roles": "Primary",
-        "storeId": tag,
+        "storeid": tag,
+        "language": "en_US",
         "locale": "en_US",
         "User-Agent": BROWSER_UA,
         "Accept": "application/json, text/plain, */*",
