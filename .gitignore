@@ -34,3 +34,7 @@ doppler.env
 # Python
 __pycache__/
 *.pyc
+
+# Service logs
+sync-service/logs/*.err
+sync-service/logs/*.log
