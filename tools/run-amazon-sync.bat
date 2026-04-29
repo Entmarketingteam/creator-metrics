@@ -5,8 +5,9 @@ set PROJECT_DIR=C:\Users\ethan.atchley\creator-metrics
 set LOG_DIR=%PROJECT_DIR%\logs
 set PYTHON=C:\Program Files\PyManager\python3.exe
 
-:: Build dated log file
-for /f "tokens=1-3 delims=/ " %%a in ("%DATE%") do set YMD=%%c-%%a-%%b
+:: Build dated log file (YYYY-MM-DD)
+for /f "skip=1 tokens=1-3" %%a in ('wmic os get LocalDateTime /value ^| find "="') do set DT=%%a
+set YMD=%DT:~0,4%-%DT:~4,2%-%DT:~6,2%
 set LOG_FILE=%LOG_DIR%\amazon-sync-%YMD%.log
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
