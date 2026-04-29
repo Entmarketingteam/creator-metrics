@@ -56,6 +56,7 @@ def main():
         subprocess.Popen([
             CHROME_PATH, "--remote-debugging-port=9222",
             f"--user-data-dir={PROFILE_DIR}", "--no-first-run",
+            "--window-position=-10000,-10000", "--start-minimized",
             "https://affiliate-program.amazon.com/p/reporting/earnings",
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(30):
